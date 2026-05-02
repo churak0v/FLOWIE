@@ -1,0 +1,375 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StaffRole {
+  admin
+  moderator
+  florist
+  courier
+}
+
+enum CollectionType {
+  thematic
+  scenario
+}
+
+enum ChatSenderRole {
+  client
+  staff
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  telegramId String?  @unique
+  name       String?
+  username   String?
+  phone      String?
+  createdAt  DateTime @default(now())
+  consentPersonal Boolean @default(false)
+  referralLinkId Int?
+  referralLink   ReferralLink? @relation("UserReferral", fields: [referralLinkId], references: [id], onDelete: SetNull)
+  referralSource String?
+  referralAt     DateTime?
+
+  // Staff access (admin panel)
+  staffRole   StaffRole?
+  staffActive Boolean    @default(false)
+
+  orders     Order[]
+  courierOrders Order[] @relation("OrderCourier")
+  recipients Recipient[]
+  addresses  Address[]
+  auditLogs  AuditLog[]
+
+  // Client chats + promo codes
+  chats              Chat[]
+  promoCodes         PromoCode[]          @relation("PromoCode_User")
+  promoCodesCreated  PromoCode[]          @relation("PromoCode_CreatedBy")
+  OrderStatusHistory OrderStatusHistory[]
+  OrderPhoto         OrderPhoto[]
+  AnalyticsEvent     AnalyticsEvent[]
+  referralLinksCreated ReferralLink[] @relation("ReferralCreatedBy")
+  referralOpens      ReferralOpen[] @relation("ReferralOpenUser")
+}
+
+model Address {
+  id          Int     @id @default(autoincrement())
+  userId      Int
+  user        User    @relation(fields: [userId], references: [id])
+  label       String? // e.g. "Home", "Office"
+  fullAddress String
+  coords      String? // "lat,long"
+  comment     String?
+}
+
+model Product {
+  id              Int                      @id @default(autoincrement())
+  name            String
+  price           Int
+  discount        Int                      @default(0)
+  image           String
+  description     String?
+  tags            String // Stored as comma separated
+  deliveryTime    String?
+  color           String?
+  width           Int?
+  height          Int?
+  isUpsell        Boolean                  @default(false)
+  upsellSort      Int                      @default(0)
+  sort            Int                      @default(0)
+  isActive        Boolean                  @default(true)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  orderItems      OrderItem[]
+  images          ProductImage[]
+  composition     ProductCompositionItem[]
+  collectionItems CollectionItem[]
+}
+
+model ProductImage {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  url       String
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductCompositionItem {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  quantity  String
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([productId, sort])
+}
+
+model Collection {
+  id          Int            @id @default(autoincrement())
+  type        CollectionType @default(thematic)
+  slug        String         @unique
+  title       String
+  description String?
+  isActive    Boolean        @default(true)
+  sort        Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  items CollectionItem[]
+}
+
+model CollectionItem {
+  id           Int @id @default(autoincrement())
+  collectionId Int
+  productId    Int
+  sort         Int @default(0)
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, productId])
+  @@index([collectionId, sort])
+}
+
+model Order {
+  id                 Int       @id @default(autoincrement())
+  userId             Int
+  user               User      @relation(fields: [userId], references: [id])
+  status             String // "new", "paid", "delivery", "completed", "cancelled"
+  cancelReason       String?
+  floristComment     String?
+  senderPhone        String?
+  consentPersonal    Boolean  @default(false)
+  paymentMethod      String?
+  paymentStatus      String    @default("PENDING")
+  paymentClientConfirmed Boolean @default(false)
+  paymentExpiresAt   DateTime?
+  paidAt             DateTime?
+  preDeliveryRating  String?
+  preDeliveryRatedAt DateTime?
+  courierId          Int?
+  courier            User?     @relation("OrderCourier", fields: [courierId], references: [id])
+  deliveredAt        DateTime?
+
+  // Financials
+  itemsTotal   Int
+  deliveryCost Int @default(0)
+  totalPrice   Int
+  referralLinkId Int?
+  referralLink   ReferralLink? @relation(fields: [referralLinkId], references: [id], onDelete: SetNull)
+
+  // Delivery Info
+  deliveryAddress String
+  deliveryCoords  String?
+  deliveryTime    String?
+  recipientName   String?
+  recipientPhone  String?
+
+  createdAt DateTime    @default(now())
+  items     OrderItem[]
+
+  statusHistory OrderStatusHistory[]
+  photos        OrderPhoto[]
+  chats         Chat[]
+  promoCodes    PromoCode[]
+
+  @@index([courierId])
+  @@index([referralLinkId, createdAt])
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  order     Order   @relation(fields: [orderId], references: [id])
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Int // Snapshot of price at purchase
+}
+
+model Recipient {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  name       String
+  relation   String?
+  phone      String?
+  address    String?
+  birthDate  String?
+  askAddress Boolean  @default(false)
+  image      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+}
+
+model OrderStatusHistory {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    String
+  actorId   Int?
+  actor     User?    @relation(fields: [actorId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model OrderPhoto {
+  id             Int       @id @default(autoincrement())
+  orderId        Int
+  order          Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  url            String
+  uploadedById   Int?
+  uploadedBy     User?     @relation(fields: [uploadedById], references: [id])
+  createdAt      DateTime  @default(now())
+  sentToClientAt DateTime?
+
+  @@index([orderId, createdAt])
+}
+
+model Chat {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  orderId   Int?
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+
+  @@index([userId, updatedAt])
+  @@index([orderId])
+}
+
+model Message {
+  id            Int            @id @default(autoincrement())
+  chatId        Int
+  chat          Chat           @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  senderRole    ChatSenderRole
+  senderUserId  Int?
+  text          String?
+  attachmentUrl String?
+  createdAt     DateTime       @default(now())
+
+  @@index([chatId, createdAt])
+}
+
+model PromoCode {
+  id         Int       @id @default(autoincrement())
+  code       String    @unique
+  amount     Int
+  expiresAt  DateTime?
+  sentAt     DateTime?
+  redeemedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  userId Int?
+  user   User? @relation("PromoCode_User", fields: [userId], references: [id], onDelete: SetNull)
+
+  orderId Int?
+  order   Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  createdById Int
+  createdBy   User @relation("PromoCode_CreatedBy", fields: [createdById], references: [id])
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([orderId])
+}
+
+model WorkingHours {
+  id        Int      @id @default(autoincrement())
+  weekday   Int // 0..6 (Mon..Sun)
+  startTime String? // "09:00"
+  endTime   String? // "21:00"
+  isClosed  Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+
+  @@unique([weekday])
+}
+
+model WorkingHoursException {
+  id        Int      @id @default(autoincrement())
+  date      DateTime // date at 00:00:00
+  startTime String?
+  endTime   String?
+  isClosed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([date])
+}
+
+model AnalyticsEvent {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  event     String
+  productId Int?
+  orderId   Int?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([event, createdAt])
+  @@index([createdAt])
+}
+
+model ReferralLink {
+  id          Int       @id @default(autoincrement())
+  tag         String    @unique
+  title       String?
+  note        String?
+  isActive    Boolean   @default(true)
+  autoCreated Boolean   @default(false)
+  createdById Int?
+  createdBy   User?     @relation("ReferralCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  opens  ReferralOpen[]
+  orders Order[]
+  users  User[] @relation("UserReferral")
+
+  @@index([createdAt])
+}
+
+model ReferralOpen {
+  id             Int          @id @default(autoincrement())
+  referralLinkId Int
+  referralLink   ReferralLink @relation(fields: [referralLinkId], references: [id], onDelete: Cascade)
+  userId         Int?
+  user           User?        @relation("ReferralOpenUser", fields: [userId], references: [id], onDelete: SetNull)
+  source         String?
+  href           String?
+  createdAt      DateTime     @default(now())
+
+  @@index([referralLinkId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  actorId   Int
+  actor     User     @relation(fields: [actorId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+}

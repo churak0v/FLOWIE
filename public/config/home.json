@@ -1,0 +1,11 @@
+{
+  "heroSlides": [
+    {
+      "id": "feb14",
+      "caption": "Порадуй любимую!",
+      "subtitle": "Перейти в подборку для предзаказа",
+      "image": "https://images.unsplash.com/photo-1525310072745-f49212b5ac6d?auto=format&fit=crop&w=1400&q=80",
+      "href": "/catalog?collection=bright"
+    }
+  ]
+}

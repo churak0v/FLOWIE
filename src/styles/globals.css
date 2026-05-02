@@ -1,0 +1,542 @@
+/* Base */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-main);
+  background: var(--c-bg);
+  color: var(--c-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  /* The app uses its own scroll container. */
+  overflow-y: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  /* Prevent iOS auto-zoom on focus in WebView/Safari. */
+  font-size: 16px;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Avoid default visited link colors in WebViews. */
+a:visited,
+a:hover,
+a:active {
+  color: inherit;
+}
+
+/* iOS Safari "data detectors" (phone numbers, dates) can inject <a> tags with blue styles. */
+a[x-apple-data-detectors],
+a[x-apple-data-detectors] * {
+  color: inherit !important;
+  text-decoration: none !important;
+}
+
+/* Some iOS versions don't add x-apple-data-detectors attribute. Cover common protocols too. */
+a[href^='tel:'],
+a[href^='mailto:'],
+a[href^='sms:'] {
+  color: inherit !important;
+  text-decoration: none !important;
+}
+
+#root {
+  min-height: var(--app-vh);
+  height: var(--app-vh);
+  overflow-x: hidden;
+  touch-action: pan-y;
+}
+
+/* Telegram Mini App safe-area + viewport helpers.
+   Docs: https://core.telegram.org/bots/webapps#viewport
+   Telegram sets CSS vars like --tg-viewport-stable-height and --tg-safe-area-inset-*.
+*/
+:root {
+  --app-vh: var(--tg-viewport-stable-height, 100dvh);
+  /* Space reserved for the floating BottomNav so content doesn't get hidden behind it. */
+  --app-bottom-nav-space: 96px;
+  /* Telegram header fallback height (Close pill). */
+  --app-tg-header-fallback: 56px;
+  /* iOS safe-area env() values. Telegram can report 0 for safeAreaInset in some clients;
+     keep env() available as a fallback signal (readable from JS via getComputedStyle). */
+  --app-env-safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --app-env-safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --app-env-safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --app-env-safe-area-inset-left: env(safe-area-inset-left, 0px);
+  /* Keyboard offset (px). Calculated in JS via VisualViewport and mirrored into CSS.
+     Do NOT derive it from Telegram's viewportHeight vs viewportStableHeight: those values
+     can differ during Mini App expand/collapse gestures and would incorrectly move fixed UI. */
+  /* Avoid CSS max() for compatibility with older Telegram iOS WebViews. JS clamps it to >= 0. */
+  --app-keyboard-offset: var(--app-keyboard-offset-js, 0px);
+  /* Telegram docs:
+     - safeAreaInset: system safe-area (notches, home indicator).
+     - contentSafeAreaInset: safe-area + Telegram UI overlay ("Close" pill, main button).
+     Use contentSafeAreaInset for page content padding.
+     Keep BottomNav aligned to the physical bottom: use safeAreaInset for its padding only.
+  */
+  /* Important: trust content-safe-area, but keep a fallback for header overlay. */
+  --app-inset-top: max(
+    var(--tg-content-safe-area-inset-top, env(safe-area-inset-top, 0px)),
+    calc(var(--tg-safe-area-inset-top, env(safe-area-inset-top, 0px)) + var(--app-tg-header-fallback))
+  );
+  --app-inset-right: max(
+    var(--tg-content-safe-area-inset-right, 0px),
+    var(--tg-safe-area-inset-right, env(safe-area-inset-right, 0px))
+  );
+  --app-inset-bottom: max(
+    var(--tg-content-safe-area-inset-bottom, 0px),
+    var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))
+  );
+  --app-inset-left: max(
+    var(--tg-content-safe-area-inset-left, 0px),
+    var(--tg-safe-area-inset-left, env(safe-area-inset-left, 0px))
+  );
+  --app-nav-inset-bottom: var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  /* Scroll containers can override to reduce the "empty tail" while keeping fixed UI safe. */
+  --app-content-inset-bottom: var(--app-inset-bottom);
+
+  /* Default iOS/Safari uses blue for range/checkbox/radio. Force orange accent. */
+  accent-color: var(--accent);
+}
+
+/* Utilities */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Simple route/page enter transition (no extra libs). */
+.ui-pageEnter {
+  animation: uiPageIn 200ms ease both;
+}
+
+@keyframes uiPageIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Route stack transitions.
+   Important: fixed UI like BottomNav must NOT be inside the animated layers,
+   otherwise `transform` would change its positioning behavior. */
+.ui-routeStack {
+  position: relative;
+  width: 100%;
+  height: var(--app-vh);
+  overflow: hidden;
+}
+
+.ui-routeLayer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ui-routeLayer--under {
+  pointer-events: none;
+}
+
+.ui-routeLayer--top {
+  pointer-events: auto;
+  will-change: transform;
+}
+
+.ui-routeLayer--push {
+  animation: uiSlideIn 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ui-routeLayer--pop {
+  animation: uiSlideOut 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes uiSlideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes uiSlideOut {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-routeLayer--push,
+  .ui-routeLayer--pop,
+  .ui-pageEnter {
+    animation: none !important;
+  }
+}
+
+/* UI primitives */
+.ui-surface {
+  background: var(--surface);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-1);
+}
+
+.ui-surface--soft {
+  background: var(--surface-2);
+  box-shadow: none;
+}
+
+.ui-text-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.ui-text-subtitle {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.ui-text-body {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.ui-text-caption {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--c-text-muted);
+}
+
+.ui-iconButton {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  background: var(--c-white-72);
+  box-shadow: 0 10px 25px var(--c-ink-12);
+}
+
+.ui-iconButton:active {
+  transform: scale(0.98);
+}
+
+.ui-chip {
+  height: 31px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-text);
+  white-space: nowrap;
+}
+
+.ui-chip--accent {
+  border-color: var(--c-accent-border);
+  color: var(--c-accent);
+}
+
+.ui-chip--success {
+  background: var(--c-success-bg);
+  border-color: var(--c-success-border);
+  color: var(--c-success);
+}
+
+/* Accordion */
+.ui-accordion {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.ui-accordion > summary {
+  list-style: none;
+}
+
+.ui-accordion > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ui-accordion__summary {
+  cursor: pointer;
+  padding: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ui-accordion[open] > .ui-accordion__summary {
+  background: var(--surface-2);
+}
+
+.ui-accordion__chevron {
+  margin-left: auto;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: center;
+}
+
+.ui-accordion[open] .ui-accordion__chevron {
+  transform: rotate(180deg);
+}
+
+.ui-accordion__content {
+  padding: 0 12px 12px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.ui-appShell {
+  /* Default: reserve space for BottomNav. Pages without BottomNav can override via inline CSS vars. */
+  --app-shell-bottom-space: var(--app-bottom-nav-space);
+  /* Additional space for fixed CTAs (cart/checkout/product add bar). */
+  --app-shell-extra-bottom: 0px;
+
+  width: min(100%, var(--app-max));
+  margin: 0 auto;
+  height: var(--app-vh);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* Keep content just below Telegram UI controls ("Close" pill). */
+  padding-top: calc(var(--sp-2) + var(--app-inset-top));
+  padding-right: calc(var(--sp-4) + var(--app-inset-right));
+  padding-bottom: calc(
+    var(--sp-8) + var(--app-content-inset-bottom) + var(--app-shell-bottom-space) +
+      var(--app-shell-extra-bottom)
+  );
+  padding-left: calc(var(--sp-4) + var(--app-inset-left));
+}
+
+.ui-sectionTitle {
+  margin: 0 0 var(--sp-4) 0;
+}
+
+.ui-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3);
+}
+
+/* BottomSheet */
+.ui-sheetOverlay {
+  position: fixed;
+  inset: 0;
+  background: var(--c-overlay);
+  z-index: 90;
+}
+
+.ui-sheetPanel {
+  position: fixed;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: min(100%, var(--app-max));
+  background: var(--bg);
+  border-top-left-radius: var(--r-xl);
+  border-top-right-radius: var(--r-xl);
+  box-shadow: var(--shadow-md);
+  padding-top: var(--sp-3);
+  padding-bottom: calc(var(--sp-6) + var(--app-inset-bottom));
+  padding-left: calc(var(--sp-4) + var(--app-inset-left));
+  padding-right: calc(var(--sp-4) + var(--app-inset-right));
+  z-index: 100;
+  max-height: calc(var(--app-vh) - 24px);
+  overflow: auto;
+  overflow-x: hidden;
+}
+
+.ui-sheetHandle {
+  width: 56px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--c-ink-14);
+  margin: 0 auto var(--sp-4);
+}
+
+/* StickyBar */
+.ui-stickyBar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  /* Keep behind the keyboard in Telegram WebView. */
+  bottom: calc(0px - var(--app-keyboard-offset));
+  width: auto;
+  max-width: min(100vw, var(--app-max));
+  margin-left: auto;
+  margin-right: auto;
+  padding-top: var(--sp-4);
+  padding-bottom: calc(var(--sp-4) + var(--app-inset-bottom));
+  padding-left: calc(var(--sp-4) + var(--app-inset-left));
+  padding-right: calc(var(--sp-4) + var(--app-inset-right));
+  z-index: 40;
+}
+
+.ui-stickyBarInner {
+  background: var(--c-accent-2);
+  color: var(--c-white);
+  border-radius: var(--r-lg);
+  height: 85px;
+  box-shadow: 0 -6px 20px var(--c-ink-12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-4);
+}
+
+/* BottomNav */
+.ui-bottomNav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding-top: 10px;
+  padding-bottom: var(--app-nav-inset-bottom);
+  padding-left: calc(var(--sp-4) + var(--app-inset-left));
+  padding-right: calc(var(--sp-4) + var(--app-inset-right));
+  pointer-events: none;
+  background: transparent;
+  z-index: 45;
+}
+
+.ui-bottomNavInner {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: min(100%, var(--app-max));
+  margin: 0 auto;
+  padding: 6px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  pointer-events: auto;
+}
+
+.ui-bottomNavLink {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border-radius: var(--r-md);
+  color: var(--c-ink-55);
+}
+
+.ui-bottomNavLink--active {
+  color: var(--accent);
+  background: var(--c-accent-10);
+}
+
+.ui-bottomNavLabel {
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+/* Toggle */
+.ui-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ui-toggleLabel {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ui-toggleTrack {
+  width: 44px;
+  height: 26px;
+  border-radius: var(--r-pill);
+  background: var(--c-ink-18);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 120ms ease;
+}
+
+.ui-toggleTrack--on {
+  background: var(--accent);
+}
+
+.ui-toggleThumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-pill);
+  background: var(--c-white);
+  transition: transform 120ms ease;
+}
+
+.ui-toggleThumb--on {
+  transform: translateX(18px);
+}

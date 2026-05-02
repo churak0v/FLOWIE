@@ -1,0 +1,30 @@
+.DS_Store
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+server/.env
+server/.env.*
+!server/.env.example
+
+# Dependencies
+node_modules/
+server/node_modules/
+
+# Build output
+dist/
+dist-admin/
+
+# Runtime data
+server/uploads/
+uploads/
+*.log
+*.bak
+
+# Local database snapshots
+server/prisma/*.db
+server/prisma/*.db-journal
+
+# Bundled local toolchains / generated assets
+bin/

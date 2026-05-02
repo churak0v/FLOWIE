@@ -1,0 +1,69 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-flowie}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowie}
+      POSTGRES_DB: ${POSTGRES_DB:-flowie}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flowie} -d ${POSTGRES_DB:-flowie}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "56431:5432"
+    volumes:
+      - flowie_pgdata:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./server
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-flowie}:${POSTGRES_PASSWORD:-flowie}@db:5432/${POSTGRES_DB:-flowie}?schema=public
+      NODE_ENV: ${NODE_ENV:-development}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:-change-me}
+      BOT_TOKEN: ${BOT_TOKEN:-change-me}
+      ADMIN_BOT_TOKEN: ${ADMIN_BOT_TOKEN:-}
+      APP_COOKIE_DOMAIN: ${APP_COOKIE_DOMAIN:-}
+      ADMIN_TG_IDS: ${ADMIN_TG_IDS:-}
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-}
+    ports:
+      - "6111:3001"
+    volumes:
+      - flowie_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_API_PROXY_TARGET: ${VITE_API_PROXY_TARGET:-http://api:3001}
+        VITE_HERO_IMAGE: ${VITE_HERO_IMAGE:-}
+        VITE_RECIPIENT_IMAGE: ${VITE_RECIPIENT_IMAGE:-}
+    restart: unless-stopped
+    ports:
+      - "6112:80"
+    depends_on:
+      - api
+
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_API_PROXY_TARGET: ${VITE_API_PROXY_TARGET:-http://api:3001}
+    restart: unless-stopped
+    ports:
+      - "6113:80"
+    depends_on:
+      - api
+
+volumes:
+  flowie_pgdata:
+  flowie_uploads:
