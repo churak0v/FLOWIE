@@ -1,15 +1,15 @@
 import React from 'react';
-import { Minus, Plus } from 'lucide-react';
 import { Carousel } from '../ui/Carousel';
 import { Surface } from '../ui/Surface';
 import { Text } from '../ui/Text';
 import { AppImage } from '../ui/AppImage';
+import { formatMoney } from '../../lib/money';
 
 export function UpsellsBlock({ upsells, qtyById, onAdd }) {
   return (
     <div>
       <Text variant="title" style={{ marginBottom: 'var(--sp-4)' }}>
-        Дополнительно
+        Make it feel complete
       </Text>
 
       <Carousel style={{ paddingBottom: 2 }}>
@@ -25,11 +25,13 @@ export function UpsellsBlock({ upsells, qtyById, onAdd }) {
               key={key}
               variant="soft"
               style={{
-                width: 240,
-                flexShrink: 0,
+                width: 'calc((100% - 12px) / 2)',
+                flex: '0 0 calc((100% - 12px) / 2)',
+                minWidth: 0,
                 borderRadius: 'var(--r-lg)',
                 overflow: 'hidden',
-                border: '1px solid var(--border)',
+                border: qty ? '2px solid var(--accent)' : '1px solid var(--border)',
+                background: qty ? 'var(--c-accent-10)' : 'var(--surface)',
               }}
             >
               <AppImage
@@ -37,7 +39,7 @@ export function UpsellsBlock({ upsells, qtyById, onAdd }) {
                 alt={u.title}
                 style={{
                   width: '100%',
-                  height: 128,
+                  height: 118,
                   objectFit: 'cover',
                   background: 'var(--surface)',
                 }}
@@ -48,58 +50,28 @@ export function UpsellsBlock({ upsells, qtyById, onAdd }) {
                 </Text>
                 <div style={{ marginTop: 4 }}>
                   <Text variant="body" muted>
-                    {isFree ? 'Бесплатно' : `${price} ₽`}
+                    {isFree ? 'Free' : formatMoney(price)}
                   </Text>
                 </div>
 
-                <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <button
-                      type="button"
-                      onClick={() => onAdd?.(id, Math.max(0, qty - 1))}
-                      aria-label="Уменьшить"
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 12,
-                        border: '1px solid var(--border)',
-                        background: 'transparent',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: qty > 0 ? 'pointer' : 'default',
-                        opacity: qty > 0 ? 1 : 0.4,
-                      }}
-                      disabled={qty <= 0}
-                    >
-                      <Minus size={18} color="var(--text)" strokeWidth={3} />
-                    </button>
-
-                    <div style={{ fontWeight: 1000, minWidth: 18, textAlign: 'center' }}>{qty || 0}</div>
-
-                    <button
-                      type="button"
-                      onClick={() => onAdd?.(id, qty + 1)}
-                      aria-label="Добавить"
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 12,
-                        border: 0,
-                        background: 'var(--accent)',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Plus size={18} color="var(--c-white)" strokeWidth={3} />
-                    </button>
-                  </div>
-
-                  {qty ? <span className="ui-chip">В корзине</span> : <span className="ui-chip ui-chip--accent">+</span>}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => onAdd?.(id, qty ? 0 : 1)}
+                  style={{
+                    marginTop: 12,
+                    width: '100%',
+                    height: 42,
+                    border: 0,
+                    borderRadius: 999,
+                    background: qty ? 'var(--accent)' : 'var(--c-white)',
+                    color: qty ? 'var(--c-white)' : 'var(--accent)',
+                    fontWeight: 1000,
+                    cursor: 'pointer',
+                    boxShadow: qty ? 'var(--shadow-accent)' : 'inset 0 0 0 1px var(--c-accent-border)',
+                  }}
+                >
+                  {qty ? 'Added' : isFree ? 'Include' : 'Add to gift'}
+                </button>
               </div>
             </Surface>
           );

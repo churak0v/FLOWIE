@@ -11,7 +11,7 @@ export function StarsRating({ value = 5, onChange, size = 24 }) {
             key={i}
             type="button"
             onClick={onChange ? () => onChange(i) : undefined}
-            aria-label={`Оценка ${i}`}
+            aria-label={`Rating ${i}`}
             style={{
               width: 50,
               height: 50,

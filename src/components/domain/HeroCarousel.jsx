@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cx } from '../../lib/cx';
@@ -16,6 +16,18 @@ export function HeroCarousel({ slides, className }) {
   // The Home panel has a large top radius. We extend the hero underlay below the panel edge
   // so the rounded corners always reveal media (not the page background).
   const UNDERLAY_EXTRA_PX = 48;
+
+  useEffect(() => {
+    if (safeSlides.length <= 1) return undefined;
+    const timer = window.setInterval(() => {
+      const el = scrollerRef.current;
+      if (!el) return;
+      const next = (Math.round(el.scrollLeft / el.clientWidth) + 1) % safeSlides.length;
+      el.scrollTo({ left: next * el.clientWidth, behavior: 'smooth' });
+      setActive(next);
+    }, 5200);
+    return () => window.clearInterval(timer);
+  }, [safeSlides.length]);
 
   return (
     <div
@@ -82,7 +94,7 @@ export function HeroCarousel({ slides, className }) {
                   width: '100%',
                   height: '100%',
                   objectFit: 'cover',
-                  objectPosition: 'center top',
+                  objectPosition: s.imagePosition || 'center 66%',
                 }}
               />
             )}
@@ -90,7 +102,7 @@ export function HeroCarousel({ slides, className }) {
               style={{
                 position: 'absolute',
                 inset: 0,
-                background: 'var(--c-ink-14)',
+                background: 'linear-gradient(180deg, rgba(40,20,25,0.06), rgba(40,20,25,0.46))',
               }}
             />
           </div>
@@ -106,9 +118,10 @@ export function HeroCarousel({ slides, className }) {
           // Keep caption in the same visual position even though the underlay is taller.
           bottom: `calc(var(--sp-6) + ${UNDERLAY_EXTRA_PX}px)`,
           color: 'var(--c-white)',
+          textAlign: 'left',
         }}
       >
-        <div style={{ fontSize: 24, fontWeight: 900, textShadow: '0 2px 10px var(--c-ink-25)' }}>
+        <div style={{ maxWidth: 360, fontSize: 24, fontWeight: 900, lineHeight: 1.12, textShadow: '0 2px 10px var(--c-ink-25)' }}>
           {safeSlides[active]?.caption || ''}
         </div>
 
@@ -130,13 +143,35 @@ export function HeroCarousel({ slides, className }) {
               fontWeight: 900,
               display: 'inline-flex',
               alignItems: 'center',
+              justifyContent: 'flex-start',
               gap: 6,
+              maxWidth: 360,
+              textAlign: 'left',
               opacity: safeSlides[active]?.href ? 1 : 0.9,
               textShadow: '0 2px 10px var(--c-ink-25)',
             }}
           >
-            <span>{safeSlides[active]?.subtitle}</span>
-            {safeSlides[active]?.href ? <ChevronRight size={18} /> : null}
+            <span style={{ textAlign: 'left' }}>{safeSlides[active]?.subtitle}</span>
+            {safeSlides[active]?.href ? (
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 999,
+                  background: 'rgba(255,255,255,0.88)',
+                  color: 'var(--accent)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 8px 22px rgba(0,0,0,0.22)',
+                  backdropFilter: 'blur(10px)',
+                  flexShrink: 0,
+                }}
+              >
+                <ChevronRight size={18} strokeWidth={3} />
+              </span>
+            ) : null}
           </button>
         ) : null}
 

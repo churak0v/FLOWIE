@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatMoney } from '../../lib/money';
 
 export function CartFooterCTA({ total, disabled, onClick, label }) {
   return (
@@ -36,7 +37,7 @@ export function CartFooterCTA({ total, disabled, onClick, label }) {
         }}
       >
         <span>{label}</span>
-        <span style={{ opacity: 0.92 }}>{total} ₽</span>
+        <span style={{ opacity: 0.92 }}>{formatMoney(total)}</span>
       </button>
     </div>
   );

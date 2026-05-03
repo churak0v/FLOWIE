@@ -27,17 +27,66 @@ function Tile({ children, onClick, style }) {
   );
 }
 
+function normalizeRecipientName(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function recipientTime(r) {
+  return Date.parse(r?.updatedAt || r?.createdAt || '') || 0;
+}
+
+function dedupeRecipients(items, selectedId) {
+  const byName = new Map();
+
+  for (const r of items || []) {
+    if (!r) continue;
+    const key = normalizeRecipientName(r.name) || `id:${r.id}`;
+    const prev = byName.get(key);
+    const rSelected = String(r.id) === String(selectedId);
+    const prevSelected = String(prev?.id) === String(selectedId);
+    const shouldReplace =
+      !prev ||
+      (rSelected && !prevSelected) ||
+      (!prevSelected && recipientTime(r) > recipientTime(prev)) ||
+      (!prevSelected && recipientTime(r) === recipientTime(prev) && Number(r.id || 0) > Number(prev.id || 0));
+
+    if (shouldReplace) byName.set(key, r);
+  }
+
+  return Array.from(byName.values()).sort((a, b) => {
+    const aSelected = String(a.id) === String(selectedId);
+    const bSelected = String(b.id) === String(selectedId);
+    if (aSelected !== bSelected) return aSelected ? -1 : 1;
+    const bt = recipientTime(b);
+    const at = recipientTime(a);
+    if (bt !== at) return bt - at;
+    return Number(b.id || 0) - Number(a.id || 0);
+  });
+}
+
 export function SubscriptionRow() {
   const navigate = useNavigate();
   const { state, actions } = useAppState();
-  const recipients = state.recipients.items || [];
+  const recipients = useMemo(
+    () => dedupeRecipients(state.recipients.items || [], state.recipients.selectedId),
+    [state.recipients.items, state.recipients.selectedId]
+  );
 
   const tiles = useMemo(() => {
     const list = recipients.filter(Boolean);
 
     if (list.length === 0) {
       return [
-        { type: 'add', key: 'add' },
+        {
+          type: 'recipient',
+          key: 'vivienne-default',
+          recipient: {
+            id: 'vivienne-default',
+            name: 'Vivienne',
+            image: '/vivienne-avatar.jpeg',
+          },
+          href: '/?ref=vivienne',
+        },
         { type: 'pass', key: 'pass' },
       ];
     }
@@ -56,15 +105,15 @@ export function SubscriptionRow() {
   const renderTile = (t) => {
     if (!t) return <div />;
 
-    if (t.type === 'add') {
-      return <RecipientSquareTile variant="add" onClick={() => navigate('/recipients/new')} />;
-    }
-
     if (t.type === 'recipient') {
       return (
         <RecipientSquareTile
           recipient={t.recipient}
           onClick={() => {
+            if (t.href) {
+              navigate(t.href);
+              return;
+            }
             actions.selectRecipient(t.recipient.id);
             navigate(`/recipients/${t.recipient.id}`);
           }}
@@ -73,7 +122,14 @@ export function SubscriptionRow() {
     }
 
     return (
-      <Tile onClick={() => alert('PASS (позже)')} style={{ position: 'relative', background: 'var(--c-accent-2)', color: 'var(--c-white)' }}>
+      <Tile
+        onClick={() => alert('FLOWIE Pass is coming soon')}
+        style={{
+          position: 'relative',
+          background: 'linear-gradient(145deg, var(--c-accent), var(--c-accent-2))',
+          color: 'var(--c-white)',
+        }}
+      >
         <span
           className="ui-chip"
           style={{
@@ -83,18 +139,18 @@ export function SubscriptionRow() {
             height: 24,
             padding: '0 10px',
             borderColor: 'rgba(255,255,255,0.3)',
-            background: 'rgba(255,255,255,0.18)',
+            background: 'rgba(255,255,255,0.12)',
             color: 'var(--c-white)',
             fontSize: 11,
             fontWeight: 900,
           }}
         >
-          Скоро
+          Soon
         </span>
         <Text variant="subtitle" style={{ color: 'var(--c-white)' }}>
-          Подписка
+          FLOWIE Pass
         </Text>
-        <div style={{ fontSize: 42, fontWeight: 900, letterSpacing: -1, opacity: 0.92 }}>PASS</div>
+        <div style={{ fontSize: 42, fontWeight: 900, letterSpacing: 0, opacity: 0.92 }}>PASS</div>
       </Tile>
     );
   };
@@ -118,7 +174,7 @@ export function SubscriptionRow() {
             <div
               key={t.key}
               style={{
-                flex: '0 0 calc((100% - 24px) / 2.5)', // 2.5 карточки в ряд
+                flex: '0 0 calc((100% - 24px) / 2.5)', // 2.5 cards per row
                 scrollSnapAlign: 'start',
               }}
             >

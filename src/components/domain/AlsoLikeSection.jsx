@@ -23,7 +23,7 @@ export function AlsoLikeSection({ productId }) {
   return (
     <div style={{ marginTop: 'var(--sp-8)' }}>
       <Text variant="title" style={{ marginBottom: 'var(--sp-4)' }}>
-        Также может понравиться
+        More wishlist picks
       </Text>
 
       <Carousel>

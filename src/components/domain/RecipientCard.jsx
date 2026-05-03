@@ -75,7 +75,7 @@ export function RecipientCard({
         {typeof isFavorite === 'boolean' && onToggleFavorite ? (
           <button
             type="button"
-            aria-label={isFavorite ? 'Убрать из избранного' : 'В избранное'}
+            aria-label={isFavorite ? 'Remove from saved' : 'Save'}
             onClick={(e) => {
               e.stopPropagation();
               onToggleFavorite?.(id);
@@ -106,7 +106,7 @@ export function RecipientCard({
         {onDelete ? (
           <button
             type="button"
-            aria-label="Удалить"
+            aria-label="Delete"
             onClick={(e) => {
               e.stopPropagation();
               onDelete?.(id);

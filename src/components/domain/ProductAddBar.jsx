@@ -1,7 +1,9 @@
 import React from 'react';
+import { ShoppingBag } from 'lucide-react';
 import { QuantityStepper } from '../ui/QuantityStepper';
+import { formatMoney } from '../../lib/money';
 
-export function ProductAddBar({ qty, onDec, onInc, sum, onAdd }) {
+export function ProductAddBar({ qty, onDec, onInc, sum, onAdd, added = false, onViewCart }) {
   return (
     <div
       style={{
@@ -34,11 +36,11 @@ export function ProductAddBar({ qty, onDec, onInc, sum, onAdd }) {
 
         <button
           type="button"
-          onClick={onAdd}
+          onClick={added ? onViewCart : onAdd}
           style={{
             border: 0,
-            background: 'var(--c-white-22)',
-            color: 'var(--c-white)',
+            background: added ? 'var(--c-white)' : 'var(--c-white-22)',
+            color: added ? 'var(--accent)' : 'var(--c-white)',
             height: 44,
             padding: '0 14px',
             borderRadius: 'var(--r-md)',
@@ -46,9 +48,13 @@ export function ProductAddBar({ qty, onDec, onInc, sum, onAdd }) {
             fontWeight: 900,
             fontSize: 15,
             whiteSpace: 'nowrap',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
           }}
         >
-          В корзину · {sum} ₽
+          <ShoppingBag size={17} strokeWidth={2.6} />
+          {added ? 'View cart' : `Add to cart · ${formatMoney(sum)}`}
         </button>
       </div>
     </div>

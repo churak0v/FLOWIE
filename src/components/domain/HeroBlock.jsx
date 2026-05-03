@@ -1,10 +1,9 @@
 import React from 'react';
 import { User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { AddressBadge } from './AddressBadge';
 import { HeroCarousel } from './HeroCarousel';
 
-export function HeroBlock({ slides, address, onAddressClick }) {
+export function HeroBlock({ slides }) {
   const navigate = useNavigate();
 
   return (
@@ -24,16 +23,11 @@ export function HeroBlock({ slides, address, onAddressClick }) {
           pointerEvents: 'none',
         }}
       >
-        <AddressBadge
-          street={address?.street}
-          house={address?.house}
-          onClick={onAddressClick}
-          style={{ pointerEvents: 'auto' }}
-        />
+        <span />
 
         <button
           type="button"
-          aria-label="Профиль"
+          aria-label="Account"
           onClick={() => navigate('/account')}
           style={{
             width: 40,

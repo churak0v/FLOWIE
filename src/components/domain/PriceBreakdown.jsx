@@ -1,6 +1,7 @@
 import React from 'react';
 import { Surface } from '../ui/Surface';
 import { Text } from '../ui/Text';
+import { formatMoney } from '../../lib/money';
 
 function Row({ label, value, strong }) {
   return (
@@ -19,13 +20,13 @@ export function PriceBreakdown({ itemsTotal, upsellsTotal, deliveryCost, bonuses
   return (
     <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)' }}>
       <div style={{ display: 'grid', gap: 10 }}>
-        <Row label={`Товары`} value={`${itemsTotal} ₽`} />
-        {showUpsells ? <Row label={`Дополнения`} value={`${upsellsTotal} ₽`} /> : null}
-        <Row label={`Открытка`} value={`0 ₽`} />
-        <Row label={`Доставка`} value={`${deliveryCost} ₽`} />
-        {bonusesApplied ? <Row label="Бонусы" value={`- ${bonusesApplied} ₽`} /> : null}
+        <Row label="Items" value={formatMoney(itemsTotal)} />
+        {showUpsells ? <Row label="Add-ons" value={formatMoney(upsellsTotal)} /> : null}
+        <Row label="Gift note" value={formatMoney(0)} />
+        <Row label="Delivery coordination" value={formatMoney(deliveryCost)} />
+        {bonusesApplied ? <Row label="Discount" value={`- ${formatMoney(bonusesApplied)}`} /> : null}
         <div style={{ height: 1, background: 'var(--border)', margin: '6px 0' }} />
-        <Row label="Итого" value={`${total} ₽`} strong />
+        <Row label="Total" value={formatMoney(total)} strong />
       </div>
     </Surface>
   );

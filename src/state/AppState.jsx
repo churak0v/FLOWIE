@@ -3,14 +3,14 @@ import { getTelegramUserSafe } from '../telegram';
 import { api } from '../api';
 import { isCacheFresh, readCacheEntry, writeCacheEntry } from '../lib/persistedCache';
 import { prefetchImages } from '../lib/prefetch';
-import { formatPrepTime, toUiComposition, toUiSize } from '../lib/productUi';
+import { toUiComposition, toUiSize } from '../lib/productUi';
+import { COLLECTIONS, PRODUCTS, SCENARIOS, UPSELLS } from '../data/mock';
 
 const STORAGE_KEY = 'flowie_state_v1';
 const storageKeyForUser = (me) => {
   const id = me?.id ? String(me.id) : 'guest';
   return `${STORAGE_KEY}_u_${id}`;
 };
-const RECIPIENTS_MIGRATION_KEY = 'flowie_recipients_migrated_v2';
 
 function safeJsonParse(raw) {
   try {
@@ -27,7 +27,7 @@ function clamp(n, min, max) {
 const initialState = {
   auth: {
     telegramUser: null,
-    bonusBalance: 750, // demo
+    bonusBalance: 0,
     me: null, // { id, telegramId?, name?, username?, phone? }
     meLoading: false,
   },
@@ -99,7 +99,7 @@ const initialState = {
     deliveryDate: '',
     deliveryTime: '',
 
-    paymentMethod: 'manual', // manual (bank transfer)
+    paymentMethod: 'stars',
   },
 };
 
@@ -107,7 +107,7 @@ function reducer(state, action) {
   switch (action.type) {
     case 'HYDRATE': {
       const savedDelivery = action.payload?.delivery || {};
-      // Legacy: older builds stored delivery `zone` in localStorage. Ignore it.
+      // Older builds stored delivery `zone` in localStorage. Ignore it.
       // eslint-disable-next-line no-unused-vars
       const { zone, ...deliveryRest } = savedDelivery || {};
       return {
@@ -243,7 +243,8 @@ function reducer(state, action) {
       const id = action.id ?? Date.now();
       const next = {
         id,
-        name: action.name?.trim() || 'Получатель',
+        name: action.name?.trim() || 'Recipient',
+        handle: action.handle?.trim() || '',
         phone: action.phone?.trim() || '',
         relation: action.relation?.trim() || '',
         address: action.address?.trim() || '',
@@ -307,7 +308,7 @@ function reducer(state, action) {
     case 'CART_ADD_ITEM': {
       const productId = action.productId;
       const qty = clamp(Number(action.qty ?? 1), 1, 99);
-      const idx = state.cart.items.findIndex((i) => i.productId === productId);
+      const idx = state.cart.items.findIndex((i) => String(i.productId) === String(productId));
       const items = idx === -1
         ? [...state.cart.items, { productId, qty }]
         : state.cart.items.map((i, j) => (j === idx ? { ...i, qty: clamp(i.qty + qty, 1, 99) } : i));
@@ -316,13 +317,36 @@ function reducer(state, action) {
 
     case 'CART_SET_QTY': {
       const items = state.cart.items
-        .map((i) => (i.productId === action.productId ? { ...i, qty: clamp(action.qty, 1, 99) } : i))
+        .map((i) => (String(i.productId) === String(action.productId) ? { ...i, qty: clamp(action.qty, 1, 99) } : i))
         .filter((i) => i.qty > 0);
       return { ...state, cart: { ...state.cart, items } };
     }
 
     case 'CART_REMOVE_ITEM': {
-      const items = state.cart.items.filter((i) => i.productId !== action.productId);
+      const items = state.cart.items.filter((i) => String(i.productId) !== String(action.productId));
+      return { ...state, cart: { ...state.cart, items } };
+    }
+
+    case 'CART_PRUNE_ITEMS': {
+      const canonicalByKey = new Map((action.productIds || []).map((id) => [String(id), id]));
+      const byProduct = new Map();
+
+      for (const item of state.cart.items || []) {
+        const canonicalId = canonicalByKey.get(String(item.productId));
+        if (canonicalId == null) continue;
+        const prev = byProduct.get(String(canonicalId)) || { productId: canonicalId, qty: 0 };
+        byProduct.set(String(canonicalId), {
+          productId: canonicalId,
+          qty: clamp(Number(prev.qty || 0) + Number(item.qty || 0), 1, 99),
+        });
+      }
+
+      const items = [...byProduct.values()];
+      if (items.length === state.cart.items.length && items.every((it, idx) => (
+        String(it.productId) === String(state.cart.items[idx]?.productId) && Number(it.qty) === Number(state.cart.items[idx]?.qty)
+      ))) {
+        return state;
+      }
       return { ...state, cart: { ...state.cart, items } };
     }
 
@@ -414,7 +438,6 @@ const AppStateContext = createContext(null);
 
 export function AppStateProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const legacyRecipientsRef = useRef([]);
   const storageKeyRef = useRef(STORAGE_KEY);
 
   // Hydrate persisted slices
@@ -422,8 +445,6 @@ export function AppStateProvider({ children }) {
     const raw = localStorage.getItem(storageKeyRef.current);
     const saved = raw ? safeJsonParse(raw) : null;
     if (saved) {
-      // Keep legacy recipients in memory for one-time migration to DB.
-      legacyRecipientsRef.current = Array.isArray(saved?.recipients?.items) ? saved.recipients.items : [];
       dispatch({ type: 'HYDRATE', payload: saved });
     }
   }, []);
@@ -483,16 +504,10 @@ export function AppStateProvider({ children }) {
         images.push(u);
       }
 
-      const subtitle = (() => {
-        const prep = formatPrepTime(p.deliveryTime);
-        const tags = String(p.tags || '').trim();
-        return prep || tags;
-      })();
-
       return {
         id: Number(p.id),
         title: String(p.name || ''),
-        subtitle,
+        subtitle: '',
         price: finalPrice,
         basePrice,
         discount,
@@ -518,49 +533,6 @@ export function AppStateProvider({ children }) {
       }
     };
 
-    const migrateLegacyRecipientsIfNeeded = async (me) => {
-      try {
-        if (!me?.id) return;
-        if (!me?.telegramId) return; // Only migrate for real Telegram accounts.
-        if (localStorage.getItem(RECIPIENTS_MIGRATION_KEY) === '1') return;
-
-        const legacy = Array.isArray(legacyRecipientsRef.current) ? legacyRecipientsRef.current : [];
-        if (!legacy.length) {
-          localStorage.setItem(RECIPIENTS_MIGRATION_KEY, '1');
-          return;
-        }
-
-        // If the server already has recipients, do not auto-merge to avoid duplicates.
-        const current = await loadRecipients();
-        if (current.length) {
-          localStorage.setItem(RECIPIENTS_MIGRATION_KEY, '1');
-          return;
-        }
-
-        for (const r of legacy) {
-          const name = String(r?.name || '').trim();
-          if (!name) continue;
-          // Best-effort: keep only the fields supported by the server model.
-          // Ignore any legacy-only flags (e.g. isFavorite).
-          // eslint-disable-next-line no-await-in-loop
-          await api.createRecipient({
-            name,
-            relation: r?.relation || '',
-            phone: r?.phone || '',
-            address: r?.address || '',
-            birthDate: r?.birthDate || '',
-            image: r?.image || '',
-            askAddress: Boolean(r?.askAddress),
-          });
-        }
-
-        localStorage.setItem(RECIPIENTS_MIGRATION_KEY, '1');
-        await loadRecipients();
-      } catch {
-        // ignore
-      }
-    };
-
     return {
       // auth
       setTelegramUser: (user) => dispatch({ type: 'AUTH_SET_TG_USER', user }),
@@ -570,7 +542,6 @@ export function AppStateProvider({ children }) {
           const res = await api.getMe();
           dispatch({ type: 'AUTH_ME_SET', me: res?.user || null });
           // Recipients are user-scoped on the server, so load them after auth is known.
-          await migrateLegacyRecipientsIfNeeded(res?.user || null);
           await loadRecipients();
           return res?.user || null;
         } catch (e) {
@@ -607,7 +578,7 @@ export function AppStateProvider({ children }) {
 
       // products
       loadProducts: async () => {
-        const cacheKey = 'products_ui_v2';
+        const cacheKey = 'products_ui_v10';
         const cached = readCacheEntry(cacheKey);
         const cachedItems = Array.isArray(cached?.data) ? cached.data : null;
         if (cachedItems?.length) {
@@ -628,13 +599,14 @@ export function AppStateProvider({ children }) {
           writeCacheEntry(cacheKey, normalized);
           prefetchImages(normalized.map((p) => p?.image).filter(Boolean), { max: 10 });
         } catch (e) {
-          dispatch({ type: 'PRODUCTS_ERROR', error: e?.data?.error || e?.message || 'Не удалось загрузить товары' });
+          dispatch({ type: 'PRODUCTS_SET', items: PRODUCTS });
+          prefetchImages(PRODUCTS.map((p) => p?.image).filter(Boolean), { max: 10 });
         }
       },
 
       // upsells (additional products in cart)
       loadUpsells: async () => {
-        const cacheKey = 'upsells_ui_v2';
+        const cacheKey = 'upsells_ui_v5';
         const cached = readCacheEntry(cacheKey);
         const cachedItems = Array.isArray(cached?.data) ? cached.data : null;
         if (cachedItems?.length) dispatch({ type: 'UPSELLS_SET', items: cachedItems });
@@ -648,13 +620,23 @@ export function AppStateProvider({ children }) {
           dispatch({ type: 'UPSELLS_SET', items: normalized });
           writeCacheEntry(cacheKey, normalized);
         } catch (e) {
-          dispatch({ type: 'UPSELLS_ERROR', error: e?.data?.error || e?.message || 'Не удалось загрузить апсейлы' });
+          dispatch({ type: 'UPSELLS_SET', items: UPSELLS.map((u) => ({
+            id: u.id,
+            title: u.title,
+            subtitle: u.isFree ? 'Included' : 'Add-on',
+            price: u.price,
+            image: u.imageUrl,
+            images: [u.imageUrl].filter(Boolean),
+            description: '',
+            composition: [],
+            size: '',
+          })) });
         }
       },
 
       // collections + scenarios
       loadCollections: async () => {
-        const cacheKey = 'collections_v1';
+        const cacheKey = 'collections_v6';
         const cached = readCacheEntry(cacheKey);
         const cachedData = cached?.data || null;
         if (cachedData && typeof cachedData === 'object') {
@@ -672,12 +654,23 @@ export function AppStateProvider({ children }) {
           dispatch({ type: 'COLLECTIONS_SET', items, scenarios });
           writeCacheEntry(cacheKey, { items, scenarios });
         } catch (e) {
-          dispatch({ type: 'COLLECTIONS_ERROR', error: e?.data?.error || e?.message || 'Не удалось загрузить подборки' });
+          dispatch({ type: 'COLLECTIONS_SET', items: COLLECTIONS, scenarios: SCENARIOS });
         }
       },
 
       // recipients
       loadRecipients,
+      addLocalRecipient: (payload) => dispatch({
+        type: 'RECIPIENT_ADD',
+        id: payload?.id,
+        name: payload?.name,
+        handle: payload?.handle,
+        phone: payload?.phone,
+        relation: payload?.relation,
+        address: payload?.address,
+        birthDate: payload?.birthDate,
+        image: payload?.image,
+      }),
       addRecipient: async (payload) => {
         const res = await api.createRecipient(payload || {});
         await loadRecipients();
@@ -708,6 +701,7 @@ export function AppStateProvider({ children }) {
       addToCart: (productId, qty = 1) => dispatch({ type: 'CART_ADD_ITEM', productId, qty }),
       setCartQty: (productId, qty) => dispatch({ type: 'CART_SET_QTY', productId, qty }),
       removeFromCart: (productId) => dispatch({ type: 'CART_REMOVE_ITEM', productId }),
+      pruneCartItems: (productIds) => dispatch({ type: 'CART_PRUNE_ITEMS', productIds }),
       setFloristComment: (value) => dispatch({ type: 'CART_SET_FLORIST_COMMENT', value }),
       setUpsellQty: (upsellId, qty) => dispatch({ type: 'CART_SET_UPSELL_QTY', upsellId, qty }),
       toggleBonuses: () => dispatch({ type: 'CART_TOGGLE_BONUSES' }),

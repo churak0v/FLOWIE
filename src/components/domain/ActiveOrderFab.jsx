@@ -10,7 +10,7 @@ export function ActiveOrderFab() {
   const expiresAt = state.orders.activeOrderExpiresAt ? new Date(state.orders.activeOrderExpiresAt).getTime() : null;
   const expired = expiresAt && Date.now() > expiresAt;
 
-  // Скрываем FAB, если карточка заказа уже показана на главной (orderId есть, но home сам рендерит карточку).
+  // Hide the FAB when the home screen already renders the active order card.
   const showFab = Boolean(orderId) && !expired && window.location?.pathname === '/';
 
   if (!orderId || expired) {
@@ -41,10 +41,10 @@ export function ActiveOrderFab() {
         fontWeight: 900,
         cursor: 'pointer',
       }}
-      aria-label="Активный заказ"
+      aria-label="Active order"
     >
       <Clock size={18} color="white" />
-      <span style={{ whiteSpace: 'nowrap' }}>Активный заказ</span>
+      <span style={{ whiteSpace: 'nowrap' }}>Active order</span>
     </button>
   );
 }

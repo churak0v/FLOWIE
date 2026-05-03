@@ -7,13 +7,12 @@ import { IconButton } from './ui/IconButton';
 import { ProductGallery } from './domain/ProductGallery';
 import { ProductInfo } from './domain/ProductInfo';
 import { AlsoLikeSection } from './domain/AlsoLikeSection';
-import { ShopBenefits } from './domain/ShopBenefits';
 import { ProductAddBar } from './domain/ProductAddBar';
 import { api } from '../api';
 import { prefetchImages } from '../lib/prefetch';
 import { readCacheEntry, writeCacheEntry, isCacheFresh } from '../lib/persistedCache';
 import { Text } from './ui/Text';
-import { formatPrepTime, toUiComposition, toUiSize } from '../lib/productUi';
+import { toUiComposition, toUiSize } from '../lib/productUi';
 
 export function ProductDetails() {
   const { id } = useParams();
@@ -24,7 +23,7 @@ export function ProductDetails() {
   const productFromList = useMemo(() => state.products.items.find((p) => p.id === productId) || null, [productId, state.products.items]);
   const [product, setProduct] = useState(productFromList);
   const [qty, setQty] = useState(1);
-  const cacheKey = useMemo(() => (Number.isFinite(productId) ? `product_detail_${productId}` : ''), [productId]);
+  const cacheKey = useMemo(() => (Number.isFinite(productId) ? `product_detail_v4_${productId}` : ''), [productId]);
 
   useEffect(() => {
     setProduct(productFromList);
@@ -50,9 +49,11 @@ export function ProductDetails() {
   useEffect(() => {
     let alive = true;
     if (!Number.isFinite(productId)) return;
-    if (productFromList) return;
+    const hasFullGallery = Array.isArray(productFromList?.images) && productFromList.images.length > 1;
+    if (productFromList && hasFullGallery) return;
     const cached = cacheKey ? readCacheEntry(cacheKey) : null;
-    if (cached?.data && isCacheFresh(cached, 5 * 60_000)) return;
+    const cachedHasGallery = Array.isArray(cached?.data?.images) && cached.data.images.length > 1;
+    if (cached?.data && cachedHasGallery && isCacheFresh(cached, 5 * 60_000)) return;
     api
       .getProduct(productId)
       .then((p) => {
@@ -73,11 +74,7 @@ export function ProductDetails() {
         const next = {
           id: Number(p.id),
           title: String(p.name || ''),
-          subtitle: (() => {
-            const prep = formatPrepTime(p.deliveryTime);
-            const tags = String(p.tags || '').trim();
-            return prep || tags;
-          })(),
+          subtitle: '',
           price: finalPrice,
           basePrice,
           discount,
@@ -99,15 +96,43 @@ export function ProductDetails() {
     };
   }, [productFromList, productId]);
 
+  const cartItem = useMemo(
+    () => state.cart.items.find((it) => Number(it.productId) === Number(productId)) || null,
+    [productId, state.cart.items]
+  );
+  const inCart = Boolean(cartItem);
   const sum = (product?.price || 0) * qty;
   const isFavorite = product ? state.favorites.productIds.includes(product.id) : false;
+
+  useEffect(() => {
+    setQty(cartItem ? Math.max(1, Math.min(99, Number(cartItem.qty || 1))) : 1);
+  }, [cartItem, productId]);
+
+  const handleAdd = () => {
+    if (!product) return;
+    actions.addToCart(product.id, qty);
+  };
+
+  const handleDec = () => {
+    if (!product) return;
+    const next = Math.max(1, qty - 1);
+    if (inCart) actions.setCartQty(product.id, next);
+    else setQty(next);
+  };
+
+  const handleInc = () => {
+    if (!product) return;
+    const next = Math.min(99, qty + 1);
+    if (inCart) actions.setCartQty(product.id, next);
+    else setQty(next);
+  };
 
   return (
     <>
       <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '140px' }}>
         <div style={{ position: 'relative' }}>
           <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10 }}>
-            <IconButton onClick={() => navigate(-1)} aria-label="Назад">
+            <IconButton onClick={() => navigate(-1)} aria-label="Back">
               <ChevronLeft size={22} />
             </IconButton>
           </div>
@@ -115,7 +140,7 @@ export function ProductDetails() {
           <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}>
             <IconButton
               onClick={() => product && actions.toggleFavoriteProduct(product.id)}
-              aria-label={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+              aria-label={isFavorite ? 'Remove from saved' : 'Save item'}
               style={{
                 background: isFavorite ? 'var(--c-accent-10)' : undefined,
               }}
@@ -133,19 +158,20 @@ export function ProductDetails() {
         </div>
 
         <div style={{ marginTop: 'var(--sp-6)' }}>
-          {product ? <ProductInfo product={product} /> : <Text variant="body" muted>Загружаем…</Text>}
+          {product ? <ProductInfo product={product} /> : <Text variant="body" muted>Loading...</Text>}
         </div>
 
         {product ? <AlsoLikeSection productId={product.id} /> : null}
-        <ShopBenefits />
       </AppShell>
 
       <ProductAddBar
         qty={qty}
-        onDec={() => setQty((v) => Math.max(1, v - 1))}
-        onInc={() => setQty((v) => Math.min(99, v + 1))}
+        onDec={handleDec}
+        onInc={handleInc}
         sum={sum}
-        onAdd={() => product && actions.addToCart(product.id, qty)}
+        added={inCart}
+        onAdd={handleAdd}
+        onViewCart={() => navigate('/cart')}
       />
     </>
   );

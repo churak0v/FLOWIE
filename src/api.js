@@ -146,7 +146,7 @@ export const api = {
         const text = !isJson ? await res.text().catch(() => '') : '';
 
         if (res.status === 413) {
-            throw new Error('Файл слишком большой (макс 25 МБ)');
+            throw new Error('File is too large (max 25 MB)');
         }
         if (!res.ok || !data?.url) {
             throw new Error(data?.error || text || 'UPLOAD_FAILED');

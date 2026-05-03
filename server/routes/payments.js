@@ -55,7 +55,7 @@ async function notifyAdminsPaymentPending(order) {
     const text =
       `Ожидается оплата (ручной перевод)\n` +
       `Заказ: #${orderId}\n` +
-      `Сумма: ${amount} ₽\n` +
+      `Amount: $${amount}\n` +
       `Клиент: ${userLabel}`;
 
     const reply_markup = { inline_keyboard: [[{ text: 'Подтвердить поступление', callback_data: cb }]] };
@@ -89,8 +89,10 @@ router.get('/manual', requireAuth, async (req, res) => {
     });
     if (!order) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
 
-    // Всегда пингуем админов при открытии экрана оплаты, чтобы они ждали перевод даже если клиент не нажмёт подтверждение.
-    notifyAdminsPaymentPending(order);
+    // Ping admins only while payment is actually pending.
+    if (String(order.paymentStatus || '').toUpperCase() === 'PENDING') {
+      notifyAdminsPaymentPending(order);
+    }
 
     const info = getPaymentInfo();
     return res.json({

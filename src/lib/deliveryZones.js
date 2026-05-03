@@ -22,10 +22,10 @@ export function haversineKm(a, b) {
 }
 
 export const SPB_DELIVERY_ZONES = [
-  { id: 'center', title: 'Центр', maxKm: 6, price: 199, eta: '35-55 мин' },
-  { id: 'near', title: 'Районы', maxKm: 15, price: 299, eta: '45-65 мин' },
-  { id: 'far', title: 'Пригород', maxKm: 30, price: 399, eta: '55-75 мин' },
-  { id: 'outside', title: 'Вне зоны', maxKm: Infinity, price: null, eta: null, unavailable: true },
+  { id: 'center', title: 'Center', maxKm: 6, price: 199, eta: '35-55 min' },
+  { id: 'near', title: 'Nearby', maxKm: 15, price: 299, eta: '45-65 min' },
+  { id: 'far', title: 'Suburbs', maxKm: 30, price: 399, eta: '55-75 min' },
+  { id: 'outside', title: 'Outside zone', maxKm: Infinity, price: null, eta: null, unavailable: true },
 ];
 
 export function getZoneById(id) {

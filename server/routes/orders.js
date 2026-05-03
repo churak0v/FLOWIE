@@ -211,7 +211,7 @@ async function notifyAdminsPaymentPending(order) {
         const text =
             `Новый заказ, требуется подтверждение оплаты\\n` +
             `Заказ: #${orderId}\\n` +
-            `Сумма: ${amount} ₽\\n` +
+            `Amount: $${amount}\\n` +
             `Клиент: ${userLabel}`;
 
         const reply_markup = {

@@ -6,6 +6,7 @@ import { AppShell } from './layout/AppShell';
 import { BottomSheet } from './ui/BottomSheet';
 import { Surface } from './ui/Surface';
 import { Text } from './ui/Text';
+import { OrderHistoryList } from './domain/OrderHistoryList';
 
 function normalizePhone(raw) {
   const s = String(raw || '').trim();
@@ -88,6 +89,10 @@ function RowButton({ title, subtitle, onClick, right }) {
   );
 }
 
+function openSupport() {
+  window.open('https://t.me/flowie_support', '_blank', 'noopener,noreferrer');
+}
+
 export function Account() {
   const navigate = useNavigate();
   const { state, actions } = useAppState();
@@ -95,16 +100,16 @@ export function Account() {
   const tg = state.auth.telegramUser;
   const me = state.auth.me;
   const displayName = useMemo(() => {
-    if (tg) return [tg.firstName, tg.lastName].filter(Boolean).join(' ') || 'Профиль';
-    return me?.name || 'Профиль';
+    if (tg) return [tg.firstName, tg.lastName].filter(Boolean).join(' ') || 'Profile';
+    return me?.name || 'Profile';
   }, [me?.name, tg]);
 
-  const tag = tg?.username ? `@${tg.username}` : me?.username ? `@${me.username}` : 'Без тега';
+  const tag = tg?.username ? `@${tg.username}` : me?.username ? `@${me.username}` : 'No username';
   const photoUrl = tg?.photoUrl || '';
   const phoneBound = Boolean(me?.phone);
 
   const [phoneOpen, setPhoneOpen] = useState(false);
-  const [phone, setPhone] = useState('+7');
+  const [phone, setPhone] = useState('+');
   const phoneOk = validatePhone(phone);
 
   return (
@@ -120,7 +125,7 @@ export function Account() {
             boxSizing: 'border-box',
           }}
         >
-          <Text variant="title">Кабинет</Text>
+          <Text variant="title">Account</Text>
 
           <div
             style={{
@@ -176,29 +181,29 @@ export function Account() {
             </div>
 
             <div style={{ flexShrink: 0, textAlign: 'right' }}>
-              <Text variant="caption">Бонусы</Text>
-              <div style={{ marginTop: 6, fontSize: 18, fontWeight: 1000, color: 'var(--accent)' }}>
-                {state.auth.bonusBalance} ₽
+              <Text variant="caption">Status</Text>
+              <div style={{ marginTop: 6, fontSize: 15, fontWeight: 1000, color: 'var(--accent)' }}>
+                Buyer
               </div>
             </div>
           </Surface>
 
           {state.auth.meLoading ? (
             <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
-              <Text variant="subtitle">Загружаем профиль…</Text>
+              <Text variant="subtitle">Loading profile...</Text>
             </Surface>
           ) : !phoneBound ? (
             <RowButton
-              title="Привяжите номер телефона для связи"
-              subtitle="Это нужно, чтобы мы могли уточнить детали доставки"
+              title="Add a contact phone"
+              subtitle="Used only if fulfillment needs clarification."
               onClick={() => {
-                setPhone(me?.phone || '+7');
+                setPhone(me?.phone || '+');
                 setPhoneOpen(true);
               }}
             />
           ) : (
             <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
-              <Text variant="subtitle">Телефон</Text>
+              <Text variant="subtitle">Phone</Text>
               <div style={{ marginTop: 6 }}>
                 <Text variant="body" muted>
                   {me.phone}
@@ -207,18 +212,29 @@ export function Account() {
             </Surface>
           )}
 
-          <RowButton title="Согласие на обработку данных" onClick={() => navigate('/legal/consent')} />
-          <RowButton title="Политика конфиденциальности" onClick={() => navigate('/legal/privacy')} />
-          <RowButton title="Публичная оферта" onClick={() => navigate('/legal/offer')} />
+          <RowButton
+            title="Contact support"
+            subtitle="Questions about payment, delivery, or a wishlist order."
+            onClick={openSupport}
+          />
+          <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
+            <Text variant="title">Order history</Text>
+            <div style={{ marginTop: 12 }}>
+              <OrderHistoryList limit={8} />
+            </div>
+          </Surface>
+          <RowButton title="Data processing consent" onClick={() => navigate('/legal/consent')} />
+          <RowButton title="Privacy policy" onClick={() => navigate('/legal/privacy')} />
+          <RowButton title="Public offer" onClick={() => navigate('/legal/offer')} />
         </div>
         </div>
       </AppShell>
 
       <BottomSheet open={phoneOpen} onClose={() => setPhoneOpen(false)}>
-        <Text variant="title">Номер телефона</Text>
+        <Text variant="title">Phone number</Text>
         <div style={{ marginTop: 10 }}>
           <Text variant="body" muted>
-            Введите номер в формате +7XXXXXXXXXX
+            Enter a phone number in international format.
           </Text>
         </div>
 
@@ -227,7 +243,7 @@ export function Account() {
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             inputMode="tel"
-            placeholder="+7"
+            placeholder="+1 555 000 0000"
             style={{
               width: '100%',
               border: '1px solid var(--border)',
@@ -238,7 +254,7 @@ export function Account() {
           />
           {!phone ? null : phoneOk ? null : (
             <div style={{ marginTop: 6 }}>
-              <Text variant="caption">Проверьте формат номера</Text>
+              <Text variant="caption">Check the phone number format.</Text>
             </div>
           )}
         </div>
@@ -253,7 +269,7 @@ export function Account() {
                 await actions.updateMyPhone(normalizePhone(phone));
                 setPhoneOpen(false);
               } catch (e) {
-                alert(e?.data?.error || e?.message || 'Не удалось сохранить номер');
+                alert(e?.data?.error || e?.message || 'Could not save the phone number');
               }
             }}
             style={{
@@ -268,7 +284,7 @@ export function Account() {
               cursor: phoneOk ? 'pointer' : 'default',
             }}
           >
-            Сохранить
+            Save
           </button>
           <button
             type="button"
@@ -284,7 +300,7 @@ export function Account() {
               cursor: 'pointer',
             }}
           >
-            Отмена
+            Cancel
           </button>
         </div>
       </BottomSheet>

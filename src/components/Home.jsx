@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { Surface } from './ui/Surface';
@@ -6,7 +7,6 @@ import { HeroBlock } from './domain/HeroBlock';
 import { SubscriptionRow } from './domain/SubscriptionRow';
 import { ActiveOrderCard } from './domain/ActiveOrderCard';
 import { FrequentlyOrderedSection } from './domain/FrequentlyOrderedSection';
-import { AddressPickerSheet } from './domain/AddressPickerSheet';
 import { Text } from './ui/Text';
 import { HERO_SLIDES } from '../data/mock';
 import { api } from '../api';
@@ -18,13 +18,13 @@ export function Home() {
   const navigate = useNavigate();
   const { state, actions } = useAppState();
   const activeOrder = state.orders.activeOrderPreview;
-  const [addressOpen, setAddressOpen] = useState(false);
+  const [activeOrders, setActiveOrders] = useState([]);
   const [heroSlides, setHeroSlides] = useState(HERO_SLIDES);
 
   useEffect(() => {
     let alive = true;
 
-    const cacheKey = 'home_config_v1';
+    const cacheKey = 'home_config_v7';
     const cached = readCacheEntry(cacheKey);
     const cachedSlides = Array.isArray(cached?.data?.heroSlides) ? cached.data.heroSlides : null;
     if (cachedSlides?.length) setHeroSlides(cachedSlides);
@@ -51,51 +51,39 @@ export function Home() {
     };
   }, []);
 
-  // Load active order details for card.
+  // Load active order details for the home cards.
   useEffect(() => {
     let cancelled = false;
-    const id = state.orders.activeOrderId;
-    const previewId = state.orders.activeOrderPreview?.id;
+    const activeStatuses = 'PAYMENT_PENDING,PAID,ACCEPTED,ASSEMBLED,IN_DELIVERY';
 
-    const loadById = async (orderId) => {
+    const loadActiveOrders = async () => {
       try {
-        const res = await api.getOrder(orderId);
-        const order = res?.order || null;
-        if (!cancelled && order?.id != null) {
-          actions.setActiveOrder(order.id, order.paymentExpiresAt || null, buildActiveOrderPreview(order));
-        }
-      } catch (e) {
-        // Keep the cached preview on transient failures; clear only if the order is gone.
-        if (!cancelled && e?.status === 404) actions.clearActiveOrder();
-      }
-    };
-
-    const loadFallback = async () => {
-      try {
-        const res = await api.getOrders({ statuses: 'PAYMENT_PENDING,PAID,CONFIRMED' });
-        const first = Array.isArray(res) ? res[0] : null;
+        const res = await api.getOrders({ statuses: activeStatuses });
+        const orders = Array.isArray(res) ? res : [];
         if (cancelled) return;
+
+        const previews = orders.map(buildActiveOrderPreview).filter(Boolean);
+        setActiveOrders(previews);
+
+        const first = previews[0] || null;
         if (first?.id != null) {
-          actions.setActiveOrder(first.id, first.paymentExpiresAt || null, buildActiveOrderPreview(first));
+          actions.setActiveOrder(first.id, first.paymentExpiresAt || null, first);
         } else {
           actions.clearActiveOrder();
         }
       } catch {
-        // ignore
+        // Keep the current UI on transient API failures.
       }
     };
 
-    if (id) {
-      const samePreview = previewId != null && String(previewId) === String(id);
-      if (!samePreview) loadById(id);
-    } else {
-      loadFallback();
-    }
+    loadActiveOrders();
+    const timer = window.setInterval(loadActiveOrders, 45_000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
-  }, [actions, state.orders.activeOrderId, state.orders.activeOrderPreview?.id]);
+  }, [actions]);
 
   const slides = useMemo(
     () => {
@@ -106,7 +94,7 @@ export function Home() {
         const key = String(s?.id ?? `${media}::${s?.caption || ''}`);
         if (!key || seen.has(key)) continue;
         seen.add(key);
-        out.push({ id: key, image: s?.image, video: s?.video, caption: s?.caption, subtitle: s?.subtitle, href: s?.href });
+        out.push({ id: key, image: s?.image, video: s?.video, imagePosition: s?.imagePosition, caption: s?.caption, subtitle: s?.subtitle, href: s?.href });
       }
       return out;
     },
@@ -128,7 +116,7 @@ export function Home() {
             zIndex: 0,
           }}
         >
-          <HeroBlock slides={slides} address={state.delivery?.address} onAddressClick={() => setAddressOpen(true)} />
+          <HeroBlock slides={slides} />
         </div>
 
         {/* Scrollable content panel */}
@@ -161,24 +149,55 @@ export function Home() {
 
             <SubscriptionRow />
 
-            {activeOrder ? (
+            {activeOrders.length ? (
               <div style={{ marginTop: 'var(--sp-6)' }}>
-                <ActiveOrderCard order={activeOrder} onClick={() => navigate(`/pay/${encodeURIComponent(String(activeOrder.id))}`)} />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                  <Text variant="title">Active gifts</Text>
+                  <Text variant="caption" muted>{activeOrders.length} in progress</Text>
+                </div>
+
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {activeOrders.map((order) => (
+                    <ActiveOrderCard
+                      key={order.id}
+                      order={order}
+                      onClick={() => navigate(`/pay/${encodeURIComponent(String(order.id))}`)}
+                    />
+                  ))}
+                </div>
               </div>
             ) : null}
 
-	            <div style={{ marginTop: 'var(--sp-8)' }}>
-	              <Text variant="title" style={{ marginBottom: 'var(--sp-4)' }}>
-	                Авторская коллекция
-	              </Text>
-	              <FrequentlyOrderedSection products={state.products.items} />
-	            </div>
+            <div style={{ marginTop: 'var(--sp-8)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 'var(--sp-4)' }}>
+                <Text variant="title">What would make her smile?</Text>
+                <button
+                  type="button"
+                  onClick={() => navigate('/shop')}
+                  style={{
+                    border: 0,
+                    background: 'transparent',
+                    color: 'var(--accent)',
+                    fontWeight: 1000,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    padding: 0,
+                  }}
+                >
+                  Shop
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+              <FrequentlyOrderedSection products={state.products.items} limit={8} showMoreHref="/shop" showMoreLabel="Show more gifts" />
+            </div>
 
           </Surface>
         </div>
       </AppShell>
 
-      <AddressPickerSheet open={addressOpen} onClose={() => setAddressOpen(false)} />
     </>
   );
 }

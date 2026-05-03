@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Heart, House, MessageCircle, User, Users } from 'lucide-react';
+import { Heart, House, ShoppingBag, User, Users } from 'lucide-react';
 
 function Tab({ to, label, icon: Icon }) {
   return (
@@ -16,13 +16,13 @@ function Tab({ to, label, icon: Icon }) {
 
 export function BottomNav() {
   return (
-    <nav className="ui-bottomNav" aria-label="Навигация">
+    <nav className="ui-bottomNav" aria-label="Navigation">
       <div className="ui-bottomNavInner">
-        <Tab to="/" label="Главная" icon={House} />
-        <Tab to="/favorites" label="Избранное" icon={Heart} />
-        <Tab to="/recipients" label="Люди" icon={Users} />
-        <Tab to="/chat" label="Чат" icon={MessageCircle} />
-        <Tab to="/account" label="Кабинет" icon={User} />
+        <Tab to="/" label="Home" icon={House} />
+        <Tab to="/favorites" label="Saved" icon={Heart} />
+        <Tab to="/recipients" label="Profiles" icon={Users} />
+        <Tab to="/catalog" label="Shop" icon={ShoppingBag} />
+        <Tab to="/account" label="Account" icon={User} />
       </div>
     </nav>
   );

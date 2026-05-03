@@ -1,11 +1,28 @@
 {
   "heroSlides": [
     {
-      "id": "feb14",
-      "caption": "Порадуй любимую!",
-      "subtitle": "Перейти в подборку для предзаказа",
-      "image": "https://images.unsplash.com/photo-1525310072745-f49212b5ac6d?auto=format&fit=crop&w=1400&q=80",
-      "href": "/catalog?collection=bright"
+      "id": "wishlist-first",
+      "caption": "Only gifts she actually wants.",
+      "subtitle": "Shop her verified wishlist, not random suggestions",
+      "image": "/hero/flowie-hero-wishlist-grounded.jpg",
+      "imagePosition": "center 54%",
+      "href": "/catalog"
+    },
+    {
+      "id": "recipient-controls-delivery",
+      "caption": "She chooses where and when.",
+      "subtitle": "You pay for the gift, she confirms delivery herself",
+      "image": "/hero/flowie-hero-delivery-grounded.jpg",
+      "imagePosition": "center 58%",
+      "href": "/recipients"
+    },
+    {
+      "id": "no-blind-transfers",
+      "caption": "Real gifts. No blind transfers.",
+      "subtitle": "Buy products through the platform with clear checkout",
+      "image": "/hero/flowie-hero-real-gifts-grounded.jpg",
+      "imagePosition": "center 58%",
+      "href": "/catalog"
     }
   ]
 }

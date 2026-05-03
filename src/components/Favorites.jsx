@@ -18,7 +18,7 @@ export function Favorites() {
   return (
     <>
       <AppShell style={{ display: 'flex', flexDirection: 'column', '--app-content-inset-bottom': '0px' }}>
-        <Text variant="title">Избранное</Text>
+        <Text variant="title">Saved items</Text>
 
         {products.length ? (
           <div style={{ marginTop: 'var(--sp-6)' }}>
@@ -27,10 +27,10 @@ export function Favorites() {
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', textAlign: 'center' }}>
-              <Text variant="subtitle">Пока пусто</Text>
+              <Text variant="subtitle">Nothing saved yet</Text>
               <div style={{ marginTop: 6 }}>
                 <Text variant="body" muted>
-                  Откройте товар и добавьте в избранное.
+                  Open an item and save it to compare gifts later.
                 </Text>
               </div>
               <button
@@ -48,7 +48,7 @@ export function Favorites() {
                   padding: '0 14px',
                 }}
               >
-                На главную
+                Go home
               </button>
             </Surface>
           </div>

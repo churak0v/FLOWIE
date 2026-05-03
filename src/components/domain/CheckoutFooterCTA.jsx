@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatMoney } from '../../lib/money';
 
 export function CheckoutFooterCTA({ total, disabled, onClick }) {
   return (
@@ -31,7 +32,7 @@ export function CheckoutFooterCTA({ total, disabled, onClick }) {
           fontSize: 16,
         }}
       >
-        Оплатить {total} ₽
+        Pay {formatMoney(total)}
       </button>
     </div>
   );

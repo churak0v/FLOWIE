@@ -11,7 +11,7 @@ function LegalPage({ title, children }) {
   return (
     <AppShell style={{ '--app-shell-bottom-space': '0px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <IconButton onClick={() => navigate(-1)} aria-label="Назад">
+        <IconButton onClick={() => navigate(-1)} aria-label="Back">
           <ChevronLeft size={22} />
         </IconButton>
         <Text variant="title">{title}</Text>
@@ -30,12 +30,12 @@ function LegalPage({ title, children }) {
 
 export function PrivacyPolicy() {
   return (
-    <LegalPage title="Политика конфиденциальности">
+    <LegalPage title="Privacy policy">
       <Text variant="body" muted>
-        Здесь будет размещена политика конфиденциальности и описание обработки персональных данных.
+        Flowie uses buyer contact details and private delivery information only to process, verify, and fulfill gift orders.
       </Text>
       <Text variant="body" muted>
-        MVP: текст можно обновить позже без изменения логики приложения.
+        Recipient addresses are not shown to buyers. Replace this MVP text with final legal wording before production launch.
       </Text>
     </LegalPage>
   );
@@ -43,13 +43,13 @@ export function PrivacyPolicy() {
 
 export function DataProcessingConsent() {
   return (
-    <LegalPage title="Согласие на обработку данных">
+    <LegalPage title="Data processing consent">
       <Text variant="body" muted>
-        Нажимая кнопку и продолжая использование сервиса, вы подтверждаете согласие на обработку персональных данных
-        в целях оформления и доставки заказов, связи с вами и улучшения сервиса.
+        By continuing, you consent to processing the data required to create profiles, place gifts, contact buyers,
+        coordinate delivery, and protect recipient privacy.
       </Text>
       <Text variant="body" muted>
-        MVP: рекомендуется заменить на юридически выверенный текст перед запуском в прод.
+        MVP notice: replace this copy with reviewed legal text before launch.
       </Text>
     </LegalPage>
   );
@@ -57,14 +57,13 @@ export function DataProcessingConsent() {
 
 export function PublicOffer() {
   return (
-    <LegalPage title="Публичная оферта">
+    <LegalPage title="Public offer">
       <Text variant="body" muted>
-        Здесь будет размещена публичная оферта (условия продажи и доставки).
+        Flowie lets buyers purchase real gifts from creator wishlists with private fulfillment and transparent order status.
       </Text>
       <Text variant="body" muted>
-        MVP: добавьте финальный текст оферты и реквизиты компании.
+        MVP notice: add final commercial terms, payment rules, refund policy, and company details before launch.
       </Text>
     </LegalPage>
   );
 }
-

@@ -7,8 +7,8 @@ export function formatPrepTime(value) {
   const digitsOnly = /^\d+$/;
   const rangeOnly = /^\d+\s*[-–—]\s*\d+$/;
 
-  if (digitsOnly.test(raw)) return `${raw} мин`;
-  if (rangeOnly.test(raw)) return `${raw.replace(/\s*[-–—]\s*/, '-')} мин`;
+  if (digitsOnly.test(raw)) return `${raw} min`;
+  if (rangeOnly.test(raw)) return `${raw.replace(/\s*[-–—]\s*/, '-')} min`;
 
   return raw;
 }

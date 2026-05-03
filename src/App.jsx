@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Home } from './components/Home';
 import { ProductDetails } from './components/ProductDetails';
 import { Cart } from './components/Cart';
@@ -7,19 +7,12 @@ import { Checkout } from './components/Checkout';
 import { Catalog } from './components/Catalog';
 import { Favorites } from './components/Favorites';
 import { Recipients } from './components/Recipients';
-import { Inbox } from './components/Inbox';
-import { ChatThread } from './components/ChatThread';
 import { Account } from './components/Account';
-import { RecipientNew } from './components/RecipientNew';
 import { RecipientProfile } from './components/RecipientProfile';
 import { PaymentManual } from './components/PaymentManual';
 import { DataProcessingConsent, PrivacyPolicy, PublicOffer } from './components/Legal';
 import { BottomNav } from './components/ui/BottomNav';
-import { AdminLayout } from './components/admin/AdminLayout';
-import { AdminOrders } from './components/admin/AdminOrders';
-import { AdminProducts } from './components/admin/AdminProducts';
-import { AdminSettings } from './components/admin/AdminSettings';
-import { AdminStats } from './components/admin/AdminStats';
+import { WebmasterDashboard } from './components/webmaster/WebmasterDashboard';
 import { MiniCartBar } from './components/domain/MiniCartBar';
 import { ActiveOrderFab } from './components/domain/ActiveOrderFab';
 import { InsetsDebug } from './components/dev/InsetsDebug';
@@ -28,9 +21,31 @@ import { getTelegramInitData, getTelegramStartParam, getTelegramUserSafe, isTele
 import { reverseGeocodeOSM } from './lib/reverseGeocode';
 import { AppStateProvider, useAppState } from './state/AppState';
 
+const REFERRAL_PROFILES = {
+    vivienne: {
+        id: 2002,
+        name: 'Vivienne',
+        handle: '@_v.morel',
+        relation: 'Verified wishlist',
+        image: '/vivienne-avatar.jpeg',
+        askAddress: true,
+    },
+};
+
+function getReferralToken() {
+    try {
+        const params = new URLSearchParams(window.location?.search || '');
+        const raw = params.get('ref') || params.get('creator') || params.get('profile') || getTelegramStartParam() || '';
+        return String(raw).trim().toLowerCase().replace(/^creator[_-]?/, '').replace(/[^a-z0-9_-]/g, '');
+    } catch {
+        return '';
+    }
+}
+
 function AppRoutes() {
     const { state, selectors, actions } = useAppState();
     const location = useLocation();
+    const navigate = useNavigate();
     const { pathname } = location;
 
     // Load products from DB-backed API so the client vitrine reflects admin toggles (isActive).
@@ -39,6 +54,11 @@ function AppRoutes() {
         actions.loadUpsells();
         actions.loadCollections();
     }, [actions]);
+
+    useEffect(() => {
+        if (!state.products.items.length || !state.cart.items.length) return;
+        actions.pruneCartItems(state.products.items.map((p) => p.id));
+    }, [actions, state.cart.items, state.products.items]);
 
     // Load server-side profile (phone, etc). Retry briefly to survive auth bootstrap race.
     useEffect(() => {
@@ -68,36 +88,61 @@ function AppRoutes() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [actions]);
 
+    useEffect(() => {
+        const token = getReferralToken();
+        const profile = REFERRAL_PROFILES[token];
+        if (!profile) return;
+
+        const existingProfiles = (state.recipients.items || []).filter((r) => String(r?.name || '').toLowerCase() === profile.name.toLowerCase());
+        const exists = existingProfiles.sort((a, b) => {
+            const bt = Date.parse(b?.updatedAt || b?.createdAt || '') || 0;
+            const at = Date.parse(a?.updatedAt || a?.createdAt || '') || 0;
+            if (bt !== at) return bt - at;
+            return Number(b?.id || 0) - Number(a?.id || 0);
+        })[0];
+        if (exists) {
+            if (state.recipients.selectedId !== exists.id) actions.selectRecipient(exists.id);
+            if (pathname === '/' || pathname === `/recipients/${profile.id}`) {
+                navigate(`/recipients/${encodeURIComponent(String(exists.id))}`, { replace: true });
+            }
+            return;
+        }
+
+        if (!state.auth.me?.id) {
+            actions.addLocalRecipient({ ...profile, id: profile.id });
+            if (pathname === '/') navigate(`/recipients/${encodeURIComponent(String(profile.id))}`, { replace: true });
+            return;
+        }
+
+        actions.addRecipient(profile).then((created) => {
+            if (created?.id != null && (pathname === '/' || pathname === `/recipients/${profile.id}`)) {
+                navigate(`/recipients/${encodeURIComponent(String(created.id))}`, { replace: true });
+            }
+        }).catch(() => {});
+    }, [actions, navigate, pathname, state.auth.me?.id, state.recipients.items, state.recipients.selectedId]);
+
     const productsById = useMemo(() => {
         const m = new Map();
-        for (const p of state.products.items) m.set(p.id, p);
+        for (const p of state.products.items) m.set(String(p.id), p);
         return m;
     }, [state.products.items]);
 
     const sum = useMemo(() => {
-        return (state.cart.items || []).reduce((acc, it) => acc + (productsById.get(it.productId)?.price || 0) * it.qty, 0);
+        return (state.cart.items || []).reduce((acc, it) => acc + (productsById.get(String(it.productId))?.price || 0) * it.qty, 0);
     }, [productsById, state.cart.items]);
 
-    const hideMiniCart =
-        pathname.startsWith('/admin') ||
-        pathname === '/cart' ||
-        pathname === '/checkout' ||
-        pathname.startsWith('/pay') ||
-        pathname.startsWith('/chat') ||
-        pathname.startsWith('/recipients/new') ||
-        pathname.startsWith('/legal');
-
-    const miniCartBottom = pathname.startsWith('/product/')
-        ? 'calc(85px + var(--app-nav-inset-bottom))'
+    const showMiniCart = pathname === '/' || pathname === '/catalog' || pathname === '/shop' || /^\/recipients\/\d+/.test(pathname);
+    const miniCartBottom = /^\/recipients\/\d+/.test(pathname)
+        ? 'calc(16px + var(--app-nav-inset-bottom))'
         : 'calc(72px + var(--app-nav-inset-bottom))';
 
-    const showBottomNav = !pathname.startsWith('/admin') && (
+    const showBottomNav = !pathname.startsWith('/admin') && !pathname.startsWith('/webmaster') && (
         pathname === '/' ||
         pathname === '/favorites' ||
         pathname === '/recipients' ||
-        pathname === '/chat' ||
         pathname === '/account' ||
-        pathname === '/catalog'
+        pathname === '/catalog' ||
+        pathname === '/shop'
     );
     const showPaymentFab = Boolean(state.orders.activeOrderId) && pathname.startsWith('/pay/');
 
@@ -147,40 +192,33 @@ function AppRoutes() {
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/catalog" element={<Catalog />} />
+                <Route path="/shop" element={<Catalog />} />
 
                 <Route path="/favorites" element={<Favorites />} />
                 <Route path="/recipients" element={<Recipients />} />
-                <Route path="/recipients/new" element={<RecipientNew />} />
+                <Route path="/recipients/new" element={<Navigate to="/webmaster" replace />} />
                 <Route path="/recipients/:id" element={<RecipientProfile />} />
-                <Route path="/chat" element={<Inbox />} />
-                <Route path="/chat/:id" element={<ChatThread />} />
-                <Route path="/inbox" element={<Navigate to="/chat" replace />} />
-                <Route path="/inbox/:id" element={<Navigate to="/chat" replace />} />
+                <Route path="/chat" element={<Navigate to="/account" replace />} />
+                <Route path="/chat/:id" element={<Navigate to="/account" replace />} />
+                <Route path="/inbox" element={<Navigate to="/account" replace />} />
+                <Route path="/inbox/:id" element={<Navigate to="/account" replace />} />
                 <Route path="/account" element={<Account />} />
                 <Route path="/pay/:id" element={<PaymentManual />} />
                 <Route path="/legal/privacy" element={<PrivacyPolicy />} />
                 <Route path="/legal/consent" element={<DataProcessingConsent />} />
                 <Route path="/legal/offer" element={<PublicOffer />} />
+                <Route path="/webmaster/*" element={<WebmasterDashboard />} />
 
-                {/* Legacy routes from the previous flow (keep links working) */}
                 <Route path="/success" element={<Navigate to="/" replace />} />
                 <Route path="/recipient/:id" element={<Navigate to="/recipients" replace />} />
-
-                {/* Legacy in-app admin routes (will be removed after external admin deploy is stable) */}
-                <Route path="/admin" element={<AdminLayout />}>
-                    <Route index element={<Navigate to="orders" replace />} />
-                    <Route path="orders" element={<AdminOrders />} />
-                    <Route path="products" element={<AdminProducts />} />
-                    <Route path="stats" element={<AdminStats />} />
-                    <Route path="settings" element={<AdminSettings />} />
-                </Route>
+                <Route path="/admin/*" element={<Navigate to="/webmaster" replace />} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
 
             {showBottomNav ? <BottomNav /> : null}
 
-            {hideMiniCart ? null : <MiniCartBar count={selectors.cartCount} sum={sum} bottom={miniCartBottom} />}
+            {showMiniCart ? <MiniCartBar count={selectors.cartCount} sum={sum} bottom={miniCartBottom} floating /> : null}
 
             {showPaymentFab ? <ActiveOrderFab /> : null}
 

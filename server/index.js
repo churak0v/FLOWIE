@@ -6,10 +6,12 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { validate, parse } = require('@tma.js/init-data-node');
 const { PrismaClient } = require('@prisma/client');
+const { startAutoFulfillment } = require('./services/autoFulfillment');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const prisma = new PrismaClient();
+startAutoFulfillment(prisma);
 
 app.set('trust proxy', 1);
 app.use(cors({ origin: true, credentials: true }));

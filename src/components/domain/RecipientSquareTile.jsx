@@ -3,40 +3,17 @@ import { Surface } from '../ui/Surface';
 import { Text } from '../ui/Text';
 import { AppImage } from '../ui/AppImage';
 
+const VIVIENNE_AVATAR = '/vivienne-avatar.jpeg';
+
 export function RecipientSquareTile({ variant = 'recipient', recipient, title, subtitle, onClick }) {
   const clickable = typeof onClick === 'function';
-  const name = title || recipient?.name || '';
-  const image = recipient?.image || recipient?.avatar || '';
-
-  if (variant === 'add') {
-    return (
-      <Surface
-        variant="soft"
-        onClick={onClick}
-        role={clickable ? 'button' : undefined}
-        tabIndex={clickable ? 0 : undefined}
-        style={{
-          borderRadius: 'var(--r-lg)',
-          border: '1px solid var(--border)',
-          background: 'var(--surface)',
-          aspectRatio: '1 / 1',
-          minHeight: 140,
-          padding: 14,
-          cursor: clickable ? 'pointer' : 'default',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          userSelect: 'none',
-          WebkitUserSelect: 'none',
-        }}
-      >
-        <div style={{ fontSize: 54, fontWeight: 900, color: 'var(--accent)', lineHeight: 1 }}>+</div>
-        <Text variant="caption" style={{ color: 'var(--muted)' }}>
-          {subtitle || 'Добавить получателя'}
-        </Text>
-      </Surface>
-    );
-  }
+  const isVivienne =
+    String(title || recipient?.name || '').trim().toLowerCase() === 'vivienne' ||
+    String(recipient?.id || '') === '2' ||
+    String(recipient?.id || '') === '2002' ||
+    String(recipient?.id || '') === 'vivienne-default';
+  const name = isVivienne ? 'Vivienne' : title || recipient?.name || '';
+  const image = isVivienne ? VIVIENNE_AVATAR : recipient?.image || recipient?.avatar || '';
 
   return (
     <Surface

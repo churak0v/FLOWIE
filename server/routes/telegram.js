@@ -179,7 +179,7 @@ router.post('/admin-webhook', async (req, res) => {
         const text =
           `Оплата подтверждена\n` +
           `Заказ: #${orderId}\n` +
-          `Сумма: ${amount} ₽\n` +
+          `Amount: $${amount}\n` +
           `Клиент: ${userLabel}`;
         await tgApi(getAdminBotToken(), 'editMessageText', {
           chat_id: chatId,
