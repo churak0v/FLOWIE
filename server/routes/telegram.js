@@ -37,6 +37,16 @@ function makeSig(orderId) {
   return crypto.createHmac('sha256', secret).update(String(orderId)).digest('hex').slice(0, 16);
 }
 
+function verifyPaymentPayload(payload, expectedKind) {
+  const parts = String(payload || '').split(':');
+  const kind = parts[0] || '';
+  const orderId = Number(parts[1] || '');
+  const sig = parts[2] || '';
+  if (kind !== expectedKind || !Number.isFinite(orderId) || !sig) return null;
+  if (sig !== makeSig(orderId)) return null;
+  return orderId;
+}
+
 async function tgApi(token, method, payload) {
   if (!token) return null;
   const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
@@ -80,7 +90,81 @@ setTimeout(setClientBotWebhook, 0);
 router.post('/webhook', async (req, res) => {
   try {
     const update = req.body || {};
+    const preCheckout = update.pre_checkout_query || null;
+    if (preCheckout) {
+      const orderId = verifyPaymentPayload(preCheckout.invoice_payload, 'stars');
+      let ok = false;
+      let errorMessage = 'Order is not available for payment';
+
+      if (orderId) {
+        const order = await prisma.order.findUnique({ where: { id: orderId } });
+        const expectedPayload = `stars:${orderId}:${makeSig(orderId)}`;
+        const isPending = order && String(order.paymentStatus || '').toUpperCase() !== 'CONFIRMED';
+        const isPayloadMatch = order && (!order.paymentPayload || order.paymentPayload === expectedPayload);
+        ok = Boolean(isPending && isPayloadMatch);
+        if (!ok && order && String(order.paymentStatus || '').toUpperCase() === 'CONFIRMED') {
+          errorMessage = 'This order has already been paid';
+        }
+      }
+
+      await tgApi(getClientBotToken(), 'answerPreCheckoutQuery', {
+        pre_checkout_query_id: preCheckout.id,
+        ok,
+        ...(ok ? {} : { error_message: errorMessage }),
+      });
+      return res.json({ ok: true });
+    }
+
     const msg = update.message || update.edited_message || null;
+    const successfulPayment = msg?.successful_payment || null;
+    if (successfulPayment) {
+      const orderId = verifyPaymentPayload(successfulPayment.invoice_payload, 'stars');
+      if (!orderId) return res.json({ ok: true });
+
+      const chargeId = String(successfulPayment.telegram_payment_charge_id || '');
+      const now = new Date();
+      const order = await prisma.order.findUnique({ where: { id: orderId }, include: { user: true } });
+      if (!order) return res.json({ ok: true });
+
+      const updated = await prisma.order.update({
+        where: { id: orderId },
+        data: {
+          paymentMethod: 'stars',
+          paymentStatus: 'CONFIRMED',
+          paymentClientConfirmed: true,
+          status: 'PAID',
+          paidAt: order.paidAt || now,
+          paymentPayload: successfulPayment.invoice_payload,
+          paymentChargeId: chargeId || order.paymentChargeId,
+          paymentMeta: JSON.stringify({
+            currency: successfulPayment.currency,
+            totalAmount: successfulPayment.total_amount,
+            providerPaymentChargeId: successfulPayment.provider_payment_charge_id || '',
+          }),
+        },
+      });
+
+      try {
+        const ids = getAdminIds();
+        const amount = Number(order.totalPrice || 0);
+        const userLabel = order.user?.username ? `@${order.user.username}` : (order.user?.name || `User ${order.user?.id || '—'}`);
+        const text =
+          `Оплата Stars подтверждена\n` +
+          `Заказ: #${orderId}\n` +
+          `Amount: $${amount}\n` +
+          `Stars: ${successfulPayment.total_amount}\n` +
+          `Клиент: ${userLabel}`;
+        for (const chatId of ids) {
+          // eslint-disable-next-line no-await-in-loop
+          await tgApi(getAdminBotToken(), 'sendMessage', { chat_id: chatId, text });
+        }
+      } catch {
+        // ignore
+      }
+
+      return res.json({ ok: true, order: { id: updated.id, paymentStatus: updated.paymentStatus } });
+    }
+
     if (!msg?.text) return res.json({ ok: true });
 
     const text = String(msg.text || '').trim();
@@ -97,12 +181,15 @@ router.post('/webhook', async (req, res) => {
     const appUrl = startParam && baseUrl ? `${baseUrl}?startapp=${encodeURIComponent(startParam)}` : baseUrl;
 
     const reply_markup = appUrl
-      ? { inline_keyboard: [[{ text: 'Открыть приложение', web_app: { url: appUrl } }]] }
+      ? { inline_keyboard: [[{ text: 'Open FLOWIE', web_app: { url: appUrl } }]] }
       : undefined;
 
     await tgApi(getClientBotToken(), 'sendMessage', {
       chat_id: chatId,
-      text: 'Добро пожаловать в Премиум-студию флористики FLOWIES.\nОформить предзаказ можно в приложении 👇',
+      text:
+        'Welcome to FLOWIE.\n\n' +
+        'Choose real gifts from a private wishlist and pay securely with TON Connect or Telegram Stars. ' +
+        'Recipient details stay private, and the order is handled through the app.',
       reply_markup,
     });
 

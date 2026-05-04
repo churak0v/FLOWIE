@@ -35,7 +35,7 @@ export function ProductDetails() {
     if (cached?.data) {
       setProduct(cached.data);
       const imgs = cached.data?.images?.length ? cached.data.images : cached.data?.image ? [cached.data.image] : [];
-      prefetchImages(imgs, { max: 8 });
+      prefetchImages(imgs, { max: 24 });
     }
   }, [cacheKey, productFromList]);
 
@@ -43,7 +43,7 @@ export function ProductDetails() {
     if (!productFromList || !cacheKey) return;
     writeCacheEntry(cacheKey, productFromList);
     const imgs = productFromList?.images?.length ? productFromList.images : productFromList?.image ? [productFromList.image] : [];
-    prefetchImages(imgs, { max: 8 });
+    prefetchImages(imgs, { max: 24 });
   }, [cacheKey, productFromList]);
 
   useEffect(() => {
@@ -87,7 +87,7 @@ export function ProductDetails() {
         };
         setProduct(next);
         if (cacheKey) writeCacheEntry(cacheKey, next);
-        prefetchImages(next.images?.length ? next.images : next.image ? [next.image] : [], { max: 8 });
+        prefetchImages(next.images?.length ? next.images : next.image ? [next.image] : [], { max: 24 });
       })
       .catch(() => {})
       .finally(() => {});

@@ -27,7 +27,7 @@ export function AppImage({ src, alt = '', fallback = DEFAULT_FALLBACK, onError, 
       {...props}
       src={finalSrc}
       alt={alt}
-      loading={props.loading || 'lazy'}
+      loading={props.loading || 'eager'}
       decoding={props.decoding || 'async'}
       referrerPolicy="no-referrer"
       onError={(e) => {

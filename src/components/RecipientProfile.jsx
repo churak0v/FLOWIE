@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   BadgeCheck,
   ChevronLeft,
   Gift,
   Heart,
+  MoveHorizontal,
   Play,
   ShieldCheck,
   Sparkles,
@@ -23,24 +24,6 @@ const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=900&q=80';
 const VIVIENNE_AVATAR = '/vivienne-avatar.jpeg';
 const VIVIENNE_HANDLE = '@_v.morel';
-const PUBLIC_PROFILES = {
-  2: {
-    id: 2,
-    name: 'Vivienne',
-    handle: VIVIENNE_HANDLE,
-    relation: 'Verified wishlist',
-    image: VIVIENNE_AVATAR,
-  },
-  2002: {
-    id: 2002,
-    name: 'Vivienne',
-    handle: VIVIENNE_HANDLE,
-    relation: 'Verified wishlist',
-    image: VIVIENNE_AVATAR,
-  },
-};
-const MOMENT_IMAGE =
-  'https://images.unsplash.com/photo-1513201099705-a9746e1e201f?auto=format&fit=crop&w=900&q=82';
 const MOMENT_VIDEO = '/videos/vivienne-reaction.mp4';
 const RAIL_CARD_WIDTH = 188;
 const RAIL_CARD_HEIGHT = 334;
@@ -155,14 +138,13 @@ function CreatorMomentTile({ recipient, gift, onGift }) {
       <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
         <video
           src={MOMENT_VIDEO}
-          poster={MOMENT_IMAGE}
           autoPlay
           loop
           muted
           playsInline
-          preload="metadata"
+          preload="auto"
           aria-label={`${recipient.name} gift reaction`}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', background: 'var(--c-text)' }}
         />
         <div
           aria-hidden="true"
@@ -250,9 +232,30 @@ function ProductRail({ title, subtitle, products, onOpen, onAdd, onCatalog, lead
       <FunnelHeader title={title} subtitle={subtitle} action="See all" onAction={onCatalog} />
 
       <div
+        style={{
+          marginTop: 10,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          height: 28,
+          padding: '0 10px',
+          borderRadius: 999,
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          color: 'var(--muted)',
+          fontSize: 12,
+          fontWeight: 850,
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
+        <MoveHorizontal size={14} />
+        Swipe picks
+      </div>
+
+      <div
         className="hide-scrollbar"
         style={{
-          marginTop: 14,
+          marginTop: 10,
           display: 'flex',
           gap: 12,
           overflowX: 'auto',
@@ -268,6 +271,7 @@ function ProductRail({ title, subtitle, products, onOpen, onAdd, onCatalog, lead
               subtitle={p.subtitle}
               price={p.price}
               image={p.image}
+              images={p.images}
               onOpen={() => onOpen(p.id)}
               onAdd={() => onAdd(p.id)}
             />
@@ -278,7 +282,7 @@ function ProductRail({ title, subtitle, products, onOpen, onAdd, onCatalog, lead
   );
 }
 
-function FlowerPassCard({ onClick }) {
+function FlowerPassCard() {
   return (
     <Surface
       variant="default"
@@ -351,20 +355,20 @@ function FlowerPassCard({ onClick }) {
 
       <button
         type="button"
-        onClick={onClick}
+        disabled
         style={{
           marginTop: 14,
           width: '100%',
           height: 48,
           border: 0,
           borderRadius: 999,
-          background: 'var(--c-white)',
-          color: 'var(--c-text)',
+          background: 'rgba(255,255,255,0.72)',
+          color: 'rgba(13,13,13,0.62)',
           fontWeight: 1000,
-          cursor: 'pointer',
+          cursor: 'default',
         }}
       >
-        Set up FLOWIE Pass
+        Soon
       </button>
     </Surface>
   );
@@ -402,26 +406,40 @@ function SafetySummary() {
   );
 }
 
+function specialPickScore(product) {
+  const title = String(product?.title || product?.name || '').toLowerCase();
+  if (title.includes('coral peonies with eucalyptus')) return -2;
+  if (title.includes('peonies')) return -1;
+  return 0;
+}
+
 export function RecipientProfile() {
   const navigate = useNavigate();
+  const location = useLocation();
   const params = useParams();
   const { state, actions } = useAppState();
 
   const id = Number(params.id);
   const recipient = useMemo(
-    () => normalizePublicRecipient(state.recipients.items.find((r) => Number(r.id) === id) || PUBLIC_PROFILES[id] || null, id),
+    () => normalizePublicRecipient(state.recipients.items.find((r) => Number(r.id) === id) || null, id),
     [id, state.recipients.items]
   );
 
   const wishlist = useMemo(() => (state.products.items || []).slice(0, 14), [state.products.items]);
   const easyPicks = useMemo(() => wishlist.filter((p) => Number(p.price) <= 60).slice(0, 6), [wishlist]);
   const specialPicks = useMemo(
-    () => wishlist.filter((p) => Number(p.price) > 60 && Number(p.price) <= 95).slice(0, 6),
+    () => wishlist
+      .filter((p) => Number(p.price) > 60 && Number(p.price) <= 95)
+      .map((p, index) => ({ p, index }))
+      .sort((a, b) => specialPickScore(a.p) - specialPickScore(b.p) || a.index - b.index)
+      .map(({ p }) => p)
+      .slice(0, 6),
     [wishlist]
   );
   const premiumPicks = useMemo(() => wishlist.filter((p) => Number(p.price) > 95).slice(0, 6), [wishlist]);
 
   if (!Number.isFinite(id) || !recipient) {
+    const isReferralPlaceholder = Number(id) === 2 || Number(id) === 2002;
     return (
       <AppShell style={{ display: 'flex', flexDirection: 'column', '--app-content-inset-bottom': '0px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -433,7 +451,7 @@ export function RecipientProfile() {
             variant="soft"
             style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', textAlign: 'center' }}
           >
-            <Text variant="subtitle">Profile not found</Text>
+            <Text variant="subtitle">{isReferralPlaceholder ? 'Opening profile...' : 'Profile not found'}</Text>
           </Surface>
         </div>
       </AppShell>
@@ -444,12 +462,21 @@ export function RecipientProfile() {
   const openProduct = (productId) => navigate(`/product/${productId}`);
   const addProduct = (productId) => actions.addToCart(productId, 1);
   const openCatalog = () => navigate('/catalog');
+  const goBack = () => {
+    const fromReferral = Boolean(location.state?.fromReferral);
+    const hasAppHistory = Number(window.history?.length || 0) > 1;
+    if (fromReferral || !hasAppHistory) {
+      navigate('/', { replace: true });
+      return;
+    }
+    navigate(-1);
+  };
 
   return (
     <AppShell style={{ '--app-content-inset-bottom': '0px', '--app-shell-extra-bottom': '76px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <IconButton
-          onClick={() => navigate(-1)}
+          onClick={goBack}
           aria-label="Back"
           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         >
@@ -564,7 +591,7 @@ export function RecipientProfile() {
         onCatalog={openCatalog}
       />
 
-      <FlowerPassCard onClick={() => navigate('/catalog?collection=flowers')} />
+      <FlowerPassCard />
 
       <ProductRail
         title="Big gesture"

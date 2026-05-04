@@ -6,9 +6,20 @@ import { AppImage } from '../ui/AppImage';
 import { formatMoney } from '../../lib/money';
 import { useAppState } from '../../state/AppState';
 
-export function ProductCard({ id, title, subtitle, price, image, onAdd, onOpen }) {
+export function ProductCard({ id, title, subtitle, price, image, images, onAdd, onOpen }) {
   const { state, actions } = useAppState();
   const isSaved = state.favorites.productIds.includes(id);
+  const gallery = React.useMemo(() => {
+    const seen = new Set();
+    return [image, ...(Array.isArray(images) ? images : [])]
+      .map((x) => String(x || '').trim())
+      .filter(Boolean)
+      .filter((x) => {
+        if (seen.has(x)) return false;
+        seen.add(x);
+        return true;
+      });
+  }, [image, images]);
 
   return (
     <Surface
@@ -27,9 +38,10 @@ export function ProductCard({ id, title, subtitle, price, image, onAdd, onOpen }
     >
       <div style={{ position: 'relative' }}>
         <AppImage
-          src={image}
+          src={gallery[0] || image}
           alt={title}
-          loading="lazy"
+          loading="eager"
+          fetchPriority="high"
           style={{
             width: '100%',
             aspectRatio: '1/1',

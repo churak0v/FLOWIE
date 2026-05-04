@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Copy, ChevronLeft, Clock } from 'lucide-react';
+import { Copy, ChevronLeft, Clock, Sparkles, Wallet } from 'lucide-react';
+import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
 import { api } from '../api';
 import { useAppState } from '../state/AppState';
 import { buildActiveOrderPreview } from '../lib/orderPreview';
 import { formatMoney } from '../lib/money';
+import { openTelegramInvoice } from '../telegram';
 import { AppShell } from './layout/AppShell';
 import { IconButton } from './ui/IconButton';
 import { Surface } from './ui/Surface';
@@ -289,6 +291,10 @@ export function PaymentManual() {
   const [confirming, setConfirming] = useState(false);
   const [confirmDone, setConfirmDone] = useState(false);
   const [confirmError, setConfirmError] = useState('');
+  const [gatewayBusy, setGatewayBusy] = useState(false);
+  const [gatewayError, setGatewayError] = useState('');
+  const [tonConnectUI] = useTonConnectUI();
+  const tonAddress = useTonAddress();
 
   const expiresAt = useMemo(() => {
     const v = order?.paymentExpiresAt;
@@ -563,6 +569,73 @@ export function PaymentManual() {
     );
   }
 
+  const paymentMethod = String(order?.paymentMethod || '').toLowerCase();
+  const isTonPayment = paymentMethod === 'ton';
+  const isStarsPayment = paymentMethod === 'stars';
+  const tonPayment = payment?.ton || {};
+  const starsPayment = payment?.stars || {};
+
+  const payWithStars = async () => {
+    if (!order?.id) return;
+    setGatewayBusy(true);
+    setGatewayError('');
+    try {
+      const invoice = await api.createStarsInvoice(order.id);
+      if (invoice?.alreadyPaid) {
+        setOrder((prev) => ({ ...(prev || {}), paymentStatus: 'CONFIRMED' }));
+        return;
+      }
+      const status = await openTelegramInvoice(invoice?.invoiceLink);
+      if (status === 'paid') {
+        const next = await api.getOrder(order.id).catch(() => null);
+        if (next?.order) setOrder((prev) => ({ ...(prev || {}), ...next.order }));
+      } else if (status && !['opened', 'pending', 'cancelled'].includes(status)) {
+        setGatewayError(`Invoice status: ${status}`);
+      }
+    } catch (e) {
+      setGatewayError(e?.data?.error || e?.message || 'Could not open Stars invoice');
+    } finally {
+      setGatewayBusy(false);
+    }
+  };
+
+  const payWithTon = async () => {
+    if (!order?.id) return;
+    const receiver = String(tonPayment.receiverAddress || '').trim();
+    const amountNano = String(tonPayment.amountNano || '').trim();
+    if (!receiver) {
+      setGatewayError('TON receiver wallet is not configured');
+      return;
+    }
+    if (!tonAddress) {
+      setGatewayError('Connect TON wallet first');
+      return;
+    }
+
+    setGatewayBusy(true);
+    setGatewayError('');
+    try {
+      const result = await tonConnectUI.sendTransaction({
+        validUntil: Math.floor(Date.now() / 1000) + 600,
+        messages: [{ address: receiver, amount: amountNano }],
+      });
+      const boc = result?.boc || '';
+      const res = await api.submitTonPayment(order.id, { boc, walletAddress: tonAddress });
+      actions.clearActiveOrder();
+      setConfirmDone(true);
+      setOrder((prev) => ({
+        ...(prev || {}),
+        paymentClientConfirmed: true,
+        paymentStatus: res?.order?.paymentStatus || prev?.paymentStatus,
+      }));
+      navigate('/');
+    } catch (e) {
+      setGatewayError(e?.data?.error || e?.message || 'TON payment was not submitted');
+    } finally {
+      setGatewayBusy(false);
+    }
+  };
+
   // Payment screen
   return (
     <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '0px', '--app-content-inset-bottom': '0px' }}>
@@ -593,42 +666,99 @@ export function PaymentManual() {
       </div>
 
       <div style={{ marginTop: 'var(--sp-6)', display: 'grid', gap: 12 }}>
-        <Row
-          icon={<div style={{ width: 18, height: 12, border: '2px solid currentColor', borderRadius: 4 }} />}
-          label="Payment details"
-          value={payment?.cardNumber || '—'}
-          onCopy={async () => {
-            const ok = await copyToClipboard(payment?.cardNumber || '');
-            if (ok) setCopied('card');
-          }}
-        />
-        <Row
-          icon={<div style={{ fontWeight: 1000 }}>$</div>}
-          label="Payment amount"
-          value={formatMoney(amount)}
-          onCopy={async () => {
-            const ok = await copyToClipboard(String(amount || ''));
-            if (ok) setCopied('amount');
-          }}
-        />
-        <Row
-          icon={<div style={{ width: 18, height: 18, borderRadius: 999, border: '2px solid currentColor' }} />}
-          label="Recipient"
-          value={payment?.receiverName || '—'}
-          onCopy={async () => {
-            const ok = await copyToClipboard(payment?.receiverName || '');
-            if (ok) setCopied('receiver');
-          }}
-        />
-        <Row
-          icon={<div style={{ width: 18, height: 14, border: '2px solid currentColor', borderRadius: 4 }} />}
-          label="Recipient bank"
-          value={payment?.bankName || '—'}
-          onCopy={async () => {
-            const ok = await copyToClipboard(payment?.bankName || '');
-            if (ok) setCopied('bank');
-          }}
-        />
+        {isTonPayment ? (
+          <>
+            <Row
+              icon={<Wallet size={20} />}
+              label="TON receiver"
+              value={tonPayment.receiverAddress || 'Not configured'}
+              onCopy={async () => {
+                const ok = await copyToClipboard(tonPayment.receiverAddress || '');
+                if (ok) setCopied('tonReceiver');
+              }}
+            />
+            <Row
+              icon={<div style={{ fontWeight: 1000 }}>T</div>}
+              label="TON amount"
+              value={tonPayment.amountLabel || '—'}
+              onCopy={async () => {
+                const ok = await copyToClipboard(tonPayment.amountNano || '');
+                if (ok) setCopied('tonAmount');
+              }}
+            />
+            <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                <div style={{ minWidth: 0 }}>
+                  <Text variant="subtitle">Wallet</Text>
+                  <Text variant="caption" muted style={{ marginTop: 4, overflowWrap: 'anywhere' }}>
+                    {tonAddress || 'Not connected'}
+                  </Text>
+                </div>
+                <TonConnectButton />
+              </div>
+            </Surface>
+          </>
+        ) : isStarsPayment ? (
+          <>
+            <Row
+              icon={<Sparkles size={20} />}
+              label="Stars amount"
+              value={starsPayment.amountLabel || '—'}
+              onCopy={async () => {
+                const ok = await copyToClipboard(String(starsPayment.amount || ''));
+                if (ok) setCopied('starsAmount');
+              }}
+            />
+            <Row
+              icon={<div style={{ fontWeight: 1000 }}>$</div>}
+              label="Order amount"
+              value={formatMoney(amount)}
+              onCopy={async () => {
+                const ok = await copyToClipboard(String(amount || ''));
+                if (ok) setCopied('amount');
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <Row
+              icon={<div style={{ width: 18, height: 12, border: '2px solid currentColor', borderRadius: 4 }} />}
+              label="Payment details"
+              value={payment?.cardNumber || '—'}
+              onCopy={async () => {
+                const ok = await copyToClipboard(payment?.cardNumber || '');
+                if (ok) setCopied('card');
+              }}
+            />
+            <Row
+              icon={<div style={{ fontWeight: 1000 }}>$</div>}
+              label="Payment amount"
+              value={formatMoney(amount)}
+              onCopy={async () => {
+                const ok = await copyToClipboard(String(amount || ''));
+                if (ok) setCopied('amount');
+              }}
+            />
+            <Row
+              icon={<div style={{ width: 18, height: 18, borderRadius: 999, border: '2px solid currentColor' }} />}
+              label="Recipient"
+              value={payment?.receiverName || '—'}
+              onCopy={async () => {
+                const ok = await copyToClipboard(payment?.receiverName || '');
+                if (ok) setCopied('receiver');
+              }}
+            />
+            <Row
+              icon={<div style={{ width: 18, height: 14, border: '2px solid currentColor', borderRadius: 4 }} />}
+              label="Recipient bank"
+              value={payment?.bankName || '—'}
+              onCopy={async () => {
+                const ok = await copyToClipboard(payment?.bankName || '');
+                if (ok) setCopied('bank');
+              }}
+            />
+          </>
+        )}
       </div>
 
       <div style={{ marginTop: 'var(--sp-8)', display: 'grid', gap: 10 }}>
@@ -654,6 +784,70 @@ export function PaymentManual() {
               Payment time expired. Please create a new order.
             </Text>
           </Surface>
+        ) : isTonPayment ? (
+          <>
+            <button
+              type="button"
+              disabled={gatewayBusy || !tonPayment.receiverAddress || !tonAddress}
+              onClick={payWithTon}
+              style={{
+                height: 54,
+                borderRadius: 'var(--r-lg)',
+                border: 0,
+                background: 'var(--accent)',
+                color: 'var(--c-white)',
+                fontWeight: 1000,
+                cursor: gatewayBusy ? 'default' : 'pointer',
+                opacity: !tonPayment.receiverAddress || !tonAddress ? 0.58 : 1,
+              }}
+            >
+              {gatewayBusy ? 'Sending...' : 'Pay with TON'}
+            </button>
+            <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
+              <Text variant="body" muted>
+                After the wallet sends the transaction, we will verify the transfer and confirm the order.
+              </Text>
+              {gatewayError ? (
+                <div style={{ marginTop: 6 }}>
+                  <Text variant="caption" style={{ color: 'var(--c-accent)' }}>
+                    {gatewayError}
+                  </Text>
+                </div>
+              ) : null}
+            </Surface>
+          </>
+        ) : isStarsPayment ? (
+          <>
+            <button
+              type="button"
+              disabled={gatewayBusy || !starsPayment.enabled}
+              onClick={payWithStars}
+              style={{
+                height: 54,
+                borderRadius: 'var(--r-lg)',
+                border: 0,
+                background: '#f6b73c',
+                color: '#3b2600',
+                fontWeight: 1000,
+                cursor: gatewayBusy ? 'default' : 'pointer',
+                opacity: !starsPayment.enabled ? 0.58 : 1,
+              }}
+            >
+              {gatewayBusy ? 'Opening...' : 'Pay with Stars'}
+            </button>
+            <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
+              <Text variant="body" muted>
+                Telegram will confirm the Stars payment automatically after checkout.
+              </Text>
+              {gatewayError ? (
+                <div style={{ marginTop: 6 }}>
+                  <Text variant="caption" style={{ color: 'var(--c-accent)' }}>
+                    {gatewayError}
+                  </Text>
+                </div>
+              ) : null}
+            </Surface>
+          </>
         ) : (
           <>
             <button

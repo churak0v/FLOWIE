@@ -172,7 +172,7 @@ export function PaymentMethods({ value, onChange, totalUsd = 0 }) {
             selected={value === method.id}
             onClick={() => onChange?.(method.id)}
             amountLabel={method.id === 'ton' ? quote.tonLabel : quote.starsLabel}
-            rateLabel={method.id === 'ton' ? quote.rateLabel : '~64 Stars / $1'}
+            rateLabel={method.id === 'ton' ? quote.rateLabel : '~49 Stars / $1'}
           />
         ))}
       </Surface>

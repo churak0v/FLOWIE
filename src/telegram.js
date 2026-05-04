@@ -128,6 +128,15 @@ export function telegramReady() {
         // no-op
     }
 
+    // Fullscreen is available in Telegram Mini Apps 8.0+ when enabled in BotFather.
+    try {
+        if (WebApp?.requestFullscreen && WebApp?.isVersionAtLeast?.('8.0') && !WebApp?.isFullscreen) {
+            WebApp.requestFullscreen();
+        }
+    } catch {
+        // no-op
+    }
+
     // Keep CSS vars in sync even if Telegram doesn't inject them.
     syncTelegramCssVars();
     // Some clients populate safe-area/viewport data asynchronously after `ready()`/`expand()`.
@@ -228,6 +237,43 @@ export function isTelegramWebApp() {
     }
 }
 
+export function openTelegramInvoice(invoiceLink) {
+    const link = String(invoiceLink || '').trim();
+    if (!link) return Promise.resolve('failed');
+
+    return new Promise((resolve) => {
+        try {
+            if (WebApp?.openInvoice) {
+                WebApp.openInvoice(link, (status) => resolve(String(status || '')));
+                return;
+            }
+        } catch {
+            // fallback below
+        }
+
+        try {
+            window.open(link, '_blank', 'noopener,noreferrer');
+            resolve('opened');
+        } catch {
+            resolve('failed');
+        }
+    });
+}
+
+export function requestWriteAccess() {
+    return new Promise((resolve) => {
+        try {
+            if (!WebApp?.requestWriteAccess || !WebApp?.isVersionAtLeast?.('6.9')) {
+                resolve(false);
+                return;
+            }
+            WebApp.requestWriteAccess((allowed) => resolve(Boolean(allowed)));
+        } catch {
+            resolve(false);
+        }
+    });
+}
+
 export async function requestLocation() {
     // Prefer Telegram's LocationManager (native prompt in the Telegram app).
     try {
@@ -287,6 +333,7 @@ export function getTelegramUserSafe() {
             lastName: u.last_name ? String(u.last_name) : '',
             username: u.username ? String(u.username) : '',
             photoUrl: u.photo_url ? String(u.photo_url) : '',
+            allowsWriteToPm: Boolean(u.allows_write_to_pm),
         };
     } catch {
         return null;

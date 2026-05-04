@@ -33,6 +33,16 @@ function normalizeRecipientAccount(recipient) {
 const PHONE_COUNTRIES = [
   { iso: 'US', flag: '🇺🇸', name: 'United States', dial: '+1', placeholder: '(555) 000-0000', max: 10 },
   { iso: 'CA', flag: '🇨🇦', name: 'Canada', dial: '+1', placeholder: '(555) 000-0000', max: 10 },
+  { iso: 'PK', flag: '🇵🇰', name: 'Pakistan', dial: '+92', placeholder: '300 1234567', max: 10 },
+  { iso: 'BD', flag: '🇧🇩', name: 'Bangladesh', dial: '+880', placeholder: '1712 345678', max: 10 },
+  { iso: 'ID', flag: '🇮🇩', name: 'Indonesia', dial: '+62', placeholder: '812 3456 7890', max: 11 },
+  { iso: 'MY', flag: '🇲🇾', name: 'Malaysia', dial: '+60', placeholder: '12 345 6789', max: 10 },
+  { iso: 'PH', flag: '🇵🇭', name: 'Philippines', dial: '+63', placeholder: '917 123 4567', max: 10 },
+  { iso: 'TH', flag: '🇹🇭', name: 'Thailand', dial: '+66', placeholder: '81 234 5678', max: 9 },
+  { iso: 'VN', flag: '🇻🇳', name: 'Vietnam', dial: '+84', placeholder: '91 234 56 78', max: 9 },
+  { iso: 'CN', flag: '🇨🇳', name: 'China', dial: '+86', placeholder: '131 2345 6789', max: 11 },
+  { iso: 'JP', flag: '🇯🇵', name: 'Japan', dial: '+81', placeholder: '90 1234 5678', max: 10 },
+  { iso: 'KR', flag: '🇰🇷', name: 'South Korea', dial: '+82', placeholder: '10 1234 5678', max: 10 },
   { iso: 'GB', flag: '🇬🇧', name: 'United Kingdom', dial: '+44', placeholder: '7400 000000', max: 10 },
   { iso: 'DE', flag: '🇩🇪', name: 'Germany', dial: '+49', placeholder: '1512 3456789', max: 11 },
   { iso: 'FR', flag: '🇫🇷', name: 'France', dial: '+33', placeholder: '6 12 34 56 78', max: 9 },
@@ -43,9 +53,20 @@ const PHONE_COUNTRIES = [
   { iso: 'TR', flag: '🇹🇷', name: 'Turkey', dial: '+90', placeholder: '532 000 0000', max: 10 },
   { iso: 'AE', flag: '🇦🇪', name: 'United Arab Emirates', dial: '+971', placeholder: '50 000 0000', max: 9 },
   { iso: 'SA', flag: '🇸🇦', name: 'Saudi Arabia', dial: '+966', placeholder: '50 000 0000', max: 9 },
+  { iso: 'QA', flag: '🇶🇦', name: 'Qatar', dial: '+974', placeholder: '3000 0000', max: 8 },
+  { iso: 'KW', flag: '🇰🇼', name: 'Kuwait', dial: '+965', placeholder: '500 00000', max: 8 },
+  { iso: 'BH', flag: '🇧🇭', name: 'Bahrain', dial: '+973', placeholder: '3600 0000', max: 8 },
+  { iso: 'OM', flag: '🇴🇲', name: 'Oman', dial: '+968', placeholder: '9000 0000', max: 8 },
   { iso: 'IN', flag: '🇮🇳', name: 'India', dial: '+91', placeholder: '98765 43210', max: 10 },
+  { iso: 'ZA', flag: '🇿🇦', name: 'South Africa', dial: '+27', placeholder: '71 123 4567', max: 9 },
+  { iso: 'NG', flag: '🇳🇬', name: 'Nigeria', dial: '+234', placeholder: '801 234 5678', max: 10 },
+  { iso: 'KE', flag: '🇰🇪', name: 'Kenya', dial: '+254', placeholder: '712 345678', max: 9 },
+  { iso: 'EG', flag: '🇪🇬', name: 'Egypt', dial: '+20', placeholder: '100 123 4567', max: 10 },
   { iso: 'BR', flag: '🇧🇷', name: 'Brazil', dial: '+55', placeholder: '11 91234-5678', max: 11 },
   { iso: 'MX', flag: '🇲🇽', name: 'Mexico', dial: '+52', placeholder: '55 1234 5678', max: 10 },
+  { iso: 'AR', flag: '🇦🇷', name: 'Argentina', dial: '+54', placeholder: '9 11 2345 6789', max: 11 },
+  { iso: 'CL', flag: '🇨🇱', name: 'Chile', dial: '+56', placeholder: '9 1234 5678', max: 9 },
+  { iso: 'CO', flag: '🇨🇴', name: 'Colombia', dial: '+57', placeholder: '300 1234567', max: 10 },
   { iso: 'RU', flag: '🇷🇺', name: 'Russia', dial: '+7', placeholder: '999 000-00-00', max: 10 },
   { iso: 'UA', flag: '🇺🇦', name: 'Ukraine', dial: '+380', placeholder: '67 000 0000', max: 9 },
   { iso: 'KZ', flag: '🇰🇿', name: 'Kazakhstan', dial: '+7', placeholder: '700 000 0000', max: 10 },
@@ -277,7 +298,7 @@ export function Checkout() {
   );
 
   function buildDeliveryAddress() {
-    return 'Recipient will choose safe delivery location';
+    return 'No delivery address required';
   }
 
   function buildDeliveryTime() {
@@ -460,22 +481,6 @@ export function Checkout() {
             console.log('Order created:', order?.id);
           } catch (e) {
             const code = String(e?.data?.error || e?.message || '').trim();
-            if (code === 'DELIVERY_OUT_OF_SERVICE_AREA') {
-              alert('Delivery is not available for this address yet.');
-              return;
-            }
-            if (code === 'DELIVERY_ADDRESS_NOT_FOUND') {
-              alert('We could not find this address. Please check street and building.');
-              return;
-            }
-            if (code === 'ADDRESS_VALIDATION_UNAVAILABLE') {
-              alert('Address validation is temporarily unavailable. Please try again soon.');
-              return;
-            }
-            if (code === 'DELIVERY_ADDRESS_TOO_SHORT') {
-              alert('Please add a more specific delivery address.');
-              return;
-            }
             alert(code || 'Could not create the order');
           }
         }}

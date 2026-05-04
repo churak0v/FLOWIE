@@ -72,23 +72,6 @@ export function Recipients() {
                   Open a shared wishlist link to see a profile here.
                 </Text>
               </div>
-              <button
-                type="button"
-                onClick={() => navigate('/?ref=vivienne')}
-                style={{
-                  marginTop: 12,
-                  height: 44,
-                  borderRadius: 'var(--r-lg)',
-                  border: 0,
-                  background: 'var(--accent)',
-                  color: 'var(--c-white)',
-                  fontWeight: 1000,
-                  cursor: 'pointer',
-                  padding: '0 14px',
-                }}
-              >
-                Open Vivienne
-              </button>
             </Surface>
           </div>
         ) : (

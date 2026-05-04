@@ -21,6 +21,7 @@ export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMo
             subtitle={p.subtitle}
             price={p.price}
             image={p.image}
+            images={p.images}
             onOpen={() => navigate(`/product/${p.id}`)}
             onAdd={() => actions.addToCart(p.id, 1)}
           />

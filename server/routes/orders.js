@@ -341,17 +341,9 @@ router.post('/', requireAuth, async (req, res) => {
             return res.status(400).json({ error: 'NO_ITEMS' });
         }
 
-        if (!deliveryAddress) {
-            return res.status(400).json({ error: 'NO_DELIVERY_ADDRESS' });
-        }
-
         const deliveryAddressStr = String(deliveryAddress || '').trim();
-        let deliveryCoords = null;
-        if (deliveryAddressStr && normalizeRu(deliveryAddressStr) !== normalizeRu('Уточнить у получателя')) {
-            const v = await validateDeliveryAddressSpbLo(deliveryAddressStr);
-            if (!v?.ok) return res.status(400).json({ error: v?.code || 'DELIVERY_ADDRESS_INVALID' });
-            if (v?.coords) deliveryCoords = JSON.stringify(v.coords);
-        }
+        const safeDeliveryAddress = deliveryAddressStr || 'No delivery address required';
+        const deliveryCoords = null;
 
         if (!senderPhone || !String(senderPhone).trim()) {
             return res.status(400).json({ error: 'SENDER_PHONE_REQUIRED' });
@@ -387,7 +379,7 @@ router.post('/', requireAuth, async (req, res) => {
                     deliveryCost,
                     totalPrice,
                     referralLinkId: userRef?.referralLinkId ?? null,
-                    deliveryAddress,
+                    deliveryAddress: safeDeliveryAddress,
                     deliveryCoords,
                     deliveryTime,
                     recipientName,

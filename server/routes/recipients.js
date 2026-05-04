@@ -64,6 +64,28 @@ router.post('/', requireAuth, async (req, res) => {
         const image = normalizeString(req.body?.image);
         const askAddress = normalizeBoolean(req.body?.askAddress);
 
+        const existing = await prisma.recipient.findFirst({
+            where: {
+                userId: req.user.id,
+                name: { equals: name, mode: 'insensitive' },
+            },
+            orderBy: { updatedAt: 'desc' },
+        });
+        if (existing) {
+            const recipient = await prisma.recipient.update({
+                where: { id: existing.id },
+                data: {
+                    relation,
+                    phone,
+                    address,
+                    birthDate,
+                    image,
+                    ...(askAddress != null ? { askAddress } : {}),
+                },
+            });
+            return res.json({ ok: true, recipient: serializeRecipient(recipient) });
+        }
+
         const recipient = await prisma.recipient.create({
             data: {
                 userId: req.user.id,
@@ -142,4 +164,3 @@ router.delete('/:id', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
-

@@ -153,6 +153,9 @@ model Order {
   paymentMethod      String?
   paymentStatus      String    @default("PENDING")
   paymentClientConfirmed Boolean @default(false)
+  paymentPayload     String?
+  paymentChargeId    String?
+  paymentMeta        String?
   paymentExpiresAt   DateTime?
   paidAt             DateTime?
   preDeliveryRating  String?

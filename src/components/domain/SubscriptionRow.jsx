@@ -77,16 +77,6 @@ export function SubscriptionRow() {
 
     if (list.length === 0) {
       return [
-        {
-          type: 'recipient',
-          key: 'vivienne-default',
-          recipient: {
-            id: 'vivienne-default',
-            name: 'Vivienne',
-            image: '/vivienne-avatar.jpeg',
-          },
-          href: '/?ref=vivienne',
-        },
         { type: 'pass', key: 'pass' },
       ];
     }

@@ -13,6 +13,7 @@
     "preview:admin": "node ./node_modules/vite/bin/vite.js preview --config vite.admin.config.js"
   },
   "dependencies": {
+    "@tonconnect/ui-react": "^2.4.4",
     "@twa-dev/sdk": "^8.0.2",
     "lucide-react": "^0.473.0",
     "react": "^18.3.1",

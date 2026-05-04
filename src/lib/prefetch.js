@@ -1,6 +1,6 @@
 const PREFETCHED = new Set();
 const MEMORY_CACHE = new Map(); // url -> Image
-const MAX_MEMORY = 60;
+const MAX_MEMORY = 360;
 
 function shouldPrefetch() {
   try {
@@ -22,7 +22,7 @@ function normalizeUrl(raw) {
   return `/${s}`;
 }
 
-export function prefetchImages(urls, { max = 10 } = {}) {
+export function prefetchImages(urls, { max = 300 } = {}) {
   try {
     if (typeof window === 'undefined') return;
     if (!Array.isArray(urls) || urls.length === 0) return;
@@ -53,20 +53,12 @@ export function prefetchImages(urls, { max = 10 } = {}) {
       }
     };
 
-    const run = () => {
-      for (const url of unique) {
-        const img = new Image();
-        img.decoding = 'async';
-        img.loading = 'eager';
-        img.src = url;
-        remember(url, img);
-      }
-    };
-
-    if (typeof window.requestIdleCallback === 'function') {
-      window.requestIdleCallback(run, { timeout: 1200 });
-    } else {
-      setTimeout(run, 50);
+    for (const url of unique) {
+      const img = new Image();
+      img.decoding = 'async';
+      img.loading = 'eager';
+      img.src = url;
+      remember(url, img);
     }
   } catch {
     // ignore

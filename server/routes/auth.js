@@ -30,11 +30,95 @@ function getCookieOptions() {
     };
 }
 
+function getPublicSiteUrl() {
+    return String(process.env.PUBLIC_SITE_URL || '').trim();
+}
+
 function setSessionCookie(res, token) {
     res.setHeader(
         'Set-Cookie',
         cookie.serialize('session', token, getCookieOptions()),
     );
+}
+
+async function tgApi(method, payload) {
+    const token = process.env.BOT_TOKEN || '';
+    if (!token) return null;
+
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 1800);
+    try {
+        const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload || {}),
+            signal: ac.signal,
+        });
+        return response.json().catch(() => null);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+function getStartParamFromInitData(initData) {
+    try {
+        const params = new URLSearchParams(String(initData || ''));
+        return String(params.get('start_param') || '').trim();
+    } catch {
+        return '';
+    }
+}
+
+function buildWelcomeAppUrl(startParam) {
+    const base = getPublicSiteUrl().replace(/\/$/, '');
+    if (!base) return '';
+    return startParam ? `${base}?startapp=${encodeURIComponent(startParam)}` : base;
+}
+
+async function sendTelegramWelcomeOnce({ userId, telegramId, startParam }) {
+    if (!userId || !telegramId) return;
+
+    const existing = await prisma.analyticsEvent.findFirst({
+        where: {
+            userId,
+            event: { in: ['tg_welcome_sent', 'tg_welcome_blocked'] },
+        },
+        select: { id: true },
+    });
+    if (existing) return;
+
+    const appUrl = buildWelcomeAppUrl(startParam);
+    const reply_markup = appUrl
+        ? { inline_keyboard: [[{ text: startParam ? "Open Vivienne's wishlist" : 'Open FLOWIE', web_app: { url: appUrl } }]] }
+        : undefined;
+
+    const result = await tgApi('sendMessage', {
+        chat_id: telegramId,
+        text:
+            'Welcome to FLOWIE.\n\n' +
+            'A private gifting app for choosing real gifts from curated wishlists. ' +
+            'Pay securely with TON Connect or Telegram Stars, while recipient details stay private.',
+        reply_markup,
+        disable_web_page_preview: true,
+    });
+
+    const event = result?.ok ? 'tg_welcome_sent' : String(result?.description || '').includes("can't initiate conversation")
+        ? 'tg_welcome_blocked'
+        : 'tg_welcome_failed';
+
+    await prisma.analyticsEvent.create({
+        data: {
+            userId,
+            event,
+            meta: {
+                startParam: startParam || null,
+                telegramOk: Boolean(result?.ok),
+                errorCode: result?.error_code || null,
+                description: result?.description || null,
+                messageId: result?.result?.message_id || null,
+            },
+        },
+    });
 }
 
 // POST /api/auth/telegram
@@ -55,6 +139,7 @@ router.post('/telegram', async (req, res) => {
         const telegramId = String(tgUser.id);
         const name = [tgUser.firstName, tgUser.lastName].filter(Boolean).join(' ') || null;
         const username = tgUser.username ? String(tgUser.username) : null;
+        const startParam = getStartParamFromInitData(initData);
 
         const user = await prisma.user.upsert({
             where: { telegramId },
@@ -76,6 +161,9 @@ router.post('/telegram', async (req, res) => {
         );
 
         setSessionCookie(res, token);
+        sendTelegramWelcomeOnce({ userId: user.id, telegramId, startParam }).catch((e) => {
+            console.warn('Telegram welcome failed:', e?.message || e);
+        });
         return res.json({
             ok: true,
             token,

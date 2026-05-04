@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 const FALLBACK_TON_USD = 3.2;
 const TON_USD_OVERRIDE = Number(import.meta.env.VITE_TON_USD_RATE || FALLBACK_TON_USD);
-const STAR_BUY_USD = 0.01569;
+const STARS_PER_USD = 49;
+const STAR_BUY_USD = 1 / STARS_PER_USD;
 const TON_PRICE_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd';
 
 let cachedTonUsd = null;

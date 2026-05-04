@@ -232,6 +232,20 @@ export const api = {
             body: JSON.stringify({ orderId }),
         });
     },
+    createStarsInvoice: async (orderId) => {
+        return fetchJson(`${API_URL}/payments/stars-invoice`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId }),
+        });
+    },
+    submitTonPayment: async (orderId, payload = {}) => {
+        return fetchJson(`${API_URL}/payments/ton-submitted`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId, ...payload }),
+        });
+    },
     rateOrderPhoto: async (orderId, rating) => {
         return fetchJson(`${API_URL}/orders/${encodeURIComponent(orderId)}/photo-rating`, {
             method: 'POST',

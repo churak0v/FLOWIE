@@ -17,8 +17,7 @@ import { MiniCartBar } from './components/domain/MiniCartBar';
 import { ActiveOrderFab } from './components/domain/ActiveOrderFab';
 import { InsetsDebug } from './components/dev/InsetsDebug';
 import { api } from './api';
-import { getTelegramInitData, getTelegramStartParam, getTelegramUserSafe, isTelegramWebApp, requestLocation } from './telegram';
-import { reverseGeocodeOSM } from './lib/reverseGeocode';
+import { getTelegramInitData, getTelegramStartParam, getTelegramUserSafe, isTelegramWebApp, requestWriteAccess } from './telegram';
 import { AppStateProvider, useAppState } from './state/AppState';
 
 const REFERRAL_PROFILES = {
@@ -32,6 +31,8 @@ const REFERRAL_PROFILES = {
     },
 };
 
+const REFERRAL_OPEN_PREFIX = 'flowie:referral-opened:';
+
 function getReferralToken() {
     try {
         const params = new URLSearchParams(window.location?.search || '');
@@ -39,6 +40,22 @@ function getReferralToken() {
         return String(raw).trim().toLowerCase().replace(/^creator[_-]?/, '').replace(/[^a-z0-9_-]/g, '');
     } catch {
         return '';
+    }
+}
+
+function referralWasOpened(token) {
+    try {
+        return window.sessionStorage?.getItem(`${REFERRAL_OPEN_PREFIX}${token}`) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function markReferralOpened(token) {
+    try {
+        window.sessionStorage?.setItem(`${REFERRAL_OPEN_PREFIX}${token}`, '1');
+    } catch {
+        // ignore
     }
 }
 
@@ -93,6 +110,12 @@ function AppRoutes() {
         const profile = REFERRAL_PROFILES[token];
         if (!profile) return;
 
+        const autoOpenAllowed = !referralWasOpened(token);
+        const openReferralProfile = (to, { replace = false } = {}) => {
+            markReferralOpened(token);
+            navigate(to, { replace, state: { fromReferral: token } });
+        };
+
         const existingProfiles = (state.recipients.items || []).filter((r) => String(r?.name || '').toLowerCase() === profile.name.toLowerCase());
         const exists = existingProfiles.sort((a, b) => {
             const bt = Date.parse(b?.updatedAt || b?.createdAt || '') || 0;
@@ -102,21 +125,17 @@ function AppRoutes() {
         })[0];
         if (exists) {
             if (state.recipients.selectedId !== exists.id) actions.selectRecipient(exists.id);
-            if (pathname === '/' || pathname === `/recipients/${profile.id}`) {
-                navigate(`/recipients/${encodeURIComponent(String(exists.id))}`, { replace: true });
+            if ((pathname === '/' && autoOpenAllowed) || pathname === `/recipients/${profile.id}`) {
+                openReferralProfile(`/recipients/${encodeURIComponent(String(exists.id))}`, { replace: pathname !== '/' });
             }
             return;
         }
 
-        if (!state.auth.me?.id) {
-            actions.addLocalRecipient({ ...profile, id: profile.id });
-            if (pathname === '/') navigate(`/recipients/${encodeURIComponent(String(profile.id))}`, { replace: true });
-            return;
-        }
+        if (!state.auth.me?.id) return;
 
         actions.addRecipient(profile).then((created) => {
-            if (created?.id != null && (pathname === '/' || pathname === `/recipients/${profile.id}`)) {
-                navigate(`/recipients/${encodeURIComponent(String(created.id))}`, { replace: true });
+            if (created?.id != null && ((pathname === '/' && autoOpenAllowed) || pathname === `/recipients/${profile.id}`)) {
+                openReferralProfile(`/recipients/${encodeURIComponent(String(created.id))}`, { replace: pathname !== '/' });
             }
         }).catch(() => {});
     }, [actions, navigate, pathname, state.auth.me?.id, state.recipients.items, state.recipients.selectedId]);
@@ -154,34 +173,6 @@ function AppRoutes() {
         if (!Number.isFinite(expiresAt)) return;
         if (Date.now() > expiresAt) actions.clearActiveOrder();
     }, [actions, state.orders.activeOrderExpiresAt]);
-
-    // Ask for geolocation permission on first app launch (TG-friendly).
-    useEffect(() => {
-        if (state.delivery?.coords) return;
-        if (state.delivery?.locationRequested) return;
-
-        let cancelled = false;
-        actions.markLocationRequested();
-
-        (async () => {
-            const loc = await requestLocation();
-            if (cancelled || !loc) return;
-
-            actions.setDeliveryCoords(loc);
-
-            // Best-effort: prefill street/house for UI. If reverse-geocode fails, the user can enter it manually.
-            try {
-                const geo = await reverseGeocodeOSM(loc);
-                if (!cancelled && geo?.street) actions.setDeliveryAddress(geo);
-            } catch {
-                // ignore
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [actions, state.delivery?.coords, state.delivery?.locationRequested]);
 
     return (
         <>
@@ -305,6 +296,30 @@ function App() {
                         source: 'startapp',
                         href: String(window.location?.href || ''),
                     });
+                } catch {
+                    // ignore
+                }
+
+                try {
+                    const tgUser = getTelegramUserSafe();
+                    const key = `flowie:write-access-requested:${startParam}`;
+                    const alreadyRequested = window.sessionStorage?.getItem(key) === '1';
+                    if (!tgUser?.allowsWriteToPm && !alreadyRequested) {
+                        window.sessionStorage?.setItem(key, '1');
+                        const allowed = await requestWriteAccess();
+                        await api.trackEvent('write_access_requested', {
+                            tag: startParam,
+                            source: 'startapp',
+                            status: allowed ? 'allowed' : 'cancelled',
+                        });
+                    } else if (tgUser?.allowsWriteToPm) {
+                        await api.trackEvent('write_access_requested', {
+                            tag: startParam,
+                            source: 'startapp',
+                            status: 'allowed',
+                            alreadyAllowed: true,
+                        });
+                    }
                 } catch {
                     // ignore
                 }

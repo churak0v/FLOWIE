@@ -1,0 +1,4 @@
+ALTER TABLE "Order"
+  ADD COLUMN IF NOT EXISTS "paymentPayload" TEXT,
+  ADD COLUMN IF NOT EXISTS "paymentChargeId" TEXT,
+  ADD COLUMN IF NOT EXISTS "paymentMeta" TEXT;

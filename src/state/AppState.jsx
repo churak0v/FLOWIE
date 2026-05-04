@@ -24,6 +24,41 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+function normalizeRecipientKey(recipient) {
+  const name = String(recipient?.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const id = String(recipient?.id || '');
+  if (name === 'vivienne' || id === '2' || id === '2002' || id === 'vivienne-default') return 'profile:vivienne';
+  return name ? `name:${name}` : `id:${recipient?.id}`;
+}
+
+function recipientTime(recipient) {
+  return Date.parse(recipient?.updatedAt || recipient?.createdAt || '') || 0;
+}
+
+function dedupeRecipients(items, preferredId = null) {
+  const byKey = new Map();
+
+  for (const recipient of items || []) {
+    if (!recipient) continue;
+    const key = normalizeRecipientKey(recipient);
+    const prev = byKey.get(key);
+    const isPreferred = String(recipient.id) === String(preferredId);
+    const prevPreferred = String(prev?.id) === String(preferredId);
+    const hasServerId = Number(recipient.id) !== 2002 && Number.isFinite(Number(recipient.id));
+    const prevHasServerId = Number(prev?.id) !== 2002 && Number.isFinite(Number(prev?.id));
+    const shouldReplace =
+      !prev ||
+      (isPreferred && !prevPreferred) ||
+      (!prevPreferred && hasServerId && !prevHasServerId) ||
+      (!prevPreferred && hasServerId === prevHasServerId && recipientTime(recipient) > recipientTime(prev)) ||
+      (!prevPreferred && hasServerId === prevHasServerId && recipientTime(recipient) === recipientTime(prev) && Number(recipient.id || 0) > Number(prev.id || 0));
+
+    if (shouldReplace) byKey.set(key, recipient);
+  }
+
+  return Array.from(byKey.values());
+}
+
 const initialState = {
   auth: {
     telegramUser: null,
@@ -99,7 +134,7 @@ const initialState = {
     deliveryDate: '',
     deliveryTime: '',
 
-    paymentMethod: 'stars',
+    paymentMethod: 'ton',
   },
 };
 
@@ -228,7 +263,7 @@ function reducer(state, action) {
     }
 
     case 'RECIPIENTS_SET': {
-      const items = Array.isArray(action.items) ? action.items : [];
+      const items = dedupeRecipients(action.items, state.recipients.selectedId);
       const hasId = (id) => items.some((r) => Number(r?.id) === Number(id));
       const selectedId = hasId(state.recipients.selectedId) ? state.recipients.selectedId : (items[0]?.id ?? null);
       const checkoutRecipientId = hasId(state.checkout.recipientId) ? state.checkout.recipientId : selectedId;
@@ -252,7 +287,7 @@ function reducer(state, action) {
         image: action.image?.trim() || '',
         isFavorite: true,
       };
-      const items = [next, ...state.recipients.items];
+      const items = dedupeRecipients([next, ...state.recipients.items], id);
       return {
         ...state,
         recipients: {
@@ -583,7 +618,7 @@ export function AppStateProvider({ children }) {
         const cachedItems = Array.isArray(cached?.data) ? cached.data : null;
         if (cachedItems?.length) {
           dispatch({ type: 'PRODUCTS_SET', items: cachedItems });
-          prefetchImages(cachedItems.map((p) => p?.image).filter(Boolean), { max: 10 });
+          prefetchImages(cachedItems.flatMap((p) => p?.images?.length ? p.images : [p?.image]).filter(Boolean), { max: 320 });
         }
 
         if (cachedItems?.length && isCacheFresh(cached, 60_000)) return;
@@ -597,10 +632,10 @@ export function AppStateProvider({ children }) {
           const normalized = items.filter((x) => Number.isFinite(x.id));
           dispatch({ type: 'PRODUCTS_SET', items: normalized });
           writeCacheEntry(cacheKey, normalized);
-          prefetchImages(normalized.map((p) => p?.image).filter(Boolean), { max: 10 });
+          prefetchImages(normalized.flatMap((p) => p?.images?.length ? p.images : [p?.image]).filter(Boolean), { max: 320 });
         } catch (e) {
           dispatch({ type: 'PRODUCTS_SET', items: PRODUCTS });
-          prefetchImages(PRODUCTS.map((p) => p?.image).filter(Boolean), { max: 10 });
+          prefetchImages(PRODUCTS.flatMap((p) => p?.images?.length ? p.images : [p?.image]).filter(Boolean), { max: 120 });
         }
       },
 

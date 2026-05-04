@@ -29,6 +29,9 @@ services:
       APP_COOKIE_DOMAIN: ${APP_COOKIE_DOMAIN:-}
       ADMIN_TG_IDS: ${ADMIN_TG_IDS:-}
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-}
+      TON_RECEIVER_ADDRESS: ${TON_RECEIVER_ADDRESS:-}
+      TON_USD_RATE: ${TON_USD_RATE:-3.2}
+      STARS_PER_USD: ${STARS_PER_USD:-49}
     ports:
       - "6111:3001"
     volumes:
