@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Heart, Plus } from 'lucide-react';
+import { Heart, Minus, Plus } from 'lucide-react';
 import { Surface } from '../ui/Surface';
 import { Text } from '../ui/Text';
 import { AppImage } from '../ui/AppImage';
@@ -10,6 +10,8 @@ import { trackAnalytics } from '../../lib/analytics';
 export function ProductCard({ id, title, price, image, images, onAdd, onOpen, view = 'grid' }) {
   const { state, actions } = useAppState();
   const isSaved = state.favorites.productIds.includes(id);
+  const cartItem = state.cart.items.find((item) => String(item.productId) === String(id));
+  const cartQty = Number(cartItem?.qty || 0);
   const isList = view === 'list';
   const gallery = useMemo(() => {
     const seen = new Set();
@@ -159,10 +161,7 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
               height: 34,
               display: 'inline-flex',
               alignItems: 'center',
-              padding: '0 10px',
-              borderRadius: 'var(--r-pill)',
-              background: 'var(--c-accent-10)',
-              border: '1px solid var(--c-accent-border)',
+              padding: 0,
               color: 'var(--accent)',
               fontWeight: 1000,
               fontSize: 15,
@@ -173,30 +172,59 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
             {formatMoney(price)}
           </div>
 
-          <button
-            type="button"
-            aria-label="Добавить"
-            onClick={(e) => {
-              e.stopPropagation();
-              onAdd?.(id);
-            }}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 12,
-              border: 0,
-              background: 'var(--c-accent)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              flexShrink: 0,
-              marginLeft: 'auto',
-              boxShadow: 'var(--shadow-accent)',
-            }}
-          >
-            <Plus size={20} color="var(--c-accent-contrast)" strokeWidth={3} />
-          </button>
+          {cartQty > 0 ? (
+            <div
+              style={{
+                marginLeft: 'auto',
+                height: 36,
+                borderRadius: 12,
+                background: 'var(--c-accent)',
+                color: 'var(--c-accent-contrast)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                boxShadow: 'var(--shadow-accent)',
+                overflow: 'hidden',
+                flexShrink: 0,
+              }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                aria-label={cartQty === 1 ? 'Убрать из корзины' : 'Уменьшить количество'}
+                onClick={() => {
+                  if (cartQty === 1) actions.removeFromCart(id, 1);
+                  else {
+                    actions.setCartQty(id, cartQty - 1);
+                    trackAnalytics('cart_remove', { productId: id, meta: { quantity: 1 } });
+                  }
+                }}
+                style={{ width: 28, height: 36, border: 0, background: 'transparent', color: 'inherit', display: 'grid', placeItems: 'center', cursor: 'pointer' }}
+              >
+                <Minus size={17} strokeWidth={3} />
+              </button>
+              <span style={{ minWidth: 18, textAlign: 'center', fontWeight: 1000, fontSize: 13 }}>{cartQty}</span>
+              <button
+                type="button"
+                aria-label="Увеличить количество"
+                onClick={() => onAdd?.(id)}
+                style={{ width: 28, height: 36, border: 0, background: 'transparent', color: 'inherit', display: 'grid', placeItems: 'center', cursor: 'pointer' }}
+              >
+                <Plus size={17} strokeWidth={3} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              aria-label="Добавить"
+              onClick={(event) => {
+                event.stopPropagation();
+                onAdd?.(id);
+              }}
+              style={{ width: 36, height: 36, borderRadius: 12, border: 0, background: 'var(--c-accent)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, marginLeft: 'auto', boxShadow: 'var(--shadow-accent)' }}
+            >
+              <Plus size={20} color="var(--c-accent-contrast)" strokeWidth={3} />
+            </button>
+          )}
         </div>
       </div>
     </Surface>

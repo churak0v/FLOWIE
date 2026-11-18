@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Camera, ChevronRight, Clock3, Sparkles } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { Surface } from './ui/Surface';
@@ -126,48 +126,13 @@ function QuickPicks({ products, onNavigate }) {
   );
 }
 
-function TrustRibbon() {
-  const items = [
-    { icon: Clock3, label: 'Сегодня' },
-    { icon: Camera, label: 'Фото до доставки' },
-    { icon: Sparkles, label: 'Открытка' },
-  ];
-
-  return (
-    <div className="hide-scrollbar" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
-      {items.map(({ icon: Icon, label }) => (
-        <span
-          key={label}
-          style={{
-            height: 34,
-            padding: '0 11px',
-            borderRadius: 999,
-            border: '1px solid var(--border)',
-            background: 'var(--surface)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            flexShrink: 0,
-            color: 'var(--text)',
-            fontSize: 12,
-            fontWeight: 950,
-            boxShadow: '0 8px 22px rgba(13,13,13,0.05)',
-          }}
-        >
-          <Icon size={14} color="var(--accent)" strokeWidth={2.5} />
-          {label}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 export function Home() {
   const navigate = useNavigate();
   const { state, actions } = useAppState();
   const activeOrder = state.orders.activeOrderPreview;
   const [activeOrders, setActiveOrders] = useState([]);
   const [heroSlides, setHeroSlides] = useState(HERO_SLIDES);
+  const isAuthenticated = Boolean(state.auth.me?.phoneVerified);
 
   useEffect(() => {
     let alive = true;
@@ -295,13 +260,11 @@ export function Home() {
               }}
             />
 
-            <SubscriptionRow />
+            {isAuthenticated ? <SubscriptionRow /> : null}
 
-            <div style={{ marginTop: 18 }}>
-              <TrustRibbon />
+            <div style={{ marginTop: isAuthenticated ? 0 : -6 }}>
+              <QuickPicks products={state.products.items || []} onNavigate={(href) => navigate(href)} />
             </div>
-
-            <QuickPicks products={state.products.items || []} onNavigate={(href) => navigate(href)} />
 
             {activeOrders.length ? (
               <div style={{ marginTop: 'var(--sp-6)' }}>

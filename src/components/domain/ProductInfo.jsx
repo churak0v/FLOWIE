@@ -119,17 +119,6 @@ export function ProductInfo({ product }) {
           </Text>
         ) : null}
 
-        <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <DetailPill tone="accent">
-            <ShieldCheck size={15} />
-            Свежий букет
-          </DetailPill>
-          <DetailPill>
-            <Truck size={15} />
-            Статус доставки
-          </DetailPill>
-          {product.size ? <DetailPill>Размер {product.size}</DetailPill> : null}
-        </div>
       </Surface>
 
       {included.length ? (

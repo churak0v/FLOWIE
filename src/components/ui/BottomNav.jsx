@@ -1,16 +1,22 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Heart, House, MapPin, ShoppingBag, User } from 'lucide-react';
 
 function Tab({ to, label, icon: Icon }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isActive = to === '/' ? location.pathname === '/' : location.pathname.startsWith(to);
   return (
-    <NavLink
-      to={to}
-      className={({ isActive }) => (isActive ? 'ui-bottomNavLink ui-bottomNavLink--active' : 'ui-bottomNavLink')}
+    <button
+      type="button"
+      onClick={() => navigate(to)}
+      className={isActive ? 'ui-bottomNavLink ui-bottomNavLink--active' : 'ui-bottomNavLink'}
+      aria-current={isActive ? 'page' : undefined}
+      aria-label={label}
     >
       <Icon size={22} />
       <span className="ui-bottomNavLabel">{label}</span>
-    </NavLink>
+    </button>
   );
 }
 

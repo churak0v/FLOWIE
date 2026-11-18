@@ -130,7 +130,7 @@ export function HeroCarousel({ slides, className }) {
         }}
       >
         <span style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--accent)' }} />
-        FLOWIE букеты
+        Ижевск
       </div>
 
       {/* Caption + dots */}

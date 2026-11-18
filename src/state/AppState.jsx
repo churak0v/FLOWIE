@@ -344,7 +344,7 @@ function reducer(state, action) {
 
     case 'CART_SET_QTY': {
       const items = state.cart.items
-        .map((i) => (String(i.productId) === String(action.productId) ? { ...i, qty: clamp(action.qty, 1, 99) } : i))
+        .map((i) => (String(i.productId) === String(action.productId) ? { ...i, qty: Math.min(99, Number(action.qty || 0)) } : i))
         .filter((i) => i.qty > 0);
       return { ...state, cart: { ...state.cart, items } };
     }
