@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+# Certbot's standalone challenge needs ports 80/443. Address the known
+# container directly so certificate renewal does not depend on Compose envs.
+if docker inspect flowie-prod-edge-1 >/dev/null 2>&1; then
+  docker stop flowie-prod-edge-1 >/dev/null
+fi

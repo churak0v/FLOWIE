@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+install -o 101 -g 101 -m 0644 "$RENEWED_LINEAGE/fullchain.pem" /etc/flowie/tls/fullchain.pem
+install -o 101 -g 101 -m 0640 "$RENEWED_LINEAGE/privkey.pem" /etc/flowie/tls/privkey.pem
