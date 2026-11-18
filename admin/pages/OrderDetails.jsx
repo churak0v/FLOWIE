@@ -275,7 +275,7 @@ export function OrderDetailsPage({ user }) {
   const customerName = useMemo(() => {
     const u = order?.user;
     if (!u) return '—';
-    return u.name || (u.username ? `@${u.username}` : null) || `TG ${u.telegramId || u.id}`;
+    return u.name || u.phone || `Клиент #${u.id}`;
   }, [order?.user]);
   const customerPhone = useMemo(() => order?.user?.phone || 'Телефон не указан', [order?.user?.phone]);
 

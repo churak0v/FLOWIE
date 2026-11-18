@@ -1,5 +1,4 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
-import { getTelegramUserSafe } from '../telegram';
 import { api } from '../api';
 import { isCacheFresh, readCacheEntry, writeCacheEntry } from '../lib/persistedCache';
 import { prefetchImages } from '../lib/prefetch';
@@ -62,9 +61,8 @@ function dedupeRecipients(items, preferredId = null) {
 
 const initialState = {
   auth: {
-    telegramUser: null,
     bonusBalance: 0,
-    me: null, // { id, telegramId?, name?, username?, phone? }
+    me: null, // { id, name?, phone?, phoneVerified? }
     meLoading: false,
   },
 
@@ -164,13 +162,6 @@ function reducer(state, action) {
           ...state.orders,
           ...(action.payload?.orders || {}),
         },
-      };
-    }
-
-    case 'AUTH_SET_TG_USER': {
-      return {
-        ...state,
-        auth: { ...state.auth, telegramUser: action.user || null },
       };
     }
 
@@ -519,8 +510,8 @@ export function AppStateProvider({ children }) {
       return;
     }
     if (key === storageKeyRef.current) return;
-    const previousWasGuest = Boolean(previousMe?.id && !previousMe.telegramId && !previousMe.phoneVerified);
-    const nextIsGuest = Boolean(state.auth.me?.id && !state.auth.me.telegramId && !state.auth.me.phoneVerified);
+    const previousWasGuest = Boolean(previousMe?.id && !previousMe.phoneVerified);
+    const nextIsGuest = Boolean(state.auth.me?.id && !state.auth.me.phoneVerified);
     const preserveGuestState = previousWasGuest || nextIsGuest;
     storageKeyRef.current = key;
     const saved = safeJsonParse(localStorage.getItem(key) || '');
@@ -538,12 +529,6 @@ export function AppStateProvider({ children }) {
       dispatch({ type: 'RESET_PERSISTED' });
     }
   }, [state.auth.me, state.cart, state.delivery, state.favorites.productIds, state.orders]);
-
-  // Telegram user for display (doesn't block UI)
-  useEffect(() => {
-    const tgUser = getTelegramUserSafe();
-    if (tgUser) dispatch({ type: 'AUTH_SET_TG_USER', user: tgUser });
-  }, []);
 
   const actions = useMemo(() => {
     const toUiProduct = (p) => {
@@ -592,7 +577,6 @@ export function AppStateProvider({ children }) {
 
     return {
       // auth
-      setTelegramUser: (user) => dispatch({ type: 'AUTH_SET_TG_USER', user }),
       loadMe: async () => {
         dispatch({ type: 'AUTH_ME_LOADING' });
         try {

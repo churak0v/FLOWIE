@@ -24,12 +24,9 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-flowie}:${POSTGRES_PASSWORD:-flowie}@db:5432/${POSTGRES_DB:-flowie}?schema=public
       NODE_ENV: ${NODE_ENV:-development}
       APP_JWT_SECRET: ${APP_JWT_SECRET:-change-me}
-      BOT_TOKEN: ${BOT_TOKEN:-change-me}
-      ADMIN_BOT_TOKEN: ${ADMIN_BOT_TOKEN:-}
       APP_COOKIE_DOMAIN: ${APP_COOKIE_DOMAIN:-}
-      ADMIN_TG_IDS: ${ADMIN_TG_IDS:-}
+      ADMIN_PHONE: ${ADMIN_PHONE:-}
       DEV_ADMIN_ENABLED: ${DEV_ADMIN_ENABLED:-false}
-      DEV_ADMIN_TELEGRAM_ID: ${DEV_ADMIN_TELEGRAM_ID:-local-dev-admin}
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-}
       AUTH_ALLOWED_ORIGINS: ${AUTH_ALLOWED_ORIGINS:-}
       SEO_APP_SHELL_URL: http://web/_flowie_app_shell
@@ -73,7 +70,6 @@ services:
         VITE_API_PROXY_TARGET: ${VITE_API_PROXY_TARGET:-http://api:3001}
         VITE_HERO_IMAGE: ${VITE_HERO_IMAGE:-}
         VITE_RECIPIENT_IMAGE: ${VITE_RECIPIENT_IMAGE:-}
-        VITE_DISABLE_TELEGRAM_BOOTSTRAP: ${VITE_DISABLE_TELEGRAM_BOOTSTRAP:-false}
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-6112}:80"

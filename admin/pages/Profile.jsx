@@ -1,41 +1,8 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Shield, X } from 'lucide-react';
-import { getTelegramUserSafe } from '../../src/telegram';
+import { ChevronRight, Shield } from 'lucide-react';
 import { Surface } from '../../src/components/ui/Surface';
 import { Text } from '../../src/components/ui/Text';
-
-function CloseButton() {
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        try {
-          window.Telegram?.WebApp?.close?.();
-        } catch {
-          // ignore
-        }
-      }}
-      style={{
-        height: 38,
-        padding: '0 12px',
-        borderRadius: 'var(--r-pill)',
-        border: '1px solid var(--border)',
-        background: 'transparent',
-        cursor: 'pointer',
-        fontWeight: 900,
-        color: 'var(--muted)',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-      }}
-      title="Закрыть"
-    >
-      <X size={16} />
-      Закрыть
-    </button>
-  );
-}
 
 function MenuItem({ title, caption, onClick, disabled = false }) {
   return (
@@ -69,14 +36,12 @@ function MenuItem({ title, caption, onClick, disabled = false }) {
 
 export function ProfilePage({ user }) {
   const navigate = useNavigate();
-  const tgUser = getTelegramUserSafe();
 
   const meLabel = useMemo(() => {
     if (!user) return '—';
-    return user?.name || (user?.username ? `@${user.username}` : null) || `User #${user?.id || ''}`;
+    return user?.name || user?.phone || `Сотрудник #${user?.id || ''}`;
   }, [user]);
 
-  const avatarUrl = tgUser?.photoUrl || '';
   const roleLabel = user?.role ? String(user.role).toUpperCase() : 'STAFF';
   const isAdmin = String(user?.role || '') === 'admin';
 
@@ -84,7 +49,6 @@ export function ProfilePage({ user }) {
     <div style={{ paddingBottom: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
         <Text variant="title">Профиль</Text>
-        <CloseButton />
       </div>
 
       <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
@@ -102,7 +66,6 @@ export function ProfilePage({ user }) {
                   flexShrink: 0,
                 }}
               >
-                {avatarUrl ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
               </div>
               <div style={{ minWidth: 0 }}>
                 <Text variant="subtitle" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -110,7 +73,7 @@ export function ProfilePage({ user }) {
                 </Text>
                 <div style={{ marginTop: 6 }}>
                   <Text variant="body" muted>
-                    TG ID: {user?.telegramId || '—'}
+                    {user?.phone || 'Телефон не указан'}
                   </Text>
                 </div>
               </div>

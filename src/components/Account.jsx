@@ -73,23 +73,14 @@ function RowButton({ title, subtitle, onClick, right }) {
   );
 }
 
-function openSupport() {
-  window.open('https://t.me/flowie_support', '_blank', 'noopener,noreferrer');
-}
-
 export function Account() {
   const navigate = useNavigate();
   const { state, actions } = useAppState();
 
-  const tg = state.auth.telegramUser;
   const me = state.auth.me;
-  const displayName = useMemo(() => {
-    if (tg) return [tg.firstName, tg.lastName].filter(Boolean).join(' ') || 'Профиль';
-    return me?.name || 'Профиль';
-  }, [me?.name, tg]);
-
-  const tag = tg?.username ? `@${tg.username}` : me?.username ? `@${me.username}` : 'Без username';
-  const photoUrl = tg?.photoUrl || '';
+  const displayName = useMemo(() => me?.name || 'Профиль', [me?.name]);
+  const tag = me?.phone || 'Гостевой профиль';
+  const photoUrl = '';
   const phoneBound = Boolean(me?.phoneVerified);
 
   const [phoneOpen, setPhoneOpen] = useState(false);
@@ -193,11 +184,6 @@ export function Account() {
             </Surface>
           )}
 
-          <RowButton
-            title="Связаться с поддержкой"
-            subtitle="Вопросы по оплате, доставке или заказу цветов."
-            onClick={openSupport}
-          />
           <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, cursor: dntEnabled ? 'default' : 'pointer' }}>
               <span style={{ minWidth: 0 }}>

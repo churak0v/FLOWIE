@@ -1,6 +1,6 @@
 # FLOWIE
 
-Telegram Mini App for fast flower delivery with a client storefront, manager cabinet, API server, PostgreSQL, Prisma migrations, uploads, and realtime chat.
+Mobile-first flower shop with a client storefront, manager cabinet, API server, PostgreSQL, Prisma migrations, uploads, and realtime chat.
 
 ## Local Run
 
@@ -57,4 +57,4 @@ node ./node_modules/prisma/build/index.js validate --schema prisma/schema.prisma
 
 - `.env` files, dependencies, build output, uploads, local DB snapshots, and bundled local toolchains are intentionally ignored by git.
 - Docker entrypoint runs `prisma migrate deploy` before starting the API.
-- Admin bootstrap uses `ADMIN_TG_IDS` with comma-separated Telegram user IDs.
+- Admin access uses SMS verification for the phone configured in `ADMIN_PHONE`.

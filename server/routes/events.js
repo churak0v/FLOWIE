@@ -1,6 +1,5 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { validate, parse } = require('@tma.js/init-data-node');
 const { requireSameOrigin } = require('../middleware/auth');
 const {
   AnalyticsValidationError,
@@ -12,96 +11,6 @@ const router = express.Router();
 let prisma = new PrismaClient();
 let ipRateLimiter = createRateLimiter({ max: 180, windowMs: 60_000 });
 let sessionRateLimiter = createRateLimiter({ max: 120, windowMs: 60_000 });
-
-function getBotToken() {
-  const token = process.env.BOT_TOKEN || process.env.ADMIN_BOT_TOKEN;
-  if (!token) throw new Error('BOT_TOKEN_NOT_SET');
-  return token;
-}
-
-function getPublicSiteUrl() {
-  return String(process.env.PUBLIC_SITE_URL || '').trim();
-}
-
-async function tgApi(method, payload) {
-  const token = process.env.BOT_TOKEN || '';
-  if (!token) return null;
-  const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload || {}),
-  });
-  return res.json().catch(() => null);
-}
-
-function buildWelcomeAppUrl(startParam) {
-  const base = getPublicSiteUrl().replace(/\/$/, '');
-  if (!base) return '';
-  return startParam ? `${base}?startapp=${encodeURIComponent(startParam)}` : base;
-}
-
-async function sendTelegramWelcomeOnce({ userId, telegramId, startParam, force = false }) {
-  if (!userId || !telegramId) return;
-
-  const sent = await prisma.analyticsEvent.findFirst({
-    where: { userId, event: 'tg_welcome_sent' },
-    select: { id: true },
-  });
-  if (sent) return;
-
-  if (!force) {
-    const recentBlocked = await prisma.analyticsEvent.findFirst({
-      where: {
-        userId,
-        event: { in: ['tg_welcome_blocked', 'tg_welcome_failed'] },
-        createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-      },
-      select: { id: true },
-    });
-    if (recentBlocked) return;
-  }
-
-  const appUrl = buildWelcomeAppUrl(startParam);
-  const reply_markup = appUrl
-    ? { inline_keyboard: [[{ text: 'Открыть FLOWIE', web_app: { url: appUrl } }]] }
-    : undefined;
-
-  const result = await tgApi('sendMessage', {
-    chat_id: telegramId,
-    text:
-      'Добро пожаловать в FLOWIE.\n\n' +
-      'Быстрая доставка цветов с подборками букетов, понятной оплатой и статусом заказа. ' +
-      'Оплачивайте банковской картой через защищённую платёжную страницу.',
-    reply_markup,
-    disable_web_page_preview: true,
-  });
-
-  const description = String(result?.description || '');
-  const outEvent = result?.ok ? 'tg_welcome_sent' : description.includes("can't initiate conversation")
-    ? 'tg_welcome_blocked'
-    : 'tg_welcome_failed';
-
-  await prisma.analyticsEvent.create({
-    data: {
-      userId,
-      event: outEvent,
-      meta: {
-        startParam: startParam || null,
-        telegramOk: Boolean(result?.ok),
-        errorCode: result?.error_code || null,
-        description: result?.description || null,
-        messageId: result?.result?.message_id || null,
-      },
-    },
-  });
-}
-
-function getInitDataFromHeader(req) {
-  const raw = req.headers['x-tg-initdata'];
-  if (typeof raw === 'string') return raw;
-  if (Array.isArray(raw)) return raw[0] || '';
-  return '';
-}
 
 function normalizeRefTag(value) {
   const raw = String(value || '').trim().toLowerCase();
@@ -116,35 +25,14 @@ async function resolveEventIdentity(req) {
   if (req.user?.id) {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { id: true, telegramId: true, staffRole: true, staffActive: true },
+      select: { id: true, staffRole: true, staffActive: true },
     });
     return user ? {
       userId: user.id,
-      telegramId: user.telegramId ? String(user.telegramId) : null,
       isStaff: Boolean(user.staffRole && user.staffActive),
-    } : { userId: null, telegramId: null, isStaff: false };
+    } : { userId: null, isStaff: false };
   }
-
-  const initData = getInitDataFromHeader(req);
-  if (!initData) return { userId: null, telegramId: null, isStaff: false };
-  let data;
-  try {
-    validate(initData, getBotToken(), { expiresIn: 86400 });
-    data = parse(initData);
-  } catch {
-    throw new AnalyticsValidationError('INVALID_INIT_DATA', 401);
-  }
-  if (!data.user?.id) throw new AnalyticsValidationError('INVALID_INIT_DATA', 401);
-  const telegramId = String(data.user.id);
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { id: true, telegramId: true, staffRole: true, staffActive: true },
-  });
-  return user ? {
-    userId: user.id,
-    telegramId,
-    isStaff: Boolean(user.staffRole && user.staffActive),
-  } : { userId: null, telegramId: null, isStaff: false };
+  return { userId: null, isStaff: false };
 }
 
 async function persistClientEvent(identity, normalized) {
@@ -213,15 +101,6 @@ router.post('/', requireSameOrigin, async (req, res) => {
     } catch (error) {
       if (error?.code === 'P2002') return res.json({ ok: true, accepted: true, duplicate: true });
       throw error;
-    }
-
-    if (normalized.event === 'write_access_requested' && normalized.meta.status === 'allowed' && identity.userId && identity.telegramId) {
-      await sendTelegramWelcomeOnce({
-        userId: identity.userId,
-        telegramId: identity.telegramId,
-        startParam: normalizeRefTag(normalized.meta.tag),
-        force: true,
-      });
     }
 
     return res.status(202).json({ ok: true, accepted: true, duplicate: false });

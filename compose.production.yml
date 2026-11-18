@@ -37,12 +37,8 @@ services:
       NODE_ENV: production
       PORT: "3001"
       APP_JWT_SECRET: ${APP_JWT_SECRET:?Set APP_JWT_SECRET in .env.production}
-      BOT_TOKEN: ${BOT_TOKEN:?Set BOT_TOKEN in .env.production}
-      ADMIN_BOT_TOKEN: ${ADMIN_BOT_TOKEN:-}
-      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:?Set TELEGRAM_WEBHOOK_SECRET in .env.production}
-      TELEGRAM_AUTO_SET_WEBHOOK: "false"
       APP_COOKIE_DOMAIN: ${APP_COOKIE_DOMAIN:-}
-      ADMIN_TG_IDS: ${ADMIN_TG_IDS:?Set ADMIN_TG_IDS in .env.production}
+      ADMIN_PHONE: ${ADMIN_PHONE:?Set ADMIN_PHONE in .env.production}
       DEV_ADMIN_ENABLED: "false"
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:?Set PUBLIC_SITE_URL in .env.production}
       AUTH_ALLOWED_ORIGINS: ${AUTH_ALLOWED_ORIGINS:?Set AUTH_ALLOWED_ORIGINS in .env.production}
@@ -120,7 +116,6 @@ services:
       dockerfile: Dockerfile.production
       args:
         VITE_API_URL: /api
-        VITE_DISABLE_TELEGRAM_BOOTSTRAP: "false"
         VITE_HERO_IMAGE: ${VITE_HERO_IMAGE:-}
         VITE_RECIPIENT_IMAGE: ${VITE_RECIPIENT_IMAGE:-}
     expose:

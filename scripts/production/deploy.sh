@@ -25,4 +25,4 @@ wait_for_healthy web 60
 wait_for_healthy admin 60
 wait_for_healthy edge 60
 
-echo "Containers are healthy. Complete the HTTPS, Telegram, admin and controlled-order checks in docs/production-deployment.md."
+echo "Containers are healthy. Complete the HTTPS, admin and controlled-order checks in docs/production-deployment.md."

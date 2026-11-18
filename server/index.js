@@ -4,8 +4,9 @@ require('dotenv').config();
 const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
-const { validate, parse } = require('@tma.js/init-data-node');
+const cookie = require('cookie');
 const { PrismaClient } = require('@prisma/client');
+const { SESSION_COOKIE, resolveSession } = require('./services/authSession');
 const { startAutoFulfillment } = require('./services/autoFulfillment');
 const { createCorsOriginCallback } = require('./services/corsOrigins');
 
@@ -41,7 +42,6 @@ const deliveryRoutes = require('./routes/delivery');
 	const recipientsRoutes = require('./routes/recipients');
 	const collectionsRoutes = require('./routes/collections');
 	const paymentsRoutes = require('./routes/payments');
-	const telegramRoutes = require('./routes/telegram');
 	const seoRoutes = require('./routes/seo');
 
 app.use('/api/auth', authRoutes);
@@ -55,7 +55,6 @@ app.use('/api/search', require('./routes/search'));
 	app.use('/api/recipients', recipientsRoutes);
 	app.use('/api/collections', collectionsRoutes);
 	app.use('/api/payments', paymentsRoutes);
-	app.use('/api/telegram', telegramRoutes);
 	app.use('/api/admin', adminRoutes);
 	app.use('/api/events', eventsRoutes);
 
@@ -64,42 +63,6 @@ app.use('/api/search', require('./routes/search'));
 app.use('/', seoRoutes);
 
 // --- WebSocket (Chat) ---
-function tryParseInitData(initData) {
-    const raw = String(initData || '');
-    if (!raw) throw new Error('NO_INIT_DATA');
-
-    const tokens = [process.env.ADMIN_BOT_TOKEN, process.env.BOT_TOKEN].filter(Boolean);
-    if (!tokens.length) throw new Error('BOT_TOKEN_NOT_SET');
-
-    let lastErr = null;
-    for (const token of tokens) {
-        try {
-            // Keep initData valid for longer; otherwise Socket.IO reconnects will fail after a few minutes.
-            validate(raw, token, { expiresIn: 86400 });
-            return parse(raw);
-        } catch (e) {
-            lastErr = e;
-        }
-    }
-    throw lastErr || new Error('INVALID_INIT_DATA');
-}
-
-async function upsertUserFromInitData(initData) {
-    const data = tryParseInitData(initData);
-    const tgUser = data.user;
-    if (!tgUser?.id) throw new Error('NO_USER');
-
-    const telegramId = String(tgUser.id);
-    const name = [tgUser.firstName, tgUser.lastName].filter(Boolean).join(' ') || null;
-    const username = tgUser.username ? String(tgUser.username) : null;
-
-    return prisma.user.upsert({
-        where: { telegramId },
-        update: { name, username },
-        create: { telegramId, name, username },
-    });
-}
-
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -109,14 +72,14 @@ const io = new Server(server, {
 
 io.use(async (socket, next) => {
     try {
-        const initData = socket.handshake.auth?.initData;
-        const user = await upsertUserFromInitData(initData);
+        const cookies = cookie.parse(socket.handshake.headers.cookie || '');
+        const session = await resolveSession(prisma, cookies[SESSION_COOKIE]);
+        if (!session?.user) throw new Error('NO_SESSION');
+        const user = session.user;
 
         const isStaff = Boolean(user.staffRole && user.staffActive);
         socket.data.user = {
             id: user.id,
-            telegramId: user.telegramId,
-            username: user.username,
             name: user.name,
             isStaff,
             staffRole: user.staffRole || null,

@@ -1,6 +1,5 @@
 const express = require('express');
 const cookie = require('cookie');
-const { validate, parse } = require('@tma.js/init-data-node');
 const { PrismaClient } = require('@prisma/client');
 const { requireAuth, requireSameOrigin } = require('../middleware/auth');
 const { SESSION_COOKIE, createSession, revokeSession, sessionTtlMs } = require('../services/authSession');
@@ -31,10 +30,6 @@ function getCookieOptions() {
     };
 }
 
-function getPublicSiteUrl() {
-    return String(process.env.PUBLIC_SITE_URL || '').trim();
-}
-
 function setSessionCookie(res, token) {
     res.setHeader(
         'Set-Cookie',
@@ -49,9 +44,7 @@ function clearSessionCookie(res) {
 function publicUser(user) {
     return {
         id: user.id,
-        telegramId: user.telegramId,
         name: user.name,
-        username: user.username,
         phone: user.verifiedPhone || user.phone || null,
         phoneVerified: Boolean(user.verifiedPhone && user.phoneVerifiedAt),
         consentPersonal: user.consentPersonal,
@@ -59,7 +52,7 @@ function publicUser(user) {
 }
 
 function isGuestUser(user) {
-    return Boolean(user && !user.telegramId && !user.verifiedPhone && !user.staffRole);
+    return Boolean(user && !user.verifiedPhone && !user.staffRole);
 }
 
 function publicAuthError(error, fallback) {
@@ -70,7 +63,6 @@ function publicAuthError(error, fallback) {
         'OTP_RESEND_TOO_SOON',
         'OTP_RATE_LIMITED',
         'PHONE_ALREADY_IN_USE',
-        'IDENTITY_CONFLICT',
     ]);
     return allowed.has(error?.message) ? error.message : fallback;
 }
@@ -91,152 +83,6 @@ async function rotateSession(req, res, userId) {
     const { token } = await createSession(prisma, userId, req);
     setSessionCookie(res, token);
 }
-
-async function tgApi(method, payload) {
-    const token = process.env.BOT_TOKEN || '';
-    if (!token) return null;
-
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 1800);
-    try {
-        const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload || {}),
-            signal: ac.signal,
-        });
-        return response.json().catch(() => null);
-    } finally {
-        clearTimeout(timer);
-    }
-}
-
-function getStartParamFromInitData(initData) {
-    try {
-        const params = new URLSearchParams(String(initData || ''));
-        return String(params.get('start_param') || '').trim();
-    } catch {
-        return '';
-    }
-}
-
-function parseTelegramIdentity(initData, botToken) {
-    validate(initData, botToken, { expiresIn: 86400 });
-    const data = parse(initData);
-    const tgUser = data.user;
-    if (!tgUser?.id) throw new Error('NO_USER');
-
-    return {
-        telegramId: String(tgUser.id),
-        name: [tgUser.first_name ?? tgUser.firstName, tgUser.last_name ?? tgUser.lastName].filter(Boolean).join(' ') || null,
-        username: tgUser.username ? String(tgUser.username) : null,
-        startParam: String(data.start_param || data.startParam || getStartParamFromInitData(initData) || '').trim(),
-    };
-}
-
-function buildWelcomeAppUrl(startParam) {
-    const base = getPublicSiteUrl().replace(/\/$/, '');
-    if (!base) return '';
-    return startParam ? `${base}?startapp=${encodeURIComponent(startParam)}` : base;
-}
-
-async function sendTelegramWelcomeOnce({ userId, telegramId, startParam }) {
-    if (!userId || !telegramId) return;
-
-    const existing = await prisma.analyticsEvent.findFirst({
-        where: {
-            userId,
-            event: { in: ['tg_welcome_sent', 'tg_welcome_blocked'] },
-        },
-        select: { id: true },
-    });
-    if (existing) return;
-
-    const appUrl = buildWelcomeAppUrl(startParam);
-    const reply_markup = appUrl
-        ? { inline_keyboard: [[{ text: 'Открыть FLOWIE', web_app: { url: appUrl } }]] }
-        : undefined;
-
-    const result = await tgApi('sendMessage', {
-        chat_id: telegramId,
-        text:
-            'Добро пожаловать в FLOWIE.\n\n' +
-            'Быстрая доставка цветов с подборками букетов, понятной оплатой и статусом заказа. ' +
-            'Оплачивайте банковской картой через защищённую платёжную страницу.',
-        reply_markup,
-        disable_web_page_preview: true,
-    });
-
-    const event = result?.ok ? 'tg_welcome_sent' : String(result?.description || '').includes("can't initiate conversation")
-        ? 'tg_welcome_blocked'
-        : 'tg_welcome_failed';
-
-    await prisma.analyticsEvent.create({
-        data: {
-            userId,
-            event,
-            meta: {
-                startParam: startParam || null,
-                telegramOk: Boolean(result?.ok),
-                errorCode: result?.error_code || null,
-                description: result?.description || null,
-                messageId: result?.result?.message_id || null,
-            },
-        },
-    });
-}
-
-// POST /api/auth/telegram
-router.post('/telegram', requireSameOrigin, async (req, res) => {
-    try {
-        const initData = String(req.body?.initData || '');
-        if (!initData) return res.status(400).json({ ok: false, error: 'NO_INIT_DATA' });
-
-        const botToken = process.env.BOT_TOKEN;
-        if (!botToken) return res.status(500).json({ ok: false, error: 'BOT_TOKEN_NOT_SET' });
-
-        // Use a sane TTL (1 day). Some clients reuse initData within the same WebView session.
-        const { telegramId, name, username, startParam } = parseTelegramIdentity(initData, botToken);
-
-        const user = await prisma.$transaction(async (tx) => {
-            const current = req.user?.id ? await tx.user.findUnique({ where: { id: req.user.id } }) : null;
-            const target = await tx.user.findUnique({ where: { telegramId } });
-
-            if (target) {
-                if (current && current.id !== target.id) {
-                    if (!isGuestUser(current)) {
-                        const error = new Error('IDENTITY_CONFLICT');
-                        error.statusCode = 409;
-                        throw error;
-                    }
-                    await mergeGuestData(tx, current.id, target.id);
-                    await tx.authSession.updateMany({ where: { userId: current.id, revokedAt: null }, data: { revokedAt: new Date() } });
-                }
-                return tx.user.update({ where: { id: target.id }, data: { name, username } });
-            }
-
-            if (current && !current.telegramId) {
-                return tx.user.update({ where: { id: current.id }, data: { telegramId, name, username } });
-            }
-            return tx.user.create({ data: { telegramId, name, username } });
-        });
-
-        await rotateSession(req, res, user.id);
-        sendTelegramWelcomeOnce({ userId: user.id, telegramId, startParam }).catch((e) => {
-            console.warn('Telegram welcome failed:', e?.message || e);
-        });
-        return res.json({
-            ok: true,
-            user: publicUser(user),
-        });
-    } catch (e) {
-        if (e?.message === 'IDENTITY_CONFLICT') {
-            if (req.authSession?.id) await revokeSession(prisma, req.authSession.id).catch(() => {});
-            clearSessionCookie(res);
-        }
-        return res.status(e?.statusCode || 401).json({ ok: false, error: publicAuthError(e, 'INVALID_INIT_DATA') });
-    }
-});
 
 // POST /api/auth/guest
 router.post('/guest', requireSameOrigin, async (req, res) => {
@@ -411,4 +257,4 @@ router.post('/logout', requireSameOrigin, async (req, res) => {
 });
 
 module.exports = router;
-module.exports._test = { parseTelegramIdentity, isGuestUser, mergeGuestData, publicUser };
+module.exports._test = { isGuestUser, mergeGuestData, publicUser };

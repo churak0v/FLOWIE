@@ -14,30 +14,6 @@ let prisma = new PrismaClient();
 const ALFA_CURRENCY_RUB = '643';
 const REGISTRATION_LOCK_TTL_MS = 30_000;
 
-function parseCsv(value) {
-  return String(value || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function getAdminIds() {
-  return parseCsv(process.env.ADMIN_TG_IDS);
-}
-
-function getAdminBotToken() {
-  return process.env.ADMIN_BOT_TOKEN || process.env.BOT_TOKEN || '';
-}
-
-function getAppSecret() {
-  return String(process.env.APP_JWT_SECRET || '');
-}
-
-function makeSig(orderId) {
-  const secret = getAppSecret();
-  return crypto.createHmac('sha256', secret).update(String(orderId)).digest('hex').slice(0, 16);
-}
-
 function getPublicSiteUrl() {
   return String(process.env.PUBLIC_SITE_URL || '').trim();
 }
@@ -387,44 +363,6 @@ function rubPerUsd() {
   return Number.isFinite(n) && n > 0 ? n : 82;
 }
 
-async function tgApi(token, method, payload) {
-  if (!token) return null;
-  const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload || {}),
-  });
-  return res.json().catch(() => null);
-}
-
-async function notifyAdminsPaymentPending(order) {
-  try {
-    const token = getAdminBotToken();
-    const ids = getAdminIds();
-    if (!token || !ids.length) return;
-
-    const amount = Number(order?.totalPrice || 0);
-    const orderId = Number(order?.id);
-    const userLabel = order?.user?.username ? `@${order.user.username}` : (order?.user?.name || `User ${order?.user?.id || '—'}`);
-    const sig = makeSig(orderId);
-    const cb = `pay_ok:${orderId}:${sig}`;
-
-    const text =
-      `Ожидается оплата (ручной перевод)\n` +
-      `Заказ: #${orderId}\n` +
-      `Сумма: ${Math.round(amount).toLocaleString('ru-RU')} ₽\n` +
-      `Клиент: ${userLabel}`;
-
-    const reply_markup = { inline_keyboard: [[{ text: 'Подтвердить поступление', callback_data: cb }]] };
-
-    for (const chatId of ids) {
-      await tgApi(token, 'sendMessage', { chat_id: chatId, text, reply_markup });
-    }
-  } catch {
-    // ignore
-  }
-}
-
 function getPaymentInfo() {
   return {
     cardNumber: String(process.env.PAYMENT_CARD_NUMBER || '2202 2065 5716 9211'),
@@ -445,11 +383,6 @@ router.get('/manual', requireAuth, async (req, res) => {
       include: { user: true, items: { include: { product: true } }, photos: true },
     });
     if (!order) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
-
-    // Ping admins only while payment is actually pending.
-    if (String(order.paymentStatus || '').toUpperCase() === 'PENDING' && String(order.paymentMethod || '').toLowerCase() !== 'alfa') {
-      notifyAdminsPaymentPending(order);
-    }
 
     const info = getPaymentInfo();
     return res.json({
@@ -553,7 +486,7 @@ router.post('/alfa-register', requireAuth, async (req, res) => {
       failUrl,
       dynamicCallbackUrl,
       description,
-      clientId: req.user.telegramId || req.user.id,
+      clientId: req.user.id,
       email: req.user.email || undefined,
     });
 
@@ -845,7 +778,7 @@ router.post('/delivery/alfa-register', requireAuth, async (req, res) => {
       failUrl: buildPublicUrl(`/pay/${encodeURIComponent(String(order.id))}?deliveryPayment=failed`),
       dynamicCallbackUrl: buildPublicUrl('/api/payments/delivery/alfa-callback'),
       description: `FLOWIE доставка заказа #${order.id}`,
-      clientId: req.user.telegramId || req.user.id,
+      clientId: req.user.id,
     });
     if (typeof result?.orderId !== 'string' || !result.orderId.trim()) {
       const error = new Error('ALFA_REGISTER_FAILED');
@@ -1011,11 +944,6 @@ router.post('/confirm-client', requireAuth, async (req, res) => {
       where: { id: orderId },
       data: { paymentClientConfirmed: true, paymentStatus: order.paymentStatus || 'PENDING' },
     });
-
-    // Дополнительный пинг админам, если клиент отметил оплату.
-    if (updated.paymentStatus === 'PENDING') {
-      notifyAdminsPaymentPending({ ...order, ...updated, user: order.user });
-    }
 
     return res.json({ ok: true, order: { id: updated.id, paymentStatus: updated.paymentStatus, paymentClientConfirmed: updated.paymentClientConfirmed } });
   } catch (e) {

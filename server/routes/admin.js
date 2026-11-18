@@ -1,6 +1,6 @@
 const express = require('express');
-const { validate, parse } = require('@tma.js/init-data-node');
 const { PrismaClient } = require('@prisma/client');
+const { normalizePhone } = require('../services/phoneOtp');
 const { loadAnalyticsReport } = require('../services/reportAnalytics');
 const {
   DeliveryPaymentError,
@@ -19,76 +19,14 @@ function orderWithPublicDelivery(order) {
   return safe;
 }
 
-function parseCsv(value) {
-  return String(value || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function getInitDataFromHeader(req) {
-  // Spec: X-TG-InitData
-  const raw = req.headers['x-tg-initdata'];
-  if (typeof raw === 'string') return raw;
-  if (Array.isArray(raw)) return raw[0] || '';
-  return '';
-}
-
-function validateAndParseAdminInitData(initData) {
-  const tokens = [...new Set([process.env.ADMIN_BOT_TOKEN, process.env.BOT_TOKEN].filter(Boolean))];
-  if (!tokens.length) throw new Error('ADMIN_BOT_TOKEN_NOT_SET');
-
-  let lastError = null;
-  for (const token of tokens) {
-    try {
-      validate(initData, token, { expiresIn: 86400 });
-      return parse(initData);
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  throw lastError || new Error('INVALID_INIT_DATA');
-}
-
 function isDevAdminEnabled() {
   return process.env.NODE_ENV === 'development' && process.env.DEV_ADMIN_ENABLED === 'true';
 }
 
 async function getDevAdminUser() {
-  const telegramId = String(process.env.DEV_ADMIN_TELEGRAM_ID || 'local-dev-admin');
-  return prisma.user.upsert({
-    where: { telegramId },
-    update: {
-      name: 'Local Dev Admin',
-      username: 'local_admin',
-      staffRole: 'admin',
-      staffActive: true,
-    },
-    create: {
-      telegramId,
-      name: 'Local Dev Admin',
-      username: 'local_admin',
-      staffRole: 'admin',
-      staffActive: true,
-    },
-  });
-}
-
-async function upsertUserFromInitData(initData) {
-  // Telegram initData may be reused while the Mini App is open; keep a longer TTL to avoid random UNAUTHORIZED.
-  const data = validateAndParseAdminInitData(initData);
-  const tgUser = data.user;
-  if (!tgUser?.id) throw new Error('NO_USER');
-
-  const telegramId = String(tgUser.id);
-  const name = [tgUser.first_name ?? tgUser.firstName, tgUser.last_name ?? tgUser.lastName].filter(Boolean).join(' ') || null;
-  const username = tgUser.username ? String(tgUser.username) : null;
-
-  return prisma.user.upsert({
-    where: { telegramId },
-    update: { name, username },
-    create: { telegramId, name, username },
-  });
+  const existing = await prisma.user.findFirst({ where: { staffRole: 'admin', staffActive: true } });
+  if (existing) return existing;
+  return prisma.user.create({ data: { name: 'Local Dev Admin', staffRole: 'admin', staffActive: true } });
 }
 
 async function writeAudit({ actorId, action, entity, entityId, payload }) {
@@ -108,47 +46,13 @@ async function writeAudit({ actorId, action, entity, entityId, payload }) {
   }
 }
 
-async function notifyClientTelegram({ telegramId, text }) {
-  try {
-    const chatId = String(telegramId || '').trim();
-    if (!chatId) return;
-
-    // Prefer the client bot for client notifications.
-    const token = process.env.BOT_TOKEN || process.env.ADMIN_BOT_TOKEN;
-    if (!token) return;
-
-    const msg = String(text || '').trim();
-    if (!msg) return;
-
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 3000);
-    try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text: msg }),
-        signal: ac.signal,
-      });
-      await res.json().catch(() => null);
-    } finally {
-      clearTimeout(timer);
-    }
-  } catch {
-    // ignore
-  }
-}
-
 async function requireAdmin(req, res, next) {
   try {
-    const initData = getInitDataFromHeader(req);
-    const initDataLen = initData ? initData.length : 0;
     const hasCookieUser = Boolean(req.user?.id);
     try {
       console.info('[admin] incoming', {
         path: req.originalUrl,
         method: req.method,
-        hasInitData: Boolean(initData),
-        initDataLen,
         hasCookieUser,
         ip: req.ip,
       });
@@ -156,26 +60,21 @@ async function requireAdmin(req, res, next) {
       // ignore logging failures
     }
 
-    // Auth via initData (preferred for subdomains / TG WebApp)
     let user = null;
     if (isDevAdminEnabled()) {
       user = await getDevAdminUser();
-    } else if (initData) {
-      user = await upsertUserFromInitData(initData);
     } else if (req.user?.id) {
-      // Fallback: cookie/bearer session (useful in local/dev)
       user = await prisma.user.findUnique({ where: { id: req.user.id } });
     }
 
     if (!user) return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
 
-    // Bootstrap the very first admin from env allow-list.
-    const bootstrapTgIds = parseCsv(process.env.ADMIN_TG_IDS);
+    // Grant admin only after ownership of the configured phone was verified by SMS.
+    const bootstrapPhone = normalizePhone(process.env.ADMIN_PHONE);
     const canBootstrap =
       (!user.staffRole || !user.staffActive) &&
-      user.telegramId &&
-      bootstrapTgIds.includes(user.telegramId) &&
-      (await prisma.user.count({ where: { staffRole: 'admin', staffActive: true } })) === 0;
+      bootstrapPhone &&
+      user.verifiedPhone === bootstrapPhone;
     if (canBootstrap) {
       user = await prisma.user.update({
         where: { id: user.id },
@@ -197,8 +96,7 @@ async function requireAdmin(req, res, next) {
 
     req.admin = {
       id: user.id,
-      telegramId: user.telegramId,
-      username: user.username,
+      phone: user.verifiedPhone || user.phone || null,
       name: user.name,
       role: user.staffRole,
     };
@@ -210,7 +108,7 @@ async function requireAdmin(req, res, next) {
     } catch {
       // ignore
     }
-    return res.status(401).json({ ok: false, error: 'UNAUTHORIZED', message: e?.message || 'INVALID_INIT_DATA' });
+    return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
   }
 }
 
@@ -1113,13 +1011,6 @@ async function setOrderStatus(req, res, nextStatus) {
       payload: { status: nextStatus },
     });
 
-    if (nextStatus === 'DELIVERED') {
-      notifyClientTelegram({
-        telegramId: order.user?.telegramId,
-        text: `Заказ №${order.id} доставлен.`,
-      });
-    }
-
     return res.json({ ok: true, order });
   } catch (e) {
     return res.status(e?.statusCode || 500).json({ ok: false, error: e?.message || 'ORDER_STATUS_FAILED' });
@@ -1247,12 +1138,6 @@ router.post('/orders/:id/cancel', requireAdmin, requireRoles(['admin', 'moderato
       payload: { reason: reason || null },
     });
 
-    // Best-effort notify client in Telegram.
-    notifyClientTelegram({
-      telegramId: order.user?.telegramId,
-      text: `Заказ №${order.id} отменен.${reason ? ` Причина: ${reason}` : ''}`,
-    });
-
     return res.json({ ok: true, order });
   } catch (e) {
     return res.status(e?.statusCode || 500).json({ ok: false, error: e?.message || 'ORDER_CANCEL_FAILED' });
@@ -1344,12 +1229,6 @@ router.post('/orders/:id/photos/:photoId/send', requireAdmin, requireRoles(['adm
       entity: 'order',
       entityId: orderId,
       payload: { photoId },
-    });
-
-    // Notify client: photo ready for оценка
-    notifyClientTelegram({
-      telegramId: order.user?.telegramId,
-      text: `Фото вашего заказа #${orderId} готово. Пожалуйста, оцените в приложении.`,
     });
 
     return res.json({ ok: true, order });
@@ -1975,20 +1854,18 @@ router.get('/staff', requireAdmin, requireRoles(['admin']), async (req, res) => 
 
 router.post('/staff', requireAdmin, requireRoles(['admin']), async (req, res) => {
   try {
-    const telegramId = String(req.body?.telegramId || '').trim();
     const staffRole = String(req.body?.staffRole || '').trim();
     const staffActive = req.body?.staffActive == null ? true : Boolean(req.body.staffActive);
     const name = req.body?.name ? String(req.body.name) : null;
-    const username = req.body?.username ? String(req.body.username).replace(/^@/, '') : null;
-    const phone = req.body?.phone ? String(req.body.phone) : null;
+    const phone = normalizePhone(req.body?.phone);
 
-    if (!/^\d+$/.test(telegramId)) return res.status(400).json({ ok: false, error: 'BAD_TG_ID' });
+    if (!phone) return res.status(400).json({ ok: false, error: 'BAD_PHONE' });
     if (!['admin', 'moderator', 'florist', 'courier'].includes(staffRole)) return res.status(400).json({ ok: false, error: 'BAD_ROLE' });
 
     const user = await prisma.user.upsert({
-      where: { telegramId },
-      update: { name, username, phone, staffRole, staffActive },
-      create: { telegramId, name, username, phone, staffRole, staffActive },
+      where: { verifiedPhone: phone },
+      update: { name, phone, staffRole, staffActive },
+      create: { verifiedPhone: phone, phone, phoneVerifiedAt: new Date(), name, staffRole, staffActive },
     });
 
     await writeAudit({
@@ -1996,7 +1873,7 @@ router.post('/staff', requireAdmin, requireRoles(['admin']), async (req, res) =>
       action: 'USER_CREATED',
       entity: 'user',
       entityId: user.id,
-      payload: { telegramId, staffRole, staffActive },
+      payload: { phone, staffRole, staffActive },
     });
 
     return res.json({ ok: true, user });
@@ -2057,5 +1934,4 @@ module.exports._test = {
   isAllowedTransition,
   canAccessOrder,
   deliveryDispatchError,
-  validateAndParseAdminInitData,
 };

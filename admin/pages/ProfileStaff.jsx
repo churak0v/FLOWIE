@@ -20,10 +20,8 @@ export function ProfileStaffPage() {
 
   const [staff, setStaff] = useState([]);
   const [newStaff, setNewStaff] = useState({
-    telegramId: '',
     staffRole: 'moderator',
     name: '',
-    username: '',
     phone: '',
   });
 
@@ -97,13 +95,8 @@ export function ProfileStaffPage() {
             <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <Text variant="caption">Telegram ID</Text>
-                  <input
-                    value={newStaff.telegramId}
-                    onChange={(e) => setNewStaff((p) => ({ ...p, telegramId: e.target.value }))}
-                    placeholder="337367605"
-                    style={inputStyle}
-                  />
+                  <Text variant="caption">Телефон</Text>
+                  <input value={newStaff.phone} onChange={(e) => setNewStaff((p) => ({ ...p, phone: e.target.value }))} placeholder="+7…" style={inputStyle} />
                 </div>
                 <div>
                   <Text variant="caption">Роль</Text>
@@ -121,23 +114,12 @@ export function ProfileStaffPage() {
                 <input value={newStaff.name} onChange={(e) => setNewStaff((p) => ({ ...p, name: e.target.value }))} placeholder="Имя" style={inputStyle} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <Text variant="caption">Username (опц.)</Text>
-                  <input value={newStaff.username} onChange={(e) => setNewStaff((p) => ({ ...p, username: e.target.value }))} placeholder="@username" style={inputStyle} />
-                </div>
-                <div>
-                  <Text variant="caption">Телефон (опц.)</Text>
-                  <input value={newStaff.phone} onChange={(e) => setNewStaff((p) => ({ ...p, phone: e.target.value }))} placeholder="+7…" style={inputStyle} />
-                </div>
-              </div>
-
               <button
                 type="button"
                 onClick={async () => {
                   try {
                     await adminApi.createStaff({ ...newStaff, staffActive: true });
-                    setNewStaff({ telegramId: '', staffRole: 'moderator', name: '', username: '', phone: '' });
+                    setNewStaff({ staffRole: 'moderator', name: '', phone: '' });
                     await load();
                   } catch (e) {
                     alert(e?.data?.error || e?.message || 'Не удалось добавить');
@@ -163,10 +145,10 @@ export function ProfileStaffPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
                 <div style={{ minWidth: 0 }}>
                   <Text variant="subtitle" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {u.name || u.username || `User #${u.id}`}
+                    {u.name || u.verifiedPhone || u.phone || `Сотрудник #${u.id}`}
                   </Text>
                   <div style={{ marginTop: 6 }}>
-                    <Text variant="caption">TG ID: {u.telegramId || '—'}</Text>
+                    <Text variant="caption">{u.verifiedPhone || u.phone || 'Телефон не указан'}</Text>
                   </div>
                 </div>
                 <span

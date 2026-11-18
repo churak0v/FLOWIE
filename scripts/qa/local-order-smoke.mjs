@@ -16,7 +16,7 @@ async function request(path, { method = 'GET', body, cookie = '', status = 200 }
   return { data, cookie: response.headers.get('set-cookie')?.split(';')[0] || cookie };
 }
 const staff = (await request('/admin/me')).data.user;
-assert.equal(staff.telegramId, 'local-dev-admin', 'Only the local development admin is permitted');
+assert.equal(staff.staffRole, 'admin', 'Only the local development admin is permitted');
 const guest = await request('/auth/guest', { method: 'POST', body: {} });
 const cookie = guest.cookie;
 assert.ok(cookie);

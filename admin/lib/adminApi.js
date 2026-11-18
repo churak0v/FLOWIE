@@ -1,5 +1,3 @@
-import { getTelegramInitData } from '../../src/telegram';
-
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const MEM_CACHE = new Map();
@@ -14,9 +12,7 @@ async function fetchJson(path, options = {}) {
     ...fetchOptions
   } = options || {};
 
-  const initData = getTelegramInitData();
   const headers = new Headers(fetchOptions.headers || {});
-  if (initData) headers.set('X-TG-InitData', initData);
 
   const method = String(fetchOptions.method || 'GET').toUpperCase();
   const key = cacheKey || `${method}:${path}`;
@@ -59,20 +55,21 @@ async function fetchJson(path, options = {}) {
 
 export const adminApi = {
   me: async (opts = {}) => fetchJson('/admin/me', { cache: 'no-store', cacheTtlMs: 10_000, ...(opts || {}) }),
+  requestPhoneOtp: async (phone) => fetchJson('/auth/phone/request', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }),
+  }),
+  verifyPhoneOtp: async ({ challengeId, code }) => fetchJson('/auth/phone/verify', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ challengeId, code }),
+  }),
 
   // Uploads (shared endpoint)
   uploadFile: async (file) => {
-    const initData = getTelegramInitData();
     const formData = new FormData();
     formData.append('file', file);
-
-    const headers = new Headers();
-    if (initData) headers.set('X-TG-InitData', initData);
 
     const res = await fetch(`${API_URL}/upload`, {
       method: 'POST',
       body: formData,
-      headers,
       credentials: 'include',
     });
     const contentType = res.headers.get('content-type') || '';
@@ -81,7 +78,7 @@ export const adminApi = {
     const text = !isJson ? await res.text().catch(() => '') : '';
 
     if (res.status === 413) throw new Error('Файл слишком большой (макс 25 МБ)');
-    if (res.status === 401 || res.status === 403) throw new Error('Нет прав (initData/сессия)');
+    if (res.status === 401 || res.status === 403) throw new Error('Нет прав доступа');
     if (!res.ok || !data?.url) throw new Error(data?.error || text || 'UPLOAD_FAILED');
     return data.url;
   },

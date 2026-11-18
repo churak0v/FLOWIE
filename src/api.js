@@ -1,4 +1,3 @@
-import { getTelegramInitData } from './telegram';
 import { createAnalyticsUuid, getAnalyticsSessionId } from './lib/analytics';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -48,7 +47,7 @@ async function fetchJson(path, options = {}) {
 export const api = {
     // Auth
     getMe: async () => {
-        // Auth is session-critical (cookie can change after telegramLogin). Avoid caching.
+        // Auth is session-critical because the cookie can change after login. Avoid caching.
         return fetchJson(`${API_URL}/auth/me`, { cache: 'no-store' });
     },
     updateMe: async (patch) => {
@@ -56,13 +55,6 @@ export const api = {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(patch || {}),
-        });
-    },
-    telegramLogin: async (initData) => {
-        return fetchJson(`${API_URL}/auth/telegram`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData }),
         });
     },
     guestLogin: async () => {
@@ -96,9 +88,7 @@ export const api = {
 
     // Analytics (best-effort)
     trackEvent: async (event, meta = {}) => {
-        const initData = getTelegramInitData();
         const headers = { 'Content-Type': 'application/json' };
-        if (initData) headers['X-TG-InitData'] = initData;
         return fetchJson(`${API_URL}/events`, {
             method: 'POST',
             headers,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { adminApi } from './lib/adminApi';
-import { getTelegramUserSafe } from '../src/telegram';
+import { PhoneLogin } from '../src/components/PhoneLogin';
 import { AdminBottomNav } from './components/AdminBottomNav';
 import { OrdersPage } from './pages/Orders';
 import { OrderDetailsPage } from './pages/OrderDetails';
@@ -60,31 +60,14 @@ function AdminFrame({ user }) {
   );
 }
 
-function Unauthorized() {
-  const tg = getTelegramUserSafe();
+function Unauthorized({ onAuthenticated, error }) {
   return (
     <div className="ui-appShell">
-      <Text variant="title">Нет доступа</Text>
+      <Text variant="title">Вход в кабинет</Text>
       <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
         <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)' }}>
-          <Text variant="subtitle">Откройте админку в Telegram</Text>
-          <div style={{ marginTop: 6 }}>
-            <Text variant="body" muted>
-              Админка авторизуется через Telegram initData. Если вы открыли ее в обычном браузере, доступ будет закрыт.
-            </Text>
-          </div>
-        </Surface>
-
-        <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)' }}>
-          <Text variant="subtitle">Первичная настройка админа</Text>
-          <div style={{ marginTop: 6 }}>
-            <Text variant="body" muted>
-              Добавьте ваш Telegram ID в переменную `ADMIN_TG_IDS` на API-сервере (через запятую) и перезапустите контейнер.
-            </Text>
-          </div>
-          <div style={{ marginTop: 10 }}>
-            <Text variant="caption">Ваш TG ID: {tg?.id || 'не определен'}</Text>
-          </div>
+          <PhoneLogin onSuccess={onAuthenticated} onCancel={() => {}} />
+          {error ? <div style={{ marginTop: 10, color: '#b42318' }}><Text variant="caption">{error === 'FORBIDDEN' ? 'Этот номер не добавлен в команду магазина.' : 'Не удалось войти в кабинет.'}</Text></div> : null}
         </Surface>
       </div>
     </div>
@@ -121,6 +104,20 @@ export default function App() {
     };
   }, []);
 
+  async function finishPhoneLogin() {
+    setLoading(true);
+    setBootError('');
+    try {
+      const res = await adminApi.me({ force: true });
+      setMe(res?.user || null);
+    } catch (e) {
+      setMe(null);
+      setBootError(e?.data?.error || e?.message || 'UNAUTHORIZED');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <BrowserRouter>
       {loading ? (
@@ -139,7 +136,7 @@ export default function App() {
       ) : me ? (
         <AdminFrame user={me} />
       ) : (
-        <Unauthorized />
+        <Unauthorized onAuthenticated={finishPhoneLogin} error={bootError} />
       )}
     </BrowserRouter>
   );

@@ -50,8 +50,6 @@ async function authenticate(req, res, next) {
         req.authSession = session;
         req.user = {
             id: session.user.id,
-            telegramId: session.user.telegramId ? String(session.user.telegramId) : null,
-            username: session.user.username ? String(session.user.username) : null,
             verifiedPhone: session.user.verifiedPhone || null,
         };
         return next();

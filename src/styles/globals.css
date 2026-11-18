@@ -77,51 +77,22 @@ a[href^='sms:'] {
   touch-action: pan-y;
 }
 
-/* Telegram Mini App safe-area + viewport helpers.
-   Docs: https://core.telegram.org/bots/webapps#viewport
-   Telegram sets CSS vars like --tg-viewport-stable-height and --tg-safe-area-inset-*.
-*/
 :root {
-  --app-vh: var(--tg-viewport-stable-height, 100dvh);
+  --app-vh: 100dvh;
   /* Space reserved for the floating BottomNav so content doesn't get hidden behind it. */
   --app-bottom-nav-space: 136px;
-  /* Telegram header fallback height (Close pill). */
-  --app-tg-header-fallback: 56px;
-  /* iOS safe-area env() values. Telegram can report 0 for safeAreaInset in some clients;
-     keep env() available as a fallback signal (readable from JS via getComputedStyle). */
+  /* iOS safe-area values remain available to components that explicitly need them. */
   --app-env-safe-area-inset-top: env(safe-area-inset-top, 0px);
   --app-env-safe-area-inset-right: env(safe-area-inset-right, 0px);
   --app-env-safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
   --app-env-safe-area-inset-left: env(safe-area-inset-left, 0px);
-  /* Keyboard offset (px). Calculated in JS via VisualViewport and mirrored into CSS.
-     Do NOT derive it from Telegram's viewportHeight vs viewportStableHeight: those values
-     can differ during Mini App expand/collapse gestures and would incorrectly move fixed UI. */
-  /* Avoid CSS max() for compatibility with older Telegram iOS WebViews. JS clamps it to >= 0. */
+  /* Keyboard offset (px), calculated with VisualViewport. */
   --app-keyboard-offset: var(--app-keyboard-offset-js, 0px);
-  /* Telegram docs:
-     - safeAreaInset: system safe-area (notches, home indicator).
-     - contentSafeAreaInset: safe-area + Telegram UI overlay ("Close" pill, main button).
-     Use contentSafeAreaInset for page content padding.
-     Keep BottomNav aligned to the physical bottom: use safeAreaInset for its padding only.
-  */
-  /* Important: trust content-safe-area, but keep a fallback for header overlay. */
-  --app-inset-top: max(
-    var(--tg-content-safe-area-inset-top, env(safe-area-inset-top, 0px)),
-    calc(var(--tg-safe-area-inset-top, env(safe-area-inset-top, 0px)) + var(--app-tg-header-fallback))
-  );
-  --app-inset-right: max(
-    var(--tg-content-safe-area-inset-right, 0px),
-    var(--tg-safe-area-inset-right, env(safe-area-inset-right, 0px))
-  );
-  --app-inset-bottom: max(
-    var(--tg-content-safe-area-inset-bottom, 0px),
-    var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))
-  );
-  --app-inset-left: max(
-    var(--tg-content-safe-area-inset-left, 0px),
-    var(--tg-safe-area-inset-left, env(safe-area-inset-left, 0px))
-  );
-  --app-nav-inset-bottom: var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --app-inset-top: 0px;
+  --app-inset-right: 0px;
+  --app-inset-bottom: 0px;
+  --app-inset-left: 0px;
+  --app-nav-inset-bottom: 0px;
   /* Scroll containers can override to reduce the "empty tail" while keeping fixed UI safe. */
   --app-content-inset-bottom: var(--app-inset-bottom);
 
@@ -374,7 +345,7 @@ a[href^='sms:'] {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  /* Keep content just below Telegram UI controls ("Close" pill). */
+  /* Compact edge-to-edge mobile layout. */
   padding-top: calc(var(--sp-2) + var(--app-inset-top));
   padding-right: calc(var(--sp-4) + var(--app-inset-right));
   padding-bottom: calc(
@@ -436,7 +407,7 @@ a[href^='sms:'] {
   position: fixed;
   left: 0;
   right: 0;
-  /* Keep behind the keyboard in Telegram WebView. */
+  /* Keep fixed controls behind the on-screen keyboard. */
   bottom: calc(0px - var(--app-keyboard-offset));
   width: auto;
   max-width: min(100vw, var(--app-max));

@@ -4,9 +4,7 @@ import { Home } from './components/Home';
 import { BottomNav } from './components/ui/BottomNav';
 import { MiniCartBar } from './components/domain/MiniCartBar';
 import { ActiveOrderFab } from './components/domain/ActiveOrderFab';
-import { InsetsDebug } from './components/dev/InsetsDebug';
 import { api } from './api';
-import { getTelegramInitData, getTelegramStartParam, getTelegramUserSafe, isTelegramWebApp, requestWriteAccess } from './telegram';
 import { AppStateProvider, useAppState } from './state/AppState';
 import { extractAnalyticsAttribution, markAnalyticsReady, trackAnalytics } from './lib/analytics';
 
@@ -41,7 +39,7 @@ const REFERRAL_OPEN_PREFIX = 'flowie:referral-opened:';
 function getReferralToken() {
     try {
         const params = new URLSearchParams(window.location?.search || '');
-        const raw = params.get('ref') || params.get('creator') || params.get('profile') || getTelegramStartParam() || '';
+        const raw = params.get('ref') || params.get('creator') || params.get('profile') || '';
         return String(raw).trim().toLowerCase().replace(/^creator[_-]?/, '').replace(/[^a-z0-9_-]/g, '');
     } catch {
         return '';
@@ -162,7 +160,7 @@ function AppRoutes() {
 
     return (
         <>
-            {/* No animated route stack: Telegram WebView + fixed UI behaves more predictably without transforms. */}
+            {/* Keep the route stack transform-free so fixed mobile controls stay stable. */}
             <Suspense fallback={<div style={{ minHeight: '100dvh', background: 'var(--bg)' }} />}>
             <Routes>
                 <Route path="/" element={<Home />} />
@@ -210,9 +208,6 @@ function AuthBootstrap() {
 
     useEffect(() => {
         const bootstrapAuth = async () => {
-            const telegramEnabled = import.meta.env.VITE_DISABLE_TELEGRAM_BOOTSTRAP !== 'true';
-            const inTg = telegramEnabled && isTelegramWebApp();
-
             // Try existing session first.
             let me = null;
             try {
@@ -222,38 +217,8 @@ function AuthBootstrap() {
                 if (e?.status !== 401) return;
             }
 
-            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-            // In Telegram we should prefer initData auth. Some clients populate initData shortly after ready/expand,
-            // so do a few short retries before falling back.
-            let initData = telegramEnabled ? getTelegramInitData() : '';
-            if (inTg && !initData) {
-                for (const ms of [0, 80, 200, 400, 700]) {
-                    await sleep(ms);
-                    initData = getTelegramInitData();
-                    if (initData) break;
-                }
-            }
-
-            // If we're in Telegram and either not logged in OR logged in as a guest (no telegramId),
-            // upgrade the session to the Telegram-bound account.
-            const tgUser = initData ? getTelegramUserSafe() : null;
-            const shouldTelegramLogin =
-                Boolean(initData) &&
-                (!me ||
-                    !me.telegramId ||
-                    (tgUser?.id != null && String(me.telegramId || '') && String(me.telegramId) !== String(tgUser.id)));
-
-            if (shouldTelegramLogin) {
-                try {
-                    await api.telegramLogin(initData);
-                } catch (e) {
-                    console.error('Telegram login failed:', e);
-                    // If Telegram auth fails, do not automatically create a guest account inside Telegram.
-                    // Better to keep the user unauthenticated than to split profiles across devices.
-                }
-            } else if (!me) {
-                // Outside Telegram, create a revocable guest session so cart and checkout remain registration-free.
+            if (!me) {
+                // Create a revocable guest session so cart and checkout work without registration.
                 try {
                     await api.guestLogin();
                 } catch (e) {
@@ -272,82 +237,10 @@ function AuthBootstrap() {
 }
 
 function App() {
-
-    useEffect(() => {
-        if (import.meta.env.VITE_DISABLE_TELEGRAM_BOOTSTRAP === 'true') return;
-
-        let cancelled = false;
-        let sent = false;
-        let attempts = 0;
-
-        const sendRefOpen = async () => {
-            if (cancelled || sent) return;
-            attempts += 1;
-            const startParam = getTelegramStartParam();
-            if (startParam) {
-                sent = true;
-                try {
-                    await api.trackEvent('ref_open', {
-                        tag: startParam,
-                        source: 'startapp',
-                        path: window.location?.pathname || '/',
-                        ...extractAnalyticsAttribution(window.location, document.referrer),
-                    });
-                } catch {
-                    // ignore
-                }
-
-                try {
-                    const tgUser = getTelegramUserSafe();
-                    const key = `flowie:write-access-requested:${startParam}`;
-                    const alreadyRequested = window.sessionStorage?.getItem(key) === '1';
-                    if (!tgUser?.allowsWriteToPm && !alreadyRequested) {
-                        window.sessionStorage?.setItem(key, '1');
-                        const allowed = await requestWriteAccess();
-                        await api.trackEvent('write_access_requested', {
-                            tag: startParam,
-                            source: 'startapp',
-                            status: allowed ? 'allowed' : 'cancelled',
-                        });
-                    } else if (tgUser?.allowsWriteToPm) {
-                        await api.trackEvent('write_access_requested', {
-                            tag: startParam,
-                            source: 'startapp',
-                            status: 'allowed',
-                            alreadyAllowed: true,
-                        });
-                    }
-                } catch {
-                    // ignore
-                }
-                return;
-            }
-
-            if (attempts < 5) {
-                setTimeout(sendRefOpen, 160 * attempts);
-            }
-        };
-
-        sendRefOpen();
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
-    const showInsetsDebug = (() => {
-        try {
-            const s = String(window.location?.search || '');
-            return /(?:\\?|&)debugInsets=1(?:&|$)/.test(s);
-        } catch {
-            return false;
-        }
-    })();
-
     return (
         <AppStateProvider>
             <AuthBootstrap />
             <BrowserRouter>
-                {showInsetsDebug ? <InsetsDebug /> : null}
                 <AppRoutes />
             </BrowserRouter>
         </AppStateProvider>

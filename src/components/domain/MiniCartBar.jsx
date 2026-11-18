@@ -76,7 +76,7 @@ export function MiniCartBar({ count, sum, bottom = 'calc(72px + var(--app-nav-in
       style={{
         position: 'fixed',
         left: '50%',
-        // Keep behind the keyboard (Telegram WebView may otherwise lift fixed UI above it).
+        // Keep behind the on-screen keyboard.
         transform: 'translateX(-50%) translateY(var(--app-keyboard-offset))',
         bottom,
         width: 'min(100%, var(--app-max))',

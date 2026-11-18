@@ -3,25 +3,11 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { validate } = require('@tma.js/init-data-node');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Browsers use a guest/account session; the staff Mini App uses signed initData.
-router.use((req, res, next) => {
-    if (req.user?.id) return next();
-    const initData = req.headers['x-tg-initdata'];
-    if (typeof initData === 'string') {
-        for (const token of [process.env.ADMIN_BOT_TOKEN, process.env.BOT_TOKEN].filter(Boolean)) {
-            try {
-                validate(initData, token, { expiresIn: 86400 });
-                return next();
-            } catch { /* Try the other configured bot. */ }
-        }
-    }
-    if (process.env.NODE_ENV === 'development' && process.env.DEV_ADMIN_ENABLED === 'true') return next();
-    return res.status(401).json({ error: 'UNAUTHORIZED' });
-});
+router.use(requireAuth);
 
 const imageExtensions = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
 

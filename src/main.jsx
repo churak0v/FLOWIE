@@ -2,19 +2,8 @@ import React, { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
-import { telegramReady } from './telegram'
 
 let KEYBOARD_BASELINE_PX = 0;
-
-function readCssPxVar(name) {
-    try {
-        const raw = getComputedStyle(document.documentElement).getPropertyValue(name);
-        const n = Number.parseFloat(String(raw || ''));
-        return Number.isFinite(n) ? n : null;
-    } catch {
-        return null;
-    }
-}
 
 function updateKeyboardOffsetVar() {
     try {
@@ -22,16 +11,8 @@ function updateKeyboardOffsetVar() {
         const docEl = document.documentElement;
         if (!docEl) return;
 
-        // Telegram mirrors viewportStableHeight into CSS. Prefer it as a baseline when available.
-        const tgStable = readCssPxVar('--tg-viewport-stable-height');
         const layoutH = Math.max(Number(window.innerHeight || 0), Number(docEl.clientHeight || 0));
-
-        if (Number.isFinite(tgStable) && tgStable > 0) {
-            // Some clients may change this value when the keyboard opens; keep the max observed.
-            KEYBOARD_BASELINE_PX = Math.max(KEYBOARD_BASELINE_PX, tgStable);
-        } else {
-            KEYBOARD_BASELINE_PX = Math.max(KEYBOARD_BASELINE_PX, layoutH);
-        }
+        KEYBOARD_BASELINE_PX = Math.max(KEYBOARD_BASELINE_PX, layoutH);
 
         if (!vv) {
             const offset = Math.max(0, KEYBOARD_BASELINE_PX - layoutH);
@@ -58,10 +39,6 @@ if (typeof window !== 'undefined') {
         window.visualViewport.addEventListener('scroll', updateKeyboardOffsetVar);
     }
 }
-
-// Initialize Telegram Mini App runtime as early as possible (safe-area + viewport vars before first paint).
-telegramReady();
-
 
 console.log("Main.jsx is running!");
 
