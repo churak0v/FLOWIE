@@ -1,0 +1,11 @@
+{
+  "name": "FLOWIE — цветы в Ижевске",
+  "short_name": "FLOWIE",
+  "description": "Заказ и доставка цветов в Ижевске",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f3ee",
+  "theme_color": "#17130f",
+  "lang": "ru-RU"
+}

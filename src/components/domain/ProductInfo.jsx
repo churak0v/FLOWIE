@@ -81,7 +81,7 @@ export function ProductInfo({ product }) {
           boxShadow: '0 18px 46px rgba(13,13,13,0.08)',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'flex-start' }}>
+        <div style={{ display: 'grid', gap: 12, alignItems: 'start' }}>
           <div style={{ minWidth: 0 }}>
             <Text variant="title" style={{ lineHeight: 1.12 }}>
               {product.title}
@@ -107,6 +107,7 @@ export function ProductInfo({ product }) {
               fontSize: 17,
               boxShadow: 'var(--shadow-accent)',
               flexShrink: 0,
+              justifySelf: 'start',
             }}
           >
             {formatMoney(product.price)}

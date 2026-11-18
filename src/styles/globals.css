@@ -441,8 +441,8 @@ a[href^='sms:'] {
   bottom: 0;
   padding-top: 10px;
   padding-bottom: var(--app-nav-inset-bottom);
-  padding-left: calc(var(--sp-4) + var(--app-inset-left));
-  padding-right: calc(var(--sp-4) + var(--app-inset-right));
+  padding-left: calc(8px + var(--app-inset-left));
+  padding-right: calc(8px + var(--app-inset-right));
   pointer-events: auto;
   background: transparent;
   z-index: 90;
@@ -451,10 +451,10 @@ a[href^='sms:'] {
 .ui-bottomNavInner {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
   width: min(100%, var(--app-max));
   margin: 0 auto;
-  padding: 6px;
+  padding: 6px 5px;
   border-radius: var(--r-lg);
   border: 1px solid var(--border);
   background: var(--surface);

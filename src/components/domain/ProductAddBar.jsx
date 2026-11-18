@@ -30,7 +30,7 @@ export function ProductAddBar({ qty, onDec, onInc, sum, onAdd, added = false, on
           gap: 12,
         }}
       >
-        <div style={{ background: 'var(--c-white-18)', borderRadius: 'var(--r-md)' }}>
+        <div style={{ background: 'var(--c-white-18)', borderRadius: 'var(--r-md)', flexShrink: 0 }}>
           <QuantityStepper value={qty} onDec={onDec} onInc={onInc} min={1} />
         </div>
 
@@ -46,11 +46,15 @@ export function ProductAddBar({ qty, onDec, onInc, sum, onAdd, added = false, on
             borderRadius: 'var(--r-md)',
             cursor: 'pointer',
             fontWeight: 900,
-            fontSize: 15,
+            fontSize: 'clamp(13px, 3.6vw, 15px)',
             whiteSpace: 'nowrap',
             display: 'inline-flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: 8,
+            flex: '1 1 auto',
+            minWidth: 0,
+            overflow: 'hidden',
           }}
         >
           <ShoppingBag size={17} strokeWidth={2.6} />

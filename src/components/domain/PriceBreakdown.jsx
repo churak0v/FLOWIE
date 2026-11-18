@@ -14,6 +14,7 @@ export function PriceBreakdown({ itemsTotal, upsellsTotal, deliveryCost, bonuses
   const subtotal = itemsTotal + upsellsTotal + (deliverySeparate ? 0 : Number(deliveryCost || 0));
   const total = Math.max(0, subtotal - bonusesApplied);
   const showUpsells = upsellsTotal > 0;
+  const showDelivery = deliverySeparate || deliveryCost != null;
 
   return (
     <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)' }}>
@@ -21,14 +22,12 @@ export function PriceBreakdown({ itemsTotal, upsellsTotal, deliveryCost, bonuses
         <Row label="Товары" value={formatMoney(itemsTotal)} />
         {showUpsells ? <Row label="Дополнения" value={formatMoney(upsellsTotal)} /> : null}
         <Row label="Открытка" value={formatMoney(0)} />
-        <Row
-          label="Доставка"
-          value={deliverySeparate
-            ? 'Отдельным счётом после уточнения'
-            : deliveryCost == null
-              ? 'Рассчитывается'
-              : formatMoney(deliveryCost)}
-        />
+        {showDelivery ? (
+          <Row
+            label="Доставка"
+            value={deliverySeparate ? 'Отдельным счётом после уточнения' : formatMoney(deliveryCost)}
+          />
+        ) : null}
         {bonusesApplied ? <Row label="Скидка" value={`- ${formatMoney(bonusesApplied)}`} /> : null}
         <div style={{ height: 1, background: 'var(--border)', margin: '6px 0' }} />
         <Row label="Итого" value={formatMoney(total)} strong />
