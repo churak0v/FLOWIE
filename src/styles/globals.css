@@ -8,6 +8,8 @@
 html {
   min-height: 100%;
   overflow-x: clip;
+  background-color: var(--c-bg);
+  background-image: linear-gradient(var(--c-bg), var(--c-bg));
 }
 
 body {
@@ -15,12 +17,12 @@ body {
   margin: 0;
   padding: 0;
   font-family: var(--font-main);
-  background: var(--c-bg);
+  background-color: var(--c-bg);
+  background-image: linear-gradient(var(--c-bg), var(--c-bg));
   color: var(--c-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: clip;
-  /* Let Safari own the page scroll so its browser chrome can collapse naturally. */
   overflow-y: visible;
   overscroll-behavior-y: none;
 }
@@ -72,13 +74,26 @@ a[href^='sms:'] {
 }
 
 #root {
+  position: relative;
   min-height: var(--app-vh);
   height: auto;
   overflow: visible;
+  background-color: inherit;
+  background-image: inherit;
   touch-action: pan-y;
 }
 
+/* Extend the authored canvas behind iOS Safari safe areas instead of its white fallback. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--c-bg);
+  z-index: -1;
+}
+
 :root {
+  color-scheme: light;
   --app-vh: 100dvh;
   /* Space reserved for the floating BottomNav so content doesn't get hidden behind it. */
   --app-bottom-nav-space: 136px;
