@@ -8,7 +8,11 @@ require_command docker
 require_file "$ENV_FILE"
 require_file "$COMPOSE_FILE"
 
-mode=$(stat -f '%Lp' "$ENV_FILE" 2>/dev/null || stat -c '%a' "$ENV_FILE")
+if stat --version >/dev/null 2>&1; then
+  mode=$(stat -c '%a' "$ENV_FILE")
+else
+  mode=$(stat -f '%Lp' "$ENV_FILE")
+fi
 case "$mode" in
   600|400) ;;
   *) echo "Refusing: $ENV_FILE permissions are $mode; expected 600 or 400." >&2; exit 1 ;;
