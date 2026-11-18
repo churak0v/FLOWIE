@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { Surface } from './ui/Surface';
 import { HeroBlock } from './domain/HeroBlock';
@@ -14,11 +14,10 @@ import { useAppState } from '../state/AppState';
 import { buildActiveOrderPreview } from '../lib/orderPreview';
 import { isCacheFresh, readCacheEntry, writeCacheEntry } from '../lib/persistedCache';
 
-function PickTile({ title, subtitle, image, href, onClick, accent = false }) {
+function PickTile({ title, subtitle, image, href, accent = false }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      to={href}
       style={{
         position: 'relative',
         minWidth: 156,
@@ -29,6 +28,7 @@ function PickTile({ title, subtitle, image, href, onClick, accent = false }) {
         overflow: 'hidden',
         cursor: 'pointer',
         textAlign: 'left',
+        textDecoration: 'none',
         background: accent ? 'var(--c-text)' : 'var(--surface)',
         boxShadow: 'var(--shadow-1)',
         flex: '0 0 156px',
@@ -76,11 +76,11 @@ function PickTile({ title, subtitle, image, href, onClick, accent = false }) {
         <span style={{ fontSize: 15, fontWeight: 1000, lineHeight: 1.1 }}>{title}</span>
         <span style={{ fontSize: 11, fontWeight: 850, opacity: 0.82, lineHeight: 1.15 }}>{subtitle}</span>
       </span>
-    </button>
+    </Link>
   );
 }
 
-function QuickPicks({ products, onNavigate }) {
+function QuickPicks({ products }) {
   const cards = [
     {
       title: 'Нежные',
@@ -119,7 +119,7 @@ function QuickPicks({ products, onNavigate }) {
       </div>
       <div className="hide-scrollbar" style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '2px 2px 8px' }}>
         {cards.map((card) => (
-          <PickTile key={card.title} {...card} onClick={() => onNavigate(card.href)} />
+          <PickTile key={card.title} {...card} />
         ))}
       </div>
     </section>
@@ -263,7 +263,7 @@ export function Home() {
             {isAuthenticated ? <SubscriptionRow /> : null}
 
             <div style={{ marginTop: isAuthenticated ? 0 : -6 }}>
-              <QuickPicks products={state.products.items || []} onNavigate={(href) => navigate(href)} />
+              <QuickPicks products={state.products.items || []} />
             </div>
 
             {activeOrders.length ? (
