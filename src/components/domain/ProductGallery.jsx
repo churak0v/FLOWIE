@@ -79,7 +79,7 @@ export function ProductGallery({ title, images }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: -46, padding: '0 10px', position: 'relative', zIndex: 2 }}>
             <button
               type="button"
-              aria-label="Previous image"
+              aria-label="Предыдущее изображение"
               onClick={() => goTo(active - 1)}
               disabled={active <= 0}
               style={{
@@ -101,7 +101,7 @@ export function ProductGallery({ title, images }) {
             </button>
             <button
               type="button"
-              aria-label="Next image"
+              aria-label="Следующее изображение"
               onClick={() => goTo(active + 1)}
               disabled={active >= gallery.length - 1}
               style={{
@@ -128,7 +128,7 @@ export function ProductGallery({ title, images }) {
               <button
                 key={idx}
                 type="button"
-                aria-label={`Show image ${idx + 1}`}
+                aria-label={`Показать фото ${idx + 1}`}
                 onClick={() => goTo(idx)}
                 style={{
                   width: idx === active ? 18 : 7,

@@ -40,7 +40,7 @@ export function ProductAddBar({ qty, onDec, onInc, sum, onAdd, added = false, on
           style={{
             border: 0,
             background: added ? 'var(--c-white)' : 'var(--c-white-22)',
-            color: added ? 'var(--accent)' : 'var(--c-white)',
+            color: added ? 'var(--accent)' : 'var(--c-accent-contrast)',
             height: 44,
             padding: '0 14px',
             borderRadius: 'var(--r-md)',
@@ -54,7 +54,7 @@ export function ProductAddBar({ qty, onDec, onInc, sum, onAdd, added = false, on
           }}
         >
           <ShoppingBag size={17} strokeWidth={2.6} />
-          {added ? 'View cart' : `Add to cart · ${formatMoney(sum)}`}
+          {added ? 'В корзину' : `Добавить · ${formatMoney(sum)}`}
         </button>
       </div>
     </div>

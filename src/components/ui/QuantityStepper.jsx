@@ -20,7 +20,7 @@ export function QuantityStepper({ value, onDec, onInc, min = 1, max = 99 }) {
         type="button"
         onClick={canDec ? onDec : undefined}
         disabled={!canDec}
-        aria-label="Decrease"
+        aria-label="Уменьшить"
         style={{
           width: 44,
           height: 44,
@@ -51,7 +51,7 @@ export function QuantityStepper({ value, onDec, onInc, min = 1, max = 99 }) {
         type="button"
         onClick={canInc ? onInc : undefined}
         disabled={!canInc}
-        aria-label="Increase"
+        aria-label="Увеличить"
         style={{
           width: 44,
           height: 44,
@@ -69,4 +69,3 @@ export function QuantityStepper({ value, onDec, onInc, min = 1, max = 99 }) {
     </div>
   );
 }
-

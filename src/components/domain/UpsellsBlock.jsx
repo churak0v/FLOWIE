@@ -9,7 +9,7 @@ export function UpsellsBlock({ upsells, qtyById, onAdd }) {
   return (
     <div>
       <Text variant="title" style={{ marginBottom: 'var(--sp-4)' }}>
-        Make it feel complete
+        Добавьте к заказу
       </Text>
 
       <Carousel style={{ paddingBottom: 2 }}>
@@ -50,7 +50,7 @@ export function UpsellsBlock({ upsells, qtyById, onAdd }) {
                 </Text>
                 <div style={{ marginTop: 4 }}>
                   <Text variant="body" muted>
-                    {isFree ? 'Free' : formatMoney(price)}
+                    {isFree ? 'Бесплатно' : formatMoney(price)}
                   </Text>
                 </div>
 
@@ -64,13 +64,13 @@ export function UpsellsBlock({ upsells, qtyById, onAdd }) {
                     border: 0,
                     borderRadius: 999,
                     background: qty ? 'var(--accent)' : 'var(--c-white)',
-                    color: qty ? 'var(--c-white)' : 'var(--accent)',
+                    color: qty ? 'var(--c-accent-contrast)' : 'var(--accent)',
                     fontWeight: 1000,
                     cursor: 'pointer',
                     boxShadow: qty ? 'var(--shadow-accent)' : 'inset 0 0 0 1px var(--c-accent-border)',
                   }}
                 >
-                  {qty ? 'Added' : isFree ? 'Include' : 'Add to gift'}
+                  {qty ? 'Добавлено' : isFree ? 'Включить' : 'Добавить'}
                 </button>
               </div>
             </Surface>

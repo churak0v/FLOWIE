@@ -1,21 +1,29 @@
 const express = require('express');
 const { validate, parse } = require('@tma.js/init-data-node');
 const { PrismaClient } = require('@prisma/client');
+const { loadAnalyticsReport } = require('../services/reportAnalytics');
+const {
+  DeliveryPaymentError,
+  issueDeliveryQuote,
+  publicDeliveryInvoice,
+} = require('../services/deliveryPayment');
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+function orderWithPublicDelivery(order) {
+  const safe = { ...order };
+  delete safe.deliveryQuoteKey;
+  delete safe.deliveryQuoteDigest;
+  safe.deliveryInvoice = publicDeliveryInvoice(order.deliveryInvoice);
+  return safe;
+}
 
 function parseCsv(value) {
   return String(value || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-}
-
-function getBotToken() {
-  const botToken = process.env.ADMIN_BOT_TOKEN || process.env.BOT_TOKEN;
-  if (!botToken) throw new Error('ADMIN_BOT_TOKEN_NOT_SET');
-  return botToken;
 }
 
 function getInitDataFromHeader(req) {
@@ -26,15 +34,54 @@ function getInitDataFromHeader(req) {
   return '';
 }
 
+function validateAndParseAdminInitData(initData) {
+  const tokens = [...new Set([process.env.ADMIN_BOT_TOKEN, process.env.BOT_TOKEN].filter(Boolean))];
+  if (!tokens.length) throw new Error('ADMIN_BOT_TOKEN_NOT_SET');
+
+  let lastError = null;
+  for (const token of tokens) {
+    try {
+      validate(initData, token, { expiresIn: 86400 });
+      return parse(initData);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('INVALID_INIT_DATA');
+}
+
+function isDevAdminEnabled() {
+  return process.env.NODE_ENV === 'development' && process.env.DEV_ADMIN_ENABLED === 'true';
+}
+
+async function getDevAdminUser() {
+  const telegramId = String(process.env.DEV_ADMIN_TELEGRAM_ID || 'local-dev-admin');
+  return prisma.user.upsert({
+    where: { telegramId },
+    update: {
+      name: 'Local Dev Admin',
+      username: 'local_admin',
+      staffRole: 'admin',
+      staffActive: true,
+    },
+    create: {
+      telegramId,
+      name: 'Local Dev Admin',
+      username: 'local_admin',
+      staffRole: 'admin',
+      staffActive: true,
+    },
+  });
+}
+
 async function upsertUserFromInitData(initData) {
   // Telegram initData may be reused while the Mini App is open; keep a longer TTL to avoid random UNAUTHORIZED.
-  validate(initData, getBotToken(), { expiresIn: 86400 });
-  const data = parse(initData);
+  const data = validateAndParseAdminInitData(initData);
   const tgUser = data.user;
   if (!tgUser?.id) throw new Error('NO_USER');
 
   const telegramId = String(tgUser.id);
-  const name = [tgUser.firstName, tgUser.lastName].filter(Boolean).join(' ') || null;
+  const name = [tgUser.first_name ?? tgUser.firstName, tgUser.last_name ?? tgUser.lastName].filter(Boolean).join(' ') || null;
   const username = tgUser.username ? String(tgUser.username) : null;
 
   return prisma.user.upsert({
@@ -73,12 +120,19 @@ async function notifyClientTelegram({ telegramId, text }) {
     const msg = String(text || '').trim();
     if (!msg) return;
 
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: msg }),
-    });
-    await res.json().catch(() => null);
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 3000);
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: msg }),
+        signal: ac.signal,
+      });
+      await res.json().catch(() => null);
+    } finally {
+      clearTimeout(timer);
+    }
   } catch {
     // ignore
   }
@@ -104,7 +158,9 @@ async function requireAdmin(req, res, next) {
 
     // Auth via initData (preferred for subdomains / TG WebApp)
     let user = null;
-    if (initData) {
+    if (isDevAdminEnabled()) {
+      user = await getDevAdminUser();
+    } else if (initData) {
       user = await upsertUserFromInitData(initData);
     } else if (req.user?.id) {
       // Fallback: cookie/bearer session (useful in local/dev)
@@ -115,7 +171,12 @@ async function requireAdmin(req, res, next) {
 
     // Bootstrap the very first admin from env allow-list.
     const bootstrapTgIds = parseCsv(process.env.ADMIN_TG_IDS);
-    if ((!user.staffRole || !user.staffActive) && user.telegramId && bootstrapTgIds.includes(user.telegramId)) {
+    const canBootstrap =
+      (!user.staffRole || !user.staffActive) &&
+      user.telegramId &&
+      bootstrapTgIds.includes(user.telegramId) &&
+      (await prisma.user.count({ where: { staffRole: 'admin', staffActive: true } })) === 0;
+    if (canBootstrap) {
       user = await prisma.user.update({
         where: { id: user.id },
         data: { staffRole: 'admin', staffActive: true },
@@ -188,6 +249,7 @@ function normalizeOrderStatus(s) {
   const v = String(s || '').toUpperCase();
   if (v === 'NEW') return 'NEW';
   if (v === 'PAID') return 'NEW';
+  if (v === 'PAYMENT_PENDING') return 'NEW';
   if (v === 'DELIVERY') return 'IN_DELIVERY';
   if (v === 'COMPLETED') return 'DELIVERED';
   if (v === 'CANCELLED') return 'CANCELLED';
@@ -196,6 +258,33 @@ function normalizeOrderStatus(s) {
   if (v === 'IN_DELIVERY') return 'IN_DELIVERY';
   if (v === 'DELIVERED') return 'DELIVERED';
   return v || 'NEW';
+}
+
+function canAccessOrder(admin, order) {
+  if (!admin || !order) return false;
+  return admin.role !== 'courier' || Number(order.courierId) === Number(admin.id);
+}
+
+function deliveryDispatchError(order) {
+  const status = String(order?.deliveryStatus || '').toUpperCase();
+  if (!['PAID', 'WAIVED', 'INCLUDED_IN_MAIN', 'NOT_REQUIRED'].includes(status)) return 'DELIVERY_PAYMENT_REQUIRED';
+  if (status !== 'NOT_REQUIRED' && !String(order?.deliveryAddress || '').trim()) return 'DELIVERY_DETAILS_REQUIRED';
+  if (status !== 'NOT_REQUIRED' && order?.askRecipientTime && !String(order?.deliveryTime || '').trim()) {
+    return 'DELIVERY_DETAILS_REQUIRED';
+  }
+  return null;
+}
+
+function isAllowedTransition(currentStatus, nextStatus) {
+  const current = normalizeOrderStatus(currentStatus);
+  const next = normalizeOrderStatus(nextStatus);
+  const allowed = {
+    NEW: new Set(['ACCEPTED', 'CANCELLED']),
+    ACCEPTED: new Set(['ASSEMBLED', 'CANCELLED']),
+    ASSEMBLED: new Set(['IN_DELIVERY', 'CANCELLED']),
+    IN_DELIVERY: new Set(['DELIVERED', 'CANCELLED']),
+  };
+  return Boolean(allowed[current]?.has(next));
 }
 
 const PRODUCT_INCLUDE = {
@@ -819,6 +908,7 @@ router.get('/orders', requireAdmin, requireRoles(['admin', 'moderator', 'florist
     await expireStaleOrders();
 
     if (status) where.status = String(status);
+    if (req.admin.role === 'courier') where.courierId = req.admin.id;
 
     if (date === 'today' || date === 'tomorrow') {
       const d = new Date();
@@ -836,11 +926,14 @@ router.get('/orders', requireAdmin, requireRoles(['admin', 'moderator', 'florist
         // hide expired unpaid orders from the list
         NOT: [{ paymentStatus: 'EXPIRED' }, { status: 'CANCELLED', paymentStatus: 'EXPIRED' }],
       },
-      include: { items: { include: { product: true } }, user: true },
+      include: { items: { include: { product: true } }, user: true, deliveryInvoice: true },
       orderBy: { createdAt: 'desc' },
     });
 
-    return res.json({ ok: true, orders });
+    return res.json({
+      ok: true,
+      orders: orders.map(orderWithPublicDelivery),
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e?.message || 'ORDERS_FAILED' });
   }
@@ -860,26 +953,68 @@ router.get('/orders/:id', requireAdmin, requireRoles(['admin', 'moderator', 'flo
         statusHistory: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] },
         promoCodes: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] },
         chats: { orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }] },
+        deliveryInvoice: true,
       },
     });
     if (!order) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    if (!canAccessOrder(req.admin, order)) return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
 
-    return res.json({ ok: true, order });
+    return res.json({ ok: true, order: orderWithPublicDelivery(order) });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e?.message || 'ORDER_FAILED' });
   }
 });
 
+router.post('/orders/:id/delivery-quote', requireAdmin, requireRoles(['admin', 'moderator', 'florist']), async (req, res) => {
+  try {
+    const result = await issueDeliveryQuote({
+      prisma,
+      orderId: req.params.id,
+      staffUserId: req.admin.id,
+      body: req.body,
+    });
+    return res.status(result.replayed ? 200 : 201).json({
+      ok: true,
+      replayed: result.replayed,
+      order: {
+        id: result.order.id,
+        deliveryAddress: result.order.deliveryAddress,
+        deliveryTime: result.order.deliveryTime,
+        deliveryCost: result.order.deliveryCost,
+        deliveryStatus: result.order.deliveryStatus,
+      },
+      invoice: publicDeliveryInvoice(result.invoice),
+    });
+  } catch (error) {
+    if (error instanceof DeliveryPaymentError) {
+      return res.status(error.status).json({ ok: false, error: error.code });
+    }
+    return res.status(500).json({ ok: false, error: 'DELIVERY_QUOTE_FAILED' });
+  }
+});
+
 // Confirm payment manually from admin UI
-router.post('/orders/:id/confirm-payment', requireAdmin, requireRoles(['admin', 'moderator', 'florist']), async (req, res) => {
+router.post('/orders/:id/confirm-payment', requireAdmin, requireRoles(['admin', 'moderator']), async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'BAD_ID' });
 
+    const current = await prisma.order.findUnique({ where: { id } });
+    if (!current) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    if (String(current.status || '').toUpperCase() === 'CANCELLED') {
+      return res.status(409).json({ ok: false, error: 'ORDER_CANCELLED' });
+    }
+    if (String(current.paymentStatus || '').toUpperCase() === 'CONFIRMED') {
+      return res.json({ ok: true, order: current, unchanged: true });
+    }
+    if (!['PAYMENT_PENDING', 'NEW', 'PAID'].includes(String(current.status || '').toUpperCase())) {
+      return res.status(409).json({ ok: false, error: 'INVALID_STATUS_TRANSITION' });
+    }
+
     const now = new Date();
     const order = await prisma.$transaction(async (tx) => {
-      const updated = await tx.order.update({
-        where: { id },
+      const changed = await tx.order.updateMany({
+        where: { id, paymentStatus: { not: 'CONFIRMED' }, status: { not: 'CANCELLED' } },
         data: {
           paymentStatus: 'CONFIRMED',
           paymentClientConfirmed: true,
@@ -887,9 +1022,13 @@ router.post('/orders/:id/confirm-payment', requireAdmin, requireRoles(['admin', 
           paidAt: now,
         },
       });
-      await tx.orderStatusHistory.create({
-        data: { orderId: id, status: 'PAID', actorId: req.admin.id },
-      });
+      const updated = await tx.order.findUnique({ where: { id } });
+      if (!updated) throw new Error('NOT_FOUND');
+      if (changed.count > 0) {
+        await tx.orderStatusHistory.create({
+          data: { orderId: id, status: 'PAID', actorId: req.admin.id },
+        });
+      }
       return updated;
     });
 
@@ -905,18 +1044,64 @@ async function setOrderStatus(req, res, nextStatus) {
     if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'BAD_ID' });
 
     const order = await prisma.$transaction(async (tx) => {
-      const updated = await tx.order.update({
-        where: { id },
+      const current = await tx.order.findUnique({ where: { id } });
+      if (!current) {
+        const error = new Error('NOT_FOUND');
+        error.statusCode = 404;
+        throw error;
+      }
+      if (!canAccessOrder(req.admin, current)) {
+        const error = new Error('FORBIDDEN');
+        error.statusCode = 403;
+        throw error;
+      }
+      if (!isAllowedTransition(current.status, nextStatus)) {
+        const error = new Error('INVALID_STATUS_TRANSITION');
+        error.statusCode = 409;
+        throw error;
+      }
+      if (nextStatus === 'ACCEPTED' && String(current.paymentStatus || '').toUpperCase() !== 'CONFIRMED') {
+        const error = new Error('PAYMENT_NOT_CONFIRMED');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      let courierId;
+      if (nextStatus === 'IN_DELIVERY') {
+        const deliveryError = deliveryDispatchError(current);
+        if (deliveryError) {
+          const error = new Error(deliveryError);
+          error.statusCode = 409;
+          throw error;
+        }
+        const requestedCourierId = req.body?.courierId;
+        courierId = Number(requestedCourierId || req.admin.id);
+        if (requestedCourierId != null) {
+          const courier = await tx.user.findFirst({ where: { id: courierId, staffRole: 'courier', staffActive: true } });
+          if (!courier) {
+            const error = new Error('COURIER_NOT_FOUND');
+            error.statusCode = 404;
+            throw error;
+          }
+        }
+      }
+      const changed = await tx.order.updateMany({
+        where: { id, status: current.status },
         data: {
           status: nextStatus,
-          courierId: nextStatus === 'IN_DELIVERY' ? (req.body?.courierId || req.admin.id || null) : undefined,
+          courierId,
           deliveredAt: nextStatus === 'DELIVERED' ? new Date() : undefined,
         },
-        include: { items: true, user: true },
       });
+      if (changed.count !== 1) {
+        const error = new Error('ORDER_CHANGED');
+        error.statusCode = 409;
+        throw error;
+      }
       await tx.orderStatusHistory.create({
         data: { orderId: id, status: nextStatus, actorId: req.admin.id },
       });
+      const updated = await tx.order.findUnique({ where: { id }, include: { items: true, user: true } });
       return updated;
     });
 
@@ -937,7 +1122,7 @@ async function setOrderStatus(req, res, nextStatus) {
 
     return res.json({ ok: true, order });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: e?.message || 'ORDER_STATUS_FAILED' });
+    return res.status(e?.statusCode || 500).json({ ok: false, error: e?.message || 'ORDER_STATUS_FAILED' });
   }
 }
 
@@ -945,7 +1130,7 @@ router.post('/orders/:id/accept', requireAdmin, requireRoles(['admin', 'moderato
   setOrderStatus(req, res, 'ACCEPTED'),
 );
 
-router.post('/orders/:id/dispatch', requireAdmin, requireRoles(['admin', 'moderator', 'florist', 'courier']), (req, res) =>
+router.post('/orders/:id/dispatch', requireAdmin, requireRoles(['admin', 'moderator', 'florist']), (req, res) =>
   setOrderStatus(req, res, 'IN_DELIVERY'),
 );
 
@@ -978,17 +1163,46 @@ router.post('/orders/:id/assign-courier', requireAdmin, requireRoles(['admin', '
     if (!courier) return res.status(404).json({ ok: false, error: 'COURIER_NOT_FOUND' });
 
     const order = await prisma.$transaction(async (tx) => {
-      const updated = await tx.order.update({
-        where: { id },
+      const current = await tx.order.findUnique({ where: { id } });
+      if (!current) {
+        const error = new Error('NOT_FOUND');
+        error.statusCode = 404;
+        throw error;
+      }
+      if (!isAllowedTransition(current.status, 'IN_DELIVERY')) {
+        const error = new Error('INVALID_STATUS_TRANSITION');
+        error.statusCode = 409;
+        throw error;
+      }
+      const deliveryError = deliveryDispatchError(current);
+      if (deliveryError) {
+        const error = new Error(deliveryError);
+        error.statusCode = 409;
+        throw error;
+      }
+      const changed = await tx.order.updateMany({
+        where: { id, status: current.status },
         data: { courierId, status: 'IN_DELIVERY' },
       });
+      if (changed.count !== 1) {
+        const error = new Error('ORDER_CHANGED');
+        error.statusCode = 409;
+        throw error;
+      }
       await tx.orderStatusHistory.create({ data: { orderId: id, status: 'IN_DELIVERY', actorId: req.admin.id } });
-      return updated;
+      return tx.order.findUnique({ where: { id } });
     });
 
+    await writeAudit({
+      actorId: req.admin.id,
+      action: 'ORDER_COURIER_ASSIGNED',
+      entity: 'order',
+      entityId: id,
+      payload: { courierId },
+    });
     return res.json({ ok: true, order });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: e?.message || 'ASSIGN_COURIER_FAILED' });
+    return res.status(e?.statusCode || 500).json({ ok: false, error: e?.message || 'ASSIGN_COURIER_FAILED' });
   }
 });
 
@@ -999,15 +1213,30 @@ router.post('/orders/:id/cancel', requireAdmin, requireRoles(['admin', 'moderato
 
     const reason = String(req.body?.reason || '').trim();
     const order = await prisma.$transaction(async (tx) => {
-      const updated = await tx.order.update({
-        where: { id },
+      const current = await tx.order.findUnique({ where: { id } });
+      if (!current) {
+        const error = new Error('NOT_FOUND');
+        error.statusCode = 404;
+        throw error;
+      }
+      if (!isAllowedTransition(current.status, 'CANCELLED')) {
+        const error = new Error('INVALID_STATUS_TRANSITION');
+        error.statusCode = 409;
+        throw error;
+      }
+      const changed = await tx.order.updateMany({
+        where: { id, status: current.status },
         data: { status: 'CANCELLED', cancelReason: reason || null },
-        include: { items: true, user: true },
       });
+      if (changed.count !== 1) {
+        const error = new Error('ORDER_CHANGED');
+        error.statusCode = 409;
+        throw error;
+      }
       await tx.orderStatusHistory.create({
         data: { orderId: id, status: 'CANCELLED', actorId: req.admin.id },
       });
-      return updated;
+      return tx.order.findUnique({ where: { id }, include: { items: true, user: true } });
     });
 
     await writeAudit({
@@ -1026,7 +1255,7 @@ router.post('/orders/:id/cancel', requireAdmin, requireRoles(['admin', 'moderato
 
     return res.json({ ok: true, order });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: e?.message || 'ORDER_CANCEL_FAILED' });
+    return res.status(e?.statusCode || 500).json({ ok: false, error: e?.message || 'ORDER_CANCEL_FAILED' });
   }
 });
 
@@ -1047,9 +1276,14 @@ router.post('/orders/:id/photos', requireAdmin, requireRoles(['admin', 'moderato
       const current = await tx.order.findUnique({ where: { id: orderId }, include: { user: true } });
       if (!current) throw new Error('ORDER_NOT_FOUND');
       const curStatus = normalizeOrderStatus(current.status);
-      const nextStatus = curStatus === 'CANCELLED' || curStatus === 'DELIVERED' ? curStatus : 'ASSEMBLED';
+      if (!['ACCEPTED', 'ASSEMBLED'].includes(curStatus)) throw new Error('INVALID_STATUS_TRANSITION');
+      const nextStatus = 'ASSEMBLED';
       if (nextStatus !== curStatus) {
-        await tx.order.update({ where: { id: orderId }, data: { status: nextStatus } });
+        const changed = await tx.order.updateMany({
+          where: { id: orderId, status: current.status },
+          data: { status: nextStatus },
+        });
+        if (changed.count !== 1) throw new Error('ORDER_CHANGED');
         await tx.orderStatusHistory.create({ data: { orderId, status: nextStatus, actorId: req.admin.id } });
       }
 
@@ -1089,19 +1323,19 @@ router.post('/orders/:id/photos/:photoId/send', requireAdmin, requireRoles(['adm
       const current = await tx.order.findUnique({ where: { id: orderId } });
       if (!current) throw new Error('ORDER_NOT_FOUND');
       const curStatus = normalizeOrderStatus(current.status);
-      const nextStatus = curStatus === 'CANCELLED' || curStatus === 'DELIVERED' ? curStatus : 'ASSEMBLED';
-
-      const updated = await tx.order.update({
-        where: { id: orderId },
-        data: { status: nextStatus },
-        include: { user: true },
-      });
+      if (!['ACCEPTED', 'ASSEMBLED'].includes(curStatus)) throw new Error('INVALID_STATUS_TRANSITION');
+      const nextStatus = 'ASSEMBLED';
 
       if (nextStatus !== curStatus) {
+        const changed = await tx.order.updateMany({
+          where: { id: orderId, status: current.status },
+          data: { status: nextStatus },
+        });
+        if (changed.count !== 1) throw new Error('ORDER_CHANGED');
         await tx.orderStatusHistory.create({ data: { orderId, status: nextStatus, actorId: req.admin.id } });
       }
 
-      return updated;
+      return tx.order.findUnique({ where: { id: orderId }, include: { user: true } });
     });
 
     await writeAudit({
@@ -1145,6 +1379,7 @@ router.post('/orders/:id/promo', requireAdmin, requireRoles(['admin', 'moderator
 
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    if (!canAccessOrder(req.admin, order)) return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
 
     const requestedCode = String(req.body?.code || '').trim().toUpperCase();
     let code = requestedCode || randomCode();
@@ -1190,6 +1425,7 @@ router.post('/orders/:id/chat', requireAdmin, requireRoles(['admin', 'moderator'
 
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    if (!canAccessOrder(req.admin, order)) return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
 
     const existing = await prisma.chat.findFirst({ where: { orderId: order.id } });
     if (existing) return res.json({ ok: true, chat: existing });
@@ -1215,6 +1451,7 @@ router.post('/orders/:id/chat', requireAdmin, requireRoles(['admin', 'moderator'
 router.get('/chats', requireAdmin, requireRoles(['admin', 'moderator', 'florist', 'courier']), async (req, res) => {
   try {
     const chats = await prisma.chat.findMany({
+      where: req.admin.role === 'courier' ? { order: { courierId: req.admin.id } } : undefined,
       include: {
         user: true,
         order: true,
@@ -1238,6 +1475,9 @@ router.get('/chats/:id', requireAdmin, requireRoles(['admin', 'moderator', 'flor
       include: { user: true, order: true },
     });
     if (!chat) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    if (req.admin.role === 'courier' && Number(chat.order?.courierId) !== Number(req.admin.id)) {
+      return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
+    }
     return res.json({ ok: true, chat });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e?.message || 'CHAT_FAILED' });
@@ -1248,6 +1488,12 @@ router.get('/chats/:id/messages', requireAdmin, requireRoles(['admin', 'moderato
   try {
     const chatId = Number(req.params.id);
     if (!Number.isFinite(chatId)) return res.status(400).json({ ok: false, error: 'BAD_ID' });
+
+    const chat = await prisma.chat.findUnique({ where: { id: chatId }, include: { order: true } });
+    if (!chat) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    if (req.admin.role === 'courier' && Number(chat.order?.courierId) !== Number(req.admin.id)) {
+      return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
+    }
 
     const messages = await prisma.message.findMany({
       where: { chatId },
@@ -1265,6 +1511,12 @@ router.post('/chats/:id/messages', requireAdmin, requireRoles(['admin', 'moderat
   try {
     const chatId = Number(req.params.id);
     if (!Number.isFinite(chatId)) return res.status(400).json({ ok: false, error: 'BAD_ID' });
+
+    const chat = await prisma.chat.findUnique({ where: { id: chatId }, include: { order: true } });
+    if (!chat) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    if (req.admin.role === 'courier' && Number(chat.order?.courierId) !== Number(req.admin.id)) {
+      return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
+    }
 
     const text = req.body?.text == null ? null : String(req.body.text);
     const attachmentUrl = req.body?.attachmentUrl == null ? null : String(req.body.attachmentUrl);
@@ -1498,6 +1750,15 @@ router.get('/analytics/summary', requireAdmin, requireRoles(['admin']), async (r
   }
 });
 
+router.get('/analytics/report', requireAdmin, requireRoles(['admin']), async (req, res) => {
+  try {
+    const report = await loadAnalyticsReport(prisma, { days: req.query?.days });
+    return res.json(report);
+  } catch (e) {
+    return res.status(e?.statusCode || 500).json({ ok: false, error: e?.message || 'ANALYTICS_REPORT_FAILED' });
+  }
+});
+
 router.get('/analytics/finance', requireAdmin, requireRoles(['admin']), async (req, res) => {
   try {
     const from = parseYmdDate(req.query?.from) || (() => {
@@ -1515,10 +1776,31 @@ router.get('/analytics/finance', requireAdmin, requireRoles(['admin']), async (r
       select: { id: true, status: true, totalPrice: true, createdAt: true, preDeliveryRating: true },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
+    const confirmedMainPayments = await prisma.order.findMany({
+      where: {
+        paymentStatus: 'CONFIRMED',
+        paidAt: { gte: from, lt: end },
+        user: { staffRole: null },
+      },
+      select: { totalPrice: true, paidAt: true },
+      orderBy: [{ paidAt: 'asc' }, { id: 'asc' }],
+    });
+    const paidDeliveryInvoices = await prisma.deliveryInvoice.findMany({
+      where: {
+        status: 'PAID',
+        paidAt: { gte: from, lt: end },
+        order: { user: { staffRole: null } },
+      },
+      select: { amount: true, paidAt: true },
+      orderBy: [{ paidAt: 'asc' }, { id: 'asc' }],
+    });
 
     const days = new Map(); // key=YYYY-MM-DD => { revenue, delivered, cancelled, orders }
     let deliveredRevenue = 0;
     let deliveredCount = 0;
+    let paidDeliveryRevenue = 0;
+    let paidDeliveryCount = 0;
+    let confirmedMainRevenue = 0;
     let cancelledCount = 0;
     let ratedSum = 0;
     let ratedCount = 0;
@@ -1552,7 +1834,31 @@ router.get('/analytics/finance', requireAdmin, requireRoles(['admin']), async (r
       }
     }
 
-    const revenueByDay = Array.from(days.values());
+    for (const payment of confirmedMainPayments) {
+      const key = keyOf(new Date(payment.paidAt));
+      if (!days.has(key)) days.set(key, { day: key, revenue: 0, mainPaidRevenue: 0, deliveryRevenue: 0, delivered: 0, cancelled: 0, orders: 0 });
+      const row = days.get(key);
+      row.mainPaidRevenue = Number(row.mainPaidRevenue || 0) + Number(payment.totalPrice || 0);
+      confirmedMainRevenue += Number(payment.totalPrice || 0);
+    }
+
+    for (const invoice of paidDeliveryInvoices) {
+      const key = keyOf(new Date(invoice.paidAt));
+      if (!days.has(key)) days.set(key, { day: key, revenue: 0, deliveryRevenue: 0, delivered: 0, cancelled: 0, orders: 0 });
+      const row = days.get(key);
+      row.deliveryRevenue = Number(row.deliveryRevenue || 0) + Number(invoice.amount || 0);
+      paidDeliveryRevenue += Number(invoice.amount || 0);
+      paidDeliveryCount += 1;
+    }
+
+    const revenueByDay = Array.from(days.values())
+      .map((row) => ({
+        ...row,
+        mainPaidRevenue: Number(row.mainPaidRevenue || 0),
+        deliveryRevenue: Number(row.deliveryRevenue || 0),
+        totalReceipts: Number(row.mainPaidRevenue || 0) + Number(row.deliveryRevenue || 0),
+      }))
+      .sort((a, b) => a.day.localeCompare(b.day));
     const avgCheck = deliveredCount ? Math.round(deliveredRevenue / deliveredCount) : 0;
     const avgRating = ratedCount ? ratedSum / ratedCount : null;
 
@@ -1566,6 +1872,11 @@ router.get('/analytics/finance', requireAdmin, requireRoles(['admin']), async (r
       totals: {
         deliveredRevenue,
         deliveredCount,
+        paidDeliveryRevenue,
+        paidDeliveryCount,
+        confirmedMainRevenue,
+        confirmedMainCount: confirmedMainPayments.length,
+        totalReceipts: confirmedMainRevenue + paidDeliveryRevenue,
         cancelledCount,
         avgCheck,
         avgRating,
@@ -1671,7 +1982,7 @@ router.post('/staff', requireAdmin, requireRoles(['admin']), async (req, res) =>
     const username = req.body?.username ? String(req.body.username).replace(/^@/, '') : null;
     const phone = req.body?.phone ? String(req.body.phone) : null;
 
-    if (!telegramId) return res.status(400).json({ ok: false, error: 'TG_ID_REQUIRED' });
+    if (!/^\d+$/.test(telegramId)) return res.status(400).json({ ok: false, error: 'BAD_TG_ID' });
     if (!['admin', 'moderator', 'florist', 'courier'].includes(staffRole)) return res.status(400).json({ ok: false, error: 'BAD_ROLE' });
 
     const user = await prisma.user.upsert({
@@ -1711,6 +2022,17 @@ router.patch('/staff/:id', requireAdmin, requireRoles(['admin']), async (req, re
     if (patch.username !== undefined) data.username = patch.username ? String(patch.username).replace(/^@/, '') : null;
     if (patch.phone !== undefined) data.phone = patch.phone ? String(patch.phone) : null;
 
+    const current = await prisma.user.findUnique({ where: { id } });
+    if (!current) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    const removesActiveAdmin =
+      current.staffRole === 'admin' &&
+      current.staffActive &&
+      (data.staffRole != null && data.staffRole !== 'admin' || data.staffActive === false);
+    if (removesActiveAdmin) {
+      const activeAdmins = await prisma.user.count({ where: { staffRole: 'admin', staffActive: true } });
+      if (activeAdmins <= 1) return res.status(409).json({ ok: false, error: 'LAST_ACTIVE_ADMIN' });
+    }
+
     const user = await prisma.user.update({ where: { id }, data });
 
     await writeAudit({
@@ -1727,4 +2049,13 @@ router.patch('/staff/:id', requireAdmin, requireRoles(['admin']), async (req, re
   }
 });
 
+router.use('/delivery-zones', requireAdmin, requireRoles(['admin']), require('./adminDeliveryZones')({ prisma, writeAudit }));
+
 module.exports = router;
+module.exports._test = {
+  normalizeOrderStatus,
+  isAllowedTransition,
+  canAccessOrder,
+  deliveryDispatchError,
+  validateAndParseAdminInitData,
+};

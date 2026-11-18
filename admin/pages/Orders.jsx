@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../lib/adminApi';
 import { Surface } from '../../src/components/ui/Surface';
@@ -39,10 +39,11 @@ function normalizeStatus(s) {
 
 function statusChip(order) {
   const s = normalizeStatus(order?.status);
+  const rawStatus = String(order?.status || '').toUpperCase();
   const ps = String(order?.paymentStatus || '').toUpperCase();
   if (ps === 'PENDING') return { label: 'Ожидает оплаты', color: '#D92D20', bg: 'rgba(217,45,32,0.12)' };
+  if (rawStatus === 'PAID' || (s === 'NEW' && ps === 'CONFIRMED')) return { label: 'Оплачен', color: '#16A34A', bg: 'rgba(22,163,74,0.12)' };
   if (s === 'NEW') return { label: 'Новый', color: '#D92D20', bg: 'rgba(217,45,32,0.12)' };
-  if (ps === 'CONFIRMED') return { label: 'Оплачен', color: '#16A34A', bg: 'rgba(22,163,74,0.12)' };
   if (s === 'ACCEPTED') return { label: 'Принят', color: '#D97706', bg: 'rgba(217,119,6,0.12)' };
   if (s === 'ASSEMBLED') return { label: 'Собран', color: '#2563EB', bg: 'rgba(37,99,235,0.12)' };
   if (s === 'IN_DELIVERY') return { label: 'В доставке', color: '#7C3AED', bg: 'rgba(124,58,237,0.12)' };
@@ -54,15 +55,20 @@ function statusChip(order) {
 function actionFor(order) {
   const s = normalizeStatus(order?.status);
   const ps = String(order?.paymentStatus || '').toUpperCase();
-  if (ps === 'PENDING' || s === 'NEW') return 'confirmPay';
+  if (ps === 'PENDING') return 'confirmPay';
+  if (s === 'NEW') return 'accept';
   if (s === 'ACCEPTED') return 'uploadPhoto';
   if (s === 'ASSEMBLED') return 'dispatch';
   if (s === 'IN_DELIVERY') return 'complete';
   return null;
 }
 
-export function OrdersPage() {
+export function OrdersPage({ user }) {
   const navigate = useNavigate();
+  const role = String(user?.role || '');
+  const canConfirmPayment = role === 'admin' || role === 'moderator';
+  const canPrepare = canConfirmPayment || role === 'florist';
+  const canComplete = canConfirmPayment || role === 'courier';
   const [dateTab, setDateTab] = useState('today');
   const [status, setStatus] = useState('all');
   const [items, setItems] = useState(() => ORDERS_CACHE.get('today') || []);
@@ -264,8 +270,9 @@ export function OrdersPage() {
                       const action = actionFor(o);
                       if (!action) return null;
                       if (action === 'confirmPay') {
+                        if (!canConfirmPayment) return null;
                         return (
-                          <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <div style={{ marginTop: 10 }}>
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); confirmPayment(o.id); }}
@@ -274,17 +281,11 @@ export function OrdersPage() {
                             >
                               {confirmingId === o.id ? '...' : 'Подтвердить оплату'}
                             </button>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); adminApi.acceptOrder(o.id).then(() => load({ force: true })).catch((err) => alert(err?.data?.error || err.message || 'Ошибка')); }}
-                              style={{ height: 36, borderRadius: 10, border: 0, padding: '0 12px', fontWeight: 900, background: '#F59E0B', color: 'white' }}
-                            >
-                              Принять
-                            </button>
                           </div>
                         );
                       }
                       if (action === 'uploadPhoto') {
+                        if (!canPrepare) return null;
                         return (
                           <div style={{ marginTop: 10 }}>
                             <button
@@ -297,7 +298,25 @@ export function OrdersPage() {
                           </div>
                         );
                       }
+                      if (action === 'accept') {
+                        if (!canPrepare) return null;
+                        return (
+                          <div style={{ marginTop: 10 }}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                adminApi.acceptOrder(o.id).then(() => load({ force: true })).catch((err) => alert(err?.data?.error || err.message || 'Ошибка'));
+                              }}
+                              style={{ height: 36, borderRadius: 10, border: 0, padding: '0 12px', fontWeight: 900, background: '#F59E0B', color: 'white' }}
+                            >
+                              Принять
+                            </button>
+                          </div>
+                        );
+                      }
                       if (action === 'dispatch') {
+                        if (!canPrepare) return null;
                         return (
                           <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                             <button
@@ -334,6 +353,7 @@ export function OrdersPage() {
                         );
                       }
                       if (action === 'complete') {
+                        if (!canComplete) return null;
                         return (
                           <div style={{ marginTop: 10 }}>
                             <button

@@ -51,31 +51,7 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// POST new product (Admin)
-router.post('/', async (req, res) => {
-    try {
-        const { name, price, image, images = [], description, tags, deliveryTime } = req.body;
-        if (!name || !price || !image) {
-            return res.status(400).json({ error: 'name, price, image are required' });
-        }
-        const product = await prisma.product.create({
-            data: {
-                name,
-                price: Number(price),
-                image,
-                description,
-                tags,
-                deliveryTime,
-                images: {
-                    create: Array.isArray(images) ? images.map((url) => ({ url })) : []
-                }
-            },
-            include: { images: true }
-        });
-        res.json(product);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+// Catalog writes are available only through /api/admin/products, which enforces staff roles.
+router.post('/', (_req, res) => res.status(405).json({ error: 'METHOD_NOT_ALLOWED' }));
 
 module.exports = router;

@@ -30,7 +30,7 @@ export function ActiveOrderFab() {
         bottom: 'calc(var(--app-nav-inset-bottom) + 70px)',
         zIndex: 60,
         background: 'var(--c-accent)',
-        color: 'white',
+        color: 'var(--c-accent-contrast)',
         border: 0,
         borderRadius: 999,
         padding: '12px 16px',
@@ -41,10 +41,10 @@ export function ActiveOrderFab() {
         fontWeight: 900,
         cursor: 'pointer',
       }}
-      aria-label="Active order"
+      aria-label="Активный заказ"
     >
-      <Clock size={18} color="white" />
-      <span style={{ whiteSpace: 'nowrap' }}>Active order</span>
+      <Clock size={18} color="var(--c-accent-contrast)" />
+      <span style={{ whiteSpace: 'nowrap' }}>Активный заказ</span>
     </button>
   );
 }

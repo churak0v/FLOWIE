@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import { getTelegramUserSafe } from '../telegram';
 import { api } from '../api';
 import { isCacheFresh, readCacheEntry, writeCacheEntry } from '../lib/persistedCache';
 import { prefetchImages } from '../lib/prefetch';
 import { toUiComposition, toUiSize } from '../lib/productUi';
 import { COLLECTIONS, PRODUCTS, SCENARIOS, UPSELLS } from '../data/mock';
+import { trackAnalytics } from '../lib/analytics';
 
 const STORAGE_KEY = 'flowie_state_v1';
 const storageKeyForUser = (me) => {
@@ -134,7 +135,7 @@ const initialState = {
     deliveryDate: '',
     deliveryTime: '',
 
-    paymentMethod: 'ton',
+    paymentMethod: 'alfa',
   },
 };
 
@@ -474,6 +475,7 @@ const AppStateContext = createContext(null);
 export function AppStateProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const storageKeyRef = useRef(STORAGE_KEY);
+  const previousMeRef = useRef(null);
 
   // Hydrate persisted slices
   useEffect(() => {
@@ -507,15 +509,35 @@ export function AppStateProvider({ children }) {
   // When authenticated user changes, switch persisted namespace to avoid mixing profiles.
   useEffect(() => {
     const key = storageKeyForUser(state.auth.me);
+    const previousMe = previousMeRef.current;
+    previousMeRef.current = state.auth.me;
+    const identityChanged = String(previousMe?.id || '') !== String(state.auth.me?.id || '');
+    if (identityChanged) dispatch({ type: 'RECIPIENTS_SET', items: [] });
+    if (previousMe?.id && !state.auth.me?.id) {
+      storageKeyRef.current = STORAGE_KEY;
+      dispatch({ type: 'RESET_PERSISTED' });
+      return;
+    }
     if (key === storageKeyRef.current) return;
+    const previousWasGuest = Boolean(previousMe?.id && !previousMe.telegramId && !previousMe.phoneVerified);
+    const nextIsGuest = Boolean(state.auth.me?.id && !state.auth.me.telegramId && !state.auth.me.phoneVerified);
+    const preserveGuestState = previousWasGuest || nextIsGuest;
     storageKeyRef.current = key;
     const saved = safeJsonParse(localStorage.getItem(key) || '');
-    if (saved) {
+    if (preserveGuestState) {
+      const payload = {
+        delivery: state.delivery,
+        favorites: { productIds: state.favorites.productIds },
+        cart: state.cart,
+        orders: state.orders,
+      };
+      localStorage.setItem(key, JSON.stringify(payload));
+    } else if (saved) {
       dispatch({ type: 'HYDRATE', payload: saved });
     } else {
       dispatch({ type: 'RESET_PERSISTED' });
     }
-  }, [state.auth.me]);
+  }, [state.auth.me, state.cart, state.delivery, state.favorites.productIds, state.orders]);
 
   // Telegram user for display (doesn't block UI)
   useEffect(() => {
@@ -582,8 +604,16 @@ export function AppStateProvider({ children }) {
         } catch (e) {
           // Keep it non-fatal: the app can run in "guest" mode as well.
           dispatch({ type: 'AUTH_ME_SET', me: null });
+          dispatch({ type: 'RECIPIENTS_SET', items: [] });
+          dispatch({ type: 'ORDER_CLEAR_ACTIVE' });
           return null;
         }
+      },
+      logout: async () => {
+        await api.logout();
+        dispatch({ type: 'AUTH_ME_SET', me: null });
+        dispatch({ type: 'RECIPIENTS_SET', items: [] });
+        dispatch({ type: 'RESET_PERSISTED' });
       },
       setActiveOrder: (id, expiresAt, preview) => dispatch({ type: 'ORDER_SET_ACTIVE', id, expiresAt, preview }),
       clearActiveOrder: () => dispatch({ type: 'ORDER_CLEAR_ACTIVE' }),
@@ -613,7 +643,7 @@ export function AppStateProvider({ children }) {
 
       // products
       loadProducts: async () => {
-        const cacheKey = 'products_ui_v10';
+        const cacheKey = 'products_ui_v12_ru_rub';
         const cached = readCacheEntry(cacheKey);
         const cachedItems = Array.isArray(cached?.data) ? cached.data : null;
         if (cachedItems?.length) {
@@ -634,14 +664,17 @@ export function AppStateProvider({ children }) {
           writeCacheEntry(cacheKey, normalized);
           prefetchImages(normalized.flatMap((p) => p?.images?.length ? p.images : [p?.image]).filter(Boolean), { max: 320 });
         } catch (e) {
-          dispatch({ type: 'PRODUCTS_SET', items: PRODUCTS });
-          prefetchImages(PRODUCTS.flatMap((p) => p?.images?.length ? p.images : [p?.image]).filter(Boolean), { max: 120 });
+          if (import.meta.env.PROD) dispatch({ type: 'PRODUCTS_ERROR', error: 'CATALOG_UNAVAILABLE' });
+          else {
+            dispatch({ type: 'PRODUCTS_SET', items: PRODUCTS });
+            prefetchImages(PRODUCTS.flatMap((p) => p?.images?.length ? p.images : [p?.image]).filter(Boolean), { max: 120 });
+          }
         }
       },
 
       // upsells (additional products in cart)
       loadUpsells: async () => {
-        const cacheKey = 'upsells_ui_v5';
+        const cacheKey = 'upsells_ui_v7_ru_rub';
         const cached = readCacheEntry(cacheKey);
         const cachedItems = Array.isArray(cached?.data) ? cached.data : null;
         if (cachedItems?.length) dispatch({ type: 'UPSELLS_SET', items: cachedItems });
@@ -655,23 +688,26 @@ export function AppStateProvider({ children }) {
           dispatch({ type: 'UPSELLS_SET', items: normalized });
           writeCacheEntry(cacheKey, normalized);
         } catch (e) {
-          dispatch({ type: 'UPSELLS_SET', items: UPSELLS.map((u) => ({
-            id: u.id,
-            title: u.title,
-            subtitle: u.isFree ? 'Included' : 'Add-on',
-            price: u.price,
-            image: u.imageUrl,
-            images: [u.imageUrl].filter(Boolean),
-            description: '',
-            composition: [],
-            size: '',
-          })) });
+          if (import.meta.env.PROD) dispatch({ type: 'UPSELLS_ERROR', error: 'CATALOG_UNAVAILABLE' });
+          else {
+            dispatch({ type: 'UPSELLS_SET', items: UPSELLS.map((u) => ({
+              id: u.id,
+              title: u.title,
+              subtitle: u.isFree ? 'Включено' : 'Дополнение',
+              price: u.price,
+              image: u.imageUrl,
+              images: [u.imageUrl].filter(Boolean),
+              description: '',
+              composition: [],
+              size: '',
+            })) });
+          }
         }
       },
 
       // collections + scenarios
       loadCollections: async () => {
-        const cacheKey = 'collections_v6';
+        const cacheKey = 'collections_v8_ru_rub';
         const cached = readCacheEntry(cacheKey);
         const cachedData = cached?.data || null;
         if (cachedData && typeof cachedData === 'object') {
@@ -689,7 +725,8 @@ export function AppStateProvider({ children }) {
           dispatch({ type: 'COLLECTIONS_SET', items, scenarios });
           writeCacheEntry(cacheKey, { items, scenarios });
         } catch (e) {
-          dispatch({ type: 'COLLECTIONS_SET', items: COLLECTIONS, scenarios: SCENARIOS });
+          if (import.meta.env.PROD) dispatch({ type: 'COLLECTIONS_ERROR', error: 'CATALOG_UNAVAILABLE' });
+          else dispatch({ type: 'COLLECTIONS_SET', items: COLLECTIONS, scenarios: SCENARIOS });
         }
       },
 
@@ -733,9 +770,15 @@ export function AppStateProvider({ children }) {
       toggleFavoriteProduct: (productId) => dispatch({ type: 'FAVORITES_TOGGLE_PRODUCT', productId }),
 
       // cart
-      addToCart: (productId, qty = 1) => dispatch({ type: 'CART_ADD_ITEM', productId, qty }),
+      addToCart: (productId, qty = 1) => {
+        dispatch({ type: 'CART_ADD_ITEM', productId, qty });
+        trackAnalytics('cart_add', { productId, meta: { quantity: qty } });
+      },
       setCartQty: (productId, qty) => dispatch({ type: 'CART_SET_QTY', productId, qty }),
-      removeFromCart: (productId) => dispatch({ type: 'CART_REMOVE_ITEM', productId }),
+      removeFromCart: (productId, quantity = 1) => {
+        dispatch({ type: 'CART_REMOVE_ITEM', productId });
+        trackAnalytics('cart_remove', { productId, meta: { quantity } });
+      },
       pruneCartItems: (productIds) => dispatch({ type: 'CART_PRUNE_ITEMS', productIds }),
       setFloristComment: (value) => dispatch({ type: 'CART_SET_FLORIST_COMMENT', value }),
       setUpsellQty: (upsellId, qty) => dispatch({ type: 'CART_SET_UPSELL_QTY', upsellId, qty }),

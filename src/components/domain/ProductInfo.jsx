@@ -99,7 +99,7 @@ export function ProductInfo({ product }) {
               padding: '0 13px',
               borderRadius: 999,
               background: 'var(--accent)',
-              color: 'var(--c-white)',
+              color: 'var(--c-accent-contrast)',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -122,13 +122,13 @@ export function ProductInfo({ product }) {
         <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <DetailPill tone="accent">
             <ShieldCheck size={15} />
-            Verified wishlist gift
+            Свежий букет
           </DetailPill>
           <DetailPill>
             <Truck size={15} />
-            Recipient confirms delivery
+            Статус доставки
           </DetailPill>
-          {product.size ? <DetailPill>Size {product.size}</DetailPill> : null}
+          {product.size ? <DetailPill>Размер {product.size}</DetailPill> : null}
         </div>
       </Surface>
 
@@ -136,7 +136,7 @@ export function ProductInfo({ product }) {
         <Surface variant="default" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <Gift size={19} color="var(--accent)" />
-            <Text variant="title">What is included</Text>
+            <Text variant="title">Что входит</Text>
           </div>
 
           <div style={{ marginTop: 13, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -153,13 +153,13 @@ export function ProductInfo({ product }) {
       <div style={{ display: 'grid', gap: 10 }}>
         <TrustRow
           icon={ShieldCheck}
-          title="No blind transfer"
-          text="You buy a real product through checkout, not a vague cash request."
+          title="Понятный букет"
+          text="Вы видите букет, цену и сценарий доставки до оформления."
         />
         <TrustRow
           icon={Truck}
-          title="Safe delivery"
-          text="The recipient chooses a convenient time and place after payment."
+          title="Быстрая доставка"
+          text="Флорист собирает заказ, затем курьер везёт его по адресу."
         />
       </div>
     </div>

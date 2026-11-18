@@ -12,7 +12,7 @@ services:
       timeout: 3s
       retries: 20
     ports:
-      - "56431:5432"
+      - "${DB_PORT:-56431}:5432"
     volumes:
       - flowie_pgdata:/var/lib/postgresql/data
 
@@ -28,12 +28,37 @@ services:
       ADMIN_BOT_TOKEN: ${ADMIN_BOT_TOKEN:-}
       APP_COOKIE_DOMAIN: ${APP_COOKIE_DOMAIN:-}
       ADMIN_TG_IDS: ${ADMIN_TG_IDS:-}
+      DEV_ADMIN_ENABLED: ${DEV_ADMIN_ENABLED:-false}
+      DEV_ADMIN_TELEGRAM_ID: ${DEV_ADMIN_TELEGRAM_ID:-local-dev-admin}
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-}
-      TON_RECEIVER_ADDRESS: ${TON_RECEIVER_ADDRESS:-}
-      TON_USD_RATE: ${TON_USD_RATE:-3.2}
-      STARS_PER_USD: ${STARS_PER_USD:-49}
+      AUTH_ALLOWED_ORIGINS: ${AUTH_ALLOWED_ORIGINS:-}
+      SEO_APP_SHELL_URL: http://web/_flowie_app_shell
+      ALFA_BANK_ENABLED: ${ALFA_BANK_ENABLED:-false}
+      ALFA_BANK_MODE: ${ALFA_BANK_MODE:-test}
+      ALFA_BANK_API_URL: ${ALFA_BANK_API_URL:-}
+      ALFA_BANK_USER_NAME: ${ALFA_BANK_USER_NAME:-}
+      ALFA_BANK_PASSWORD: ${ALFA_BANK_PASSWORD:-}
+      ALFA_BANK_TOKEN: ${ALFA_BANK_TOKEN:-}
+      NODE_EXTRA_CA_CERTS: /app/certs/russian-trusted-root-ca.pem
+      DELIVERY_TARIFF_RUB: ${DELIVERY_TARIFF_RUB:-}
+      DELIVERY_INVOICE_TTL_HOURS: ${DELIVERY_INVOICE_TTL_HOURS:-24}
+      YANDEX_MAPS_ENABLED: ${YANDEX_MAPS_ENABLED:-false}
+      YANDEX_MAPS_JS_API_KEY: ${YANDEX_MAPS_JS_API_KEY:-}
+      YANDEX_MAPS_SUGGEST_API_KEY: ${YANDEX_MAPS_SUGGEST_API_KEY:-}
+      YANDEX_MAPS_GEOCODER_API_KEY: ${YANDEX_MAPS_GEOCODER_API_KEY:-}
+      CATALOG_EMBEDDINGS_ENABLED: ${CATALOG_EMBEDDINGS_ENABLED:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CATALOG_EMBEDDING_MODEL: ${CATALOG_EMBEDDING_MODEL:-text-embedding-3-small}
+      CATALOG_EMBEDDING_DIMENSIONS: ${CATALOG_EMBEDDING_DIMENSIONS:-512}
+      CATALOG_EMBEDDING_TIMEOUT_MS: ${CATALOG_EMBEDDING_TIMEOUT_MS:-2500}
+      CATALOG_SEARCH_MIN_SIMILARITY: ${CATALOG_SEARCH_MIN_SIMILARITY:-0.25}
+      CATALOG_REINDEX_MAX_PRODUCTS: ${CATALOG_REINDEX_MAX_PRODUCTS:-2000}
+      CATALOG_REINDEX_BATCH_SIZE: ${CATALOG_REINDEX_BATCH_SIZE:-20}
+      SMS_AUTH_ENABLED: ${SMS_AUTH_ENABLED:-false}
+      SMS_RU_API_ID: ${SMS_RU_API_ID:-}
+      SMS_RU_SENDER: ${SMS_RU_SENDER:-}
     ports:
-      - "6111:3001"
+      - "${API_PORT:-6111}:3001"
     volumes:
       - flowie_uploads:/app/uploads
     depends_on:
@@ -48,9 +73,10 @@ services:
         VITE_API_PROXY_TARGET: ${VITE_API_PROXY_TARGET:-http://api:3001}
         VITE_HERO_IMAGE: ${VITE_HERO_IMAGE:-}
         VITE_RECIPIENT_IMAGE: ${VITE_RECIPIENT_IMAGE:-}
+        VITE_DISABLE_TELEGRAM_BOOTSTRAP: ${VITE_DISABLE_TELEGRAM_BOOTSTRAP:-false}
     restart: unless-stopped
     ports:
-      - "6112:80"
+      - "${WEB_PORT:-6112}:80"
     depends_on:
       - api
 
@@ -63,7 +89,7 @@ services:
         VITE_API_PROXY_TARGET: ${VITE_API_PROXY_TARGET:-http://api:3001}
     restart: unless-stopped
     ports:
-      - "6113:80"
+      - "${ADMIN_PORT:-6113}:80"
     depends_on:
       - api
 

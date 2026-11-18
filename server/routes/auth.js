@@ -1,20 +1,21 @@
 const express = require('express');
 const cookie = require('cookie');
-const jwt = require('jsonwebtoken');
 const { validate, parse } = require('@tma.js/init-data-node');
 const { PrismaClient } = require('@prisma/client');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireSameOrigin } = require('../middleware/auth');
+const { SESSION_COOKIE, createSession, revokeSession, sessionTtlMs } = require('../services/authSession');
+const { sendOtpSms, smsRuConfig } = require('../services/smsru');
+const {
+    OTP_TTL_MS,
+    OTP_RESEND_MS,
+    normalizePhone,
+    generateOtp,
+    hashIp,
+} = require('../services/phoneOtp');
+const { reserveOtpChallenge, consumeOtpAttempt } = require('../services/otpStore');
 
 const router = express.Router();
 const prisma = new PrismaClient();
-
-function getJwtSecret() {
-    const secret = process.env.APP_JWT_SECRET;
-    if (!secret) {
-        throw new Error('APP_JWT_SECRET is not set');
-    }
-    return secret;
-}
 
 function getCookieOptions() {
     const isProd = process.env.NODE_ENV === 'production';
@@ -23,9 +24,9 @@ function getCookieOptions() {
     return {
         httpOnly: true,
         secure: isProd,
-        sameSite: isProd ? 'none' : 'lax',
+        sameSite: 'lax',
         path: '/',
-        maxAge: 60 * 60 * 24 * 7,
+        maxAge: Math.floor(sessionTtlMs() / 1000),
         ...(domain ? { domain } : {}),
     };
 }
@@ -37,8 +38,58 @@ function getPublicSiteUrl() {
 function setSessionCookie(res, token) {
     res.setHeader(
         'Set-Cookie',
-        cookie.serialize('session', token, getCookieOptions()),
+        cookie.serialize(SESSION_COOKIE, token, getCookieOptions()),
     );
+}
+
+function clearSessionCookie(res) {
+    res.setHeader('Set-Cookie', cookie.serialize(SESSION_COOKIE, '', { ...getCookieOptions(), maxAge: 0 }));
+}
+
+function publicUser(user) {
+    return {
+        id: user.id,
+        telegramId: user.telegramId,
+        name: user.name,
+        username: user.username,
+        phone: user.verifiedPhone || user.phone || null,
+        phoneVerified: Boolean(user.verifiedPhone && user.phoneVerifiedAt),
+        consentPersonal: user.consentPersonal,
+    };
+}
+
+function isGuestUser(user) {
+    return Boolean(user && !user.telegramId && !user.verifiedPhone && !user.staffRole);
+}
+
+function publicAuthError(error, fallback) {
+    const allowed = new Set([
+        'SMS_AUTH_DISABLED',
+        'SMS_PROVIDER_REJECTED',
+        'SMS_PROVIDER_TIMEOUT',
+        'OTP_RESEND_TOO_SOON',
+        'OTP_RATE_LIMITED',
+        'PHONE_ALREADY_IN_USE',
+        'IDENTITY_CONFLICT',
+    ]);
+    return allowed.has(error?.message) ? error.message : fallback;
+}
+
+async function mergeGuestData(tx, guestId, targetId) {
+    if (!guestId || !targetId || guestId === targetId) return;
+    await tx.order.updateMany({ where: { userId: guestId }, data: { userId: targetId } });
+    await tx.recipient.updateMany({ where: { userId: guestId }, data: { userId: targetId } });
+    await tx.address.updateMany({ where: { userId: guestId }, data: { userId: targetId } });
+    await tx.chat.updateMany({ where: { userId: guestId }, data: { userId: targetId } });
+    await tx.promoCode.updateMany({ where: { userId: guestId }, data: { userId: targetId } });
+    await tx.analyticsEvent.updateMany({ where: { userId: guestId }, data: { userId: targetId } });
+    await tx.referralOpen.updateMany({ where: { userId: guestId }, data: { userId: targetId } });
+}
+
+async function rotateSession(req, res, userId) {
+    if (req.authSession?.id) await revokeSession(prisma, req.authSession.id);
+    const { token } = await createSession(prisma, userId, req);
+    setSessionCookie(res, token);
 }
 
 async function tgApi(method, payload) {
@@ -69,6 +120,20 @@ function getStartParamFromInitData(initData) {
     }
 }
 
+function parseTelegramIdentity(initData, botToken) {
+    validate(initData, botToken, { expiresIn: 86400 });
+    const data = parse(initData);
+    const tgUser = data.user;
+    if (!tgUser?.id) throw new Error('NO_USER');
+
+    return {
+        telegramId: String(tgUser.id),
+        name: [tgUser.first_name ?? tgUser.firstName, tgUser.last_name ?? tgUser.lastName].filter(Boolean).join(' ') || null,
+        username: tgUser.username ? String(tgUser.username) : null,
+        startParam: String(data.start_param || data.startParam || getStartParamFromInitData(initData) || '').trim(),
+    };
+}
+
 function buildWelcomeAppUrl(startParam) {
     const base = getPublicSiteUrl().replace(/\/$/, '');
     if (!base) return '';
@@ -89,15 +154,15 @@ async function sendTelegramWelcomeOnce({ userId, telegramId, startParam }) {
 
     const appUrl = buildWelcomeAppUrl(startParam);
     const reply_markup = appUrl
-        ? { inline_keyboard: [[{ text: startParam ? "Open Vivienne's wishlist" : 'Open FLOWIE', web_app: { url: appUrl } }]] }
+        ? { inline_keyboard: [[{ text: 'Открыть FLOWIE', web_app: { url: appUrl } }]] }
         : undefined;
 
     const result = await tgApi('sendMessage', {
         chat_id: telegramId,
         text:
-            'Welcome to FLOWIE.\n\n' +
-            'A private gifting app for choosing real gifts from curated wishlists. ' +
-            'Pay securely with TON Connect or Telegram Stars, while recipient details stay private.',
+            'Добро пожаловать в FLOWIE.\n\n' +
+            'Быстрая доставка цветов с подборками букетов, понятной оплатой и статусом заказа. ' +
+            'Оплачивайте банковской картой через защищённую платёжную страницу.',
         reply_markup,
         disable_web_page_preview: true,
     });
@@ -122,7 +187,7 @@ async function sendTelegramWelcomeOnce({ userId, telegramId, startParam }) {
 }
 
 // POST /api/auth/telegram
-router.post('/telegram', async (req, res) => {
+router.post('/telegram', requireSameOrigin, async (req, res) => {
     try {
         const initData = String(req.body?.initData || '');
         if (!initData) return res.status(400).json({ ok: false, error: 'NO_INIT_DATA' });
@@ -131,67 +196,64 @@ router.post('/telegram', async (req, res) => {
         if (!botToken) return res.status(500).json({ ok: false, error: 'BOT_TOKEN_NOT_SET' });
 
         // Use a sane TTL (1 day). Some clients reuse initData within the same WebView session.
-        validate(initData, botToken, { expiresIn: 86400 });
-        const data = parse(initData);
-        const tgUser = data.user;
-        if (!tgUser?.id) return res.status(400).json({ ok: false, error: 'NO_USER' });
+        const { telegramId, name, username, startParam } = parseTelegramIdentity(initData, botToken);
 
-        const telegramId = String(tgUser.id);
-        const name = [tgUser.firstName, tgUser.lastName].filter(Boolean).join(' ') || null;
-        const username = tgUser.username ? String(tgUser.username) : null;
-        const startParam = getStartParamFromInitData(initData);
+        const user = await prisma.$transaction(async (tx) => {
+            const current = req.user?.id ? await tx.user.findUnique({ where: { id: req.user.id } }) : null;
+            const target = await tx.user.findUnique({ where: { telegramId } });
 
-        const user = await prisma.user.upsert({
-            where: { telegramId },
-            update: {
-                name,
-                username,
-            },
-            create: {
-                telegramId,
-                name,
-                username,
-            },
+            if (target) {
+                if (current && current.id !== target.id) {
+                    if (!isGuestUser(current)) {
+                        const error = new Error('IDENTITY_CONFLICT');
+                        error.statusCode = 409;
+                        throw error;
+                    }
+                    await mergeGuestData(tx, current.id, target.id);
+                    await tx.authSession.updateMany({ where: { userId: current.id, revokedAt: null }, data: { revokedAt: new Date() } });
+                }
+                return tx.user.update({ where: { id: target.id }, data: { name, username } });
+            }
+
+            if (current && !current.telegramId) {
+                return tx.user.update({ where: { id: current.id }, data: { telegramId, name, username } });
+            }
+            return tx.user.create({ data: { telegramId, name, username } });
         });
 
-        const token = jwt.sign(
-            { sub: String(user.id), telegramId, username },
-            getJwtSecret(),
-            { expiresIn: '7d' },
-        );
-
-        setSessionCookie(res, token);
+        await rotateSession(req, res, user.id);
         sendTelegramWelcomeOnce({ userId: user.id, telegramId, startParam }).catch((e) => {
             console.warn('Telegram welcome failed:', e?.message || e);
         });
         return res.json({
             ok: true,
-            token,
-            user: {
-                id: user.id,
-                telegramId: user.telegramId,
-                name: user.name,
-                username: user.username,
-            },
+            user: publicUser(user),
         });
     } catch (e) {
-        return res.status(401).json({ ok: false, error: e?.message || 'INVALID_INIT_DATA' });
+        if (e?.message === 'IDENTITY_CONFLICT') {
+            if (req.authSession?.id) await revokeSession(prisma, req.authSession.id).catch(() => {});
+            clearSessionCookie(res);
+        }
+        return res.status(e?.statusCode || 401).json({ ok: false, error: publicAuthError(e, 'INVALID_INIT_DATA') });
     }
 });
 
 // POST /api/auth/guest
-router.post('/guest', async (req, res) => {
+router.post('/guest', requireSameOrigin, async (req, res) => {
     try {
+        if (req.authError) return res.status(403).json({ ok: false, error: req.authError });
+        if (req.user?.id) {
+            const existing = await prisma.user.findUnique({ where: { id: req.user.id } });
+            if (existing) return res.json({ ok: true, user: publicUser(existing) });
+        }
         const user = await prisma.user.create({
             data: {
                 name: 'Гость',
             },
         });
 
-        const token = jwt.sign({ sub: String(user.id) }, getJwtSecret(), { expiresIn: '7d' });
-        setSessionCookie(res, token);
-
-        return res.json({ ok: true, token, user: { id: user.id, name: user.name } });
+        await rotateSession(req, res, user.id);
+        return res.json({ ok: true, user: publicUser(user) });
     } catch (e) {
         return res.status(500).json({ ok: false, error: e?.message || 'GUEST_LOGIN_FAILED' });
     }
@@ -205,46 +267,22 @@ router.get('/me', requireAuth, async (req, res) => {
 
         return res.json({
             ok: true,
-            user: {
-                id: user.id,
-                telegramId: user.telegramId,
-                name: user.name,
-                username: user.username,
-                phone: user.phone,
-                consentPersonal: user.consentPersonal,
-            },
+            user: publicUser(user),
         });
     } catch (e) {
         return res.status(500).json({ error: e?.message || 'ME_FAILED' });
     }
 });
 
-function normalizePhone(raw) {
-    const s = String(raw || '').trim();
-    if (!s) return null;
-
-    const digits = s.replace(/[^\d+]/g, '');
-    if (!digits) return null;
-
-    // Convert common RU formats: 8XXXXXXXXXX or 7XXXXXXXXXX -> +7XXXXXXXXXX
-    const dOnly = digits.replace(/[^\d]/g, '');
-    if (dOnly.length === 11 && (dOnly.startsWith('8') || dOnly.startsWith('7'))) {
-        return `+7${dOnly.slice(1)}`;
-    }
-
-    const normalized = digits.startsWith('+') ? digits : `+${digits}`;
-    if (!/^\+\d{10,15}$/.test(normalized)) return null;
-    return normalized;
-}
-
 // PATCH /api/auth/me
 router.patch('/me', requireAuth, async (req, res) => {
     try {
         const patch = {};
         if (req.body?.phone != null) {
-            const phone = normalizePhone(req.body?.phone);
-            if (!phone) return res.status(400).json({ ok: false, error: 'BAD_PHONE' });
-            patch.phone = phone;
+            const contactPhone = normalizePhone(req.body.phone);
+            if (!contactPhone) return res.status(400).json({ ok: false, error: 'BAD_PHONE' });
+            // Contact-only field. Identity lookup and merges use verifiedPhone exclusively.
+            patch.phone = contactPhone;
         }
         if (req.body?.consentPersonal != null) {
             patch.consentPersonal = Boolean(req.body.consentPersonal);
@@ -258,38 +296,119 @@ router.patch('/me', requireAuth, async (req, res) => {
 
         return res.json({
             ok: true,
-            user: {
-                id: user.id,
-                telegramId: user.telegramId,
-                name: user.name,
-                username: user.username,
-                phone: user.phone,
-                consentPersonal: user.consentPersonal,
-            },
+            user: publicUser(user),
         });
     } catch (e) {
         return res.status(500).json({ ok: false, error: e?.message || 'ME_UPDATE_FAILED' });
     }
 });
 
+// POST /api/auth/phone/request
+router.post('/phone/request', requireSameOrigin, async (req, res) => {
+    try {
+        if (!smsRuConfig().enabled) return res.status(503).json({ ok: false, error: 'SMS_AUTH_DISABLED' });
+        const phone = normalizePhone(req.body?.phone);
+        if (!phone) return res.status(400).json({ ok: false, error: 'BAD_PHONE' });
+
+        const now = new Date();
+        const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+        const ipHashValue = hashIp(ip);
+        const code = generateOtp();
+        const challenge = await reserveOtpChallenge({
+            prisma,
+            phone,
+            ipHash: ipHashValue,
+            userId: req.user?.id || null,
+            code,
+            now,
+        });
+
+        try {
+            const sent = await sendOtpSms({ phone, code, ip });
+            if (sent.messageId) {
+                await prisma.phoneOtpChallenge.update({
+                    where: { id: challenge.id },
+                    data: { providerMessageId: sent.messageId },
+                });
+            }
+        } catch (error) {
+            await prisma.phoneOtpChallenge.delete({ where: { id: challenge.id } }).catch(() => {});
+            throw error;
+        }
+
+        return res.json({
+            ok: true,
+            challengeId: challenge.id,
+            expiresIn: Math.floor(OTP_TTL_MS / 1000),
+            resendAfter: Math.floor(OTP_RESEND_MS / 1000),
+        });
+    } catch (error) {
+        return res.status(error?.statusCode || 500).json({
+            ok: false,
+            error: publicAuthError(error, 'OTP_REQUEST_FAILED'),
+            ...(Number(error?.retryAfter) > 0 ? { retryAfter: Number(error.retryAfter) } : {}),
+        });
+    }
+});
+
+// POST /api/auth/phone/verify
+router.post('/phone/verify', requireSameOrigin, async (req, res) => {
+    try {
+        const challengeId = String(req.body?.challengeId || '').trim();
+        const code = String(req.body?.code || '').trim();
+        if (!challengeId || !/^\d{6}$/.test(code)) {
+            return res.status(400).json({ ok: false, error: 'INVALID_OR_EXPIRED_CODE' });
+        }
+
+        const now = new Date();
+        const verification = await consumeOtpAttempt({ prisma, challengeId, code, now });
+        if (!verification.ok) {
+            const status = verification.error === 'OTP_ALREADY_USED' ? 409 : 400;
+            return res.status(status).json({ ok: false, error: verification.error });
+        }
+        const challenge = verification.challenge;
+
+        const user = await prisma.$transaction(async (tx) => {
+            const current = req.user?.id ? await tx.user.findUnique({ where: { id: req.user.id } }) : null;
+            const target = await tx.user.findUnique({ where: { verifiedPhone: challenge.phone } });
+
+            if (target) {
+                if (current && current.id !== target.id) {
+                    if (!isGuestUser(current)) {
+                        const error = new Error('PHONE_ALREADY_IN_USE');
+                        error.statusCode = 409;
+                        throw error;
+                    }
+                    await mergeGuestData(tx, current.id, target.id);
+                    await tx.authSession.updateMany({ where: { userId: current.id, revokedAt: null }, data: { revokedAt: now } });
+                }
+                return target;
+            }
+
+            if (current) {
+                return tx.user.update({
+                    where: { id: current.id },
+                    data: { verifiedPhone: challenge.phone, phone: challenge.phone, phoneVerifiedAt: now },
+                });
+            }
+            return tx.user.create({
+                data: { name: 'Покупатель', verifiedPhone: challenge.phone, phone: challenge.phone, phoneVerifiedAt: now },
+            });
+        });
+
+        await rotateSession(req, res, user.id);
+        return res.json({ ok: true, user: publicUser(user) });
+    } catch (error) {
+        return res.status(error?.statusCode || 500).json({ ok: false, error: publicAuthError(error, 'OTP_VERIFY_FAILED') });
+    }
+});
+
 // POST /api/auth/logout
-router.post('/logout', (req, res) => {
-    const isProd = process.env.NODE_ENV === 'production';
-    const domain = process.env.APP_COOKIE_DOMAIN;
-
-    res.setHeader(
-        'Set-Cookie',
-        cookie.serialize('session', '', {
-            httpOnly: true,
-            secure: isProd,
-            sameSite: isProd ? 'none' : 'lax',
-            path: '/',
-            maxAge: 0,
-            ...(domain ? { domain } : {}),
-        }),
-    );
-
+router.post('/logout', requireSameOrigin, async (req, res) => {
+    if (req.authSession?.id) await revokeSession(prisma, req.authSession.id);
+    clearSessionCookie(res);
     return res.json({ ok: true });
 });
 
 module.exports = router;
+module.exports._test = { parseTelegramIdentity, isGuestUser, mergeGuestData, publicUser };

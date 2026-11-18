@@ -1,27 +1,17 @@
 import React from 'react';
-import { Check, ShieldCheck, Sparkles, Wallet } from 'lucide-react';
+import { Check, CreditCard, ShieldCheck } from 'lucide-react';
 import { Surface } from '../ui/Surface';
 import { Text } from '../ui/Text';
-import { usePaymentQuote } from '../../lib/paymentRates';
 
 const METHODS = [
   {
-    id: 'ton',
-    title: 'TON Connect',
-    subtitle: 'Pay from your TON wallet',
-    badge: 'Wallet',
-    icon: Wallet,
-    color: '#1597ff',
-    bg: 'linear-gradient(135deg, rgba(21,151,255,0.14), rgba(21,151,255,0.04))',
-  },
-  {
-    id: 'stars',
-    title: 'Telegram Stars',
-    subtitle: 'Fast in-app payment',
-    badge: 'Stars',
-    icon: Sparkles,
-    color: '#f6b73c',
-    bg: 'linear-gradient(135deg, rgba(246,183,60,0.20), rgba(246,183,60,0.05))',
+    id: 'alfa',
+    title: 'Банковская карта',
+    subtitle: 'Оплата картой через Альфа-Банк',
+    badge: 'Альфа',
+    icon: CreditCard,
+    color: '#ef3124',
+    bg: 'linear-gradient(135deg, rgba(239,49,36,0.14), rgba(239,49,36,0.04))',
   },
 ];
 
@@ -137,13 +127,11 @@ function MethodCard({ method, selected, onClick, amountLabel, rateLabel }) {
   );
 }
 
-export function PaymentMethods({ value, onChange, totalUsd = 0 }) {
-  const quote = usePaymentQuote(totalUsd);
-
+export function PaymentMethods({ value, onChange }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-        <Text variant="title">Payment</Text>
+        <Text variant="title">Оплата</Text>
         <span
           style={{
             height: 28,
@@ -160,7 +148,7 @@ export function PaymentMethods({ value, onChange, totalUsd = 0 }) {
           }}
         >
           <ShieldCheck size={14} />
-          Safe checkout
+          Безопасная оплата
         </span>
       </div>
 
@@ -171,8 +159,8 @@ export function PaymentMethods({ value, onChange, totalUsd = 0 }) {
             method={method}
             selected={value === method.id}
             onClick={() => onChange?.(method.id)}
-            amountLabel={method.id === 'ton' ? quote.tonLabel : quote.starsLabel}
-            rateLabel={method.id === 'ton' ? quote.rateLabel : '~49 Stars / $1'}
+            amountLabel="₽"
+            rateLabel="Без ручного перевода"
           />
         ))}
       </Surface>

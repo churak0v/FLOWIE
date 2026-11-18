@@ -3,17 +3,12 @@ import { Surface } from '../ui/Surface';
 import { Text } from '../ui/Text';
 import { AppImage } from '../ui/AppImage';
 
-const VIVIENNE_AVATAR = '/vivienne-avatar.jpeg';
+const DEFAULT_ADDRESS_IMAGE = 'https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=900&q=80';
 
 export function RecipientSquareTile({ variant = 'recipient', recipient, title, subtitle, onClick }) {
   const clickable = typeof onClick === 'function';
-  const isVivienne =
-    String(title || recipient?.name || '').trim().toLowerCase() === 'vivienne' ||
-    String(recipient?.id || '') === '2' ||
-    String(recipient?.id || '') === '2002' ||
-    String(recipient?.id || '') === 'vivienne-default';
-  const name = isVivienne ? 'Vivienne' : title || recipient?.name || '';
-  const image = isVivienne ? VIVIENNE_AVATAR : recipient?.image || recipient?.avatar || '';
+  const name = title || recipient?.name || 'Адрес';
+  const image = recipient?.image || recipient?.avatar || DEFAULT_ADDRESS_IMAGE;
 
   return (
     <Surface

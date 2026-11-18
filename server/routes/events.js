@@ -1,9 +1,17 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { validate, parse } = require('@tma.js/init-data-node');
+const { requireSameOrigin } = require('../middleware/auth');
+const {
+  AnalyticsValidationError,
+  createRateLimiter,
+  normalizeClientEvent,
+} = require('../services/analytics');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+let prisma = new PrismaClient();
+let ipRateLimiter = createRateLimiter({ max: 180, windowMs: 60_000 });
+let sessionRateLimiter = createRateLimiter({ max: 120, windowMs: 60_000 });
 
 function getBotToken() {
   const token = process.env.BOT_TOKEN || process.env.ADMIN_BOT_TOKEN;
@@ -55,15 +63,15 @@ async function sendTelegramWelcomeOnce({ userId, telegramId, startParam, force =
 
   const appUrl = buildWelcomeAppUrl(startParam);
   const reply_markup = appUrl
-    ? { inline_keyboard: [[{ text: startParam ? "Open Vivienne's wishlist" : 'Open FLOWIE', web_app: { url: appUrl } }]] }
+    ? { inline_keyboard: [[{ text: 'Открыть FLOWIE', web_app: { url: appUrl } }]] }
     : undefined;
 
   const result = await tgApi('sendMessage', {
     chat_id: telegramId,
     text:
-      'Welcome to FLOWIE.\n\n' +
-      'A private gifting app for choosing real gifts from curated wishlists. ' +
-      'Pay securely with TON Connect or Telegram Stars, while recipient details stay private.',
+      'Добро пожаловать в FLOWIE.\n\n' +
+      'Быстрая доставка цветов с подборками букетов, понятной оплатой и статусом заказа. ' +
+      'Оплачивайте банковской картой через защищённую платёжную страницу.',
     reply_markup,
     disable_web_page_preview: true,
   });
@@ -104,103 +112,135 @@ function normalizeRefTag(value) {
     .slice(0, 64);
 }
 
-// POST /api/events
-// Minimal analytics ingestion for admin "КЭШ" dashboards.
-router.post('/', async (req, res) => {
+async function resolveEventIdentity(req) {
+  if (req.user?.id) {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, telegramId: true, staffRole: true, staffActive: true },
+    });
+    return user ? {
+      userId: user.id,
+      telegramId: user.telegramId ? String(user.telegramId) : null,
+      isStaff: Boolean(user.staffRole && user.staffActive),
+    } : { userId: null, telegramId: null, isStaff: false };
+  }
+
+  const initData = getInitDataFromHeader(req);
+  if (!initData) return { userId: null, telegramId: null, isStaff: false };
+  let data;
   try {
-    // Identify user either via initData (Telegram WebApp) or auth cookie.
-    let userId = null;
-    let telegramId = null;
-    try {
-      const initData = getInitDataFromHeader(req);
-      if (initData) {
-        validate(initData, getBotToken(), { expiresIn: 86400 });
-        const data = parse(initData);
-        const tgUser = data.user;
-        if (tgUser?.id) {
-          telegramId = String(tgUser.id);
-          const user = await prisma.user.upsert({
-            where: { telegramId },
-            update: {},
-            create: { telegramId },
-          });
-          userId = user.id;
-        }
-      } else if (req.user?.id) {
-        userId = req.user.id;
-        telegramId = req.user.telegramId ? String(req.user.telegramId) : null;
-      }
-    } catch {
-      // ignore identification errors; events are best-effort
-    }
+    validate(initData, getBotToken(), { expiresIn: 86400 });
+    data = parse(initData);
+  } catch {
+    throw new AnalyticsValidationError('INVALID_INIT_DATA', 401);
+  }
+  if (!data.user?.id) throw new AnalyticsValidationError('INVALID_INIT_DATA', 401);
+  const telegramId = String(data.user.id);
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true, telegramId: true, staffRole: true, staffActive: true },
+  });
+  return user ? {
+    userId: user.id,
+    telegramId,
+    isStaff: Boolean(user.staffRole && user.staffActive),
+  } : { userId: null, telegramId: null, isStaff: false };
+}
 
-    const event = String(req.body?.event || '').trim();
-    if (!event) return res.status(400).json({ ok: false, error: 'NO_EVENT' });
-
-    const productId = req.body?.productId == null ? null : Number(req.body.productId);
-    const orderId = req.body?.orderId == null ? null : Number(req.body.orderId);
-    const meta = req.body?.meta == null ? null : req.body.meta;
-
-    try {
-      console.info('[event]', { userId, event, productId, orderId, meta });
-    } catch {
-      // ignore
-    }
-
-    await prisma.analyticsEvent.create({
+async function persistClientEvent(identity, normalized) {
+  return prisma.$transaction(async (tx) => {
+    await tx.analyticsEvent.create({
       data: {
-        userId,
-        event,
-        productId: Number.isFinite(productId) ? productId : null,
-        orderId: Number.isFinite(orderId) ? orderId : null,
-        meta: meta == null ? undefined : meta,
+        eventId: normalized.eventId,
+        userId: identity.userId,
+        event: normalized.event,
+        productId: normalized.productId,
+        orderId: normalized.orderId,
+        meta: normalized.meta,
       },
     });
 
-    if (event === 'ref_open') {
-      const tag = normalizeRefTag(meta?.tag || '');
+    if (normalized.event === 'ref_open') {
+      const tag = normalizeRefTag(normalized.meta.tag);
       if (tag) {
-        const link = await prisma.referralLink.upsert({
+        const link = await tx.referralLink.upsert({
           where: { tag },
           update: { updatedAt: new Date() },
           create: { tag, autoCreated: true, isActive: true },
         });
-
-        await prisma.referralOpen.create({
+        await tx.referralOpen.create({
           data: {
             referralLinkId: link.id,
-            userId,
-            source: meta?.source == null ? null : String(meta.source).slice(0, 80),
-            href: meta?.href == null ? null : String(meta.href).slice(0, 512),
+            userId: identity.userId,
+            source: normalized.meta.referralSource || null,
+            // Keep the legacy column useful without retaining a raw URL or query string.
+            href: normalized.meta.path || null,
           },
         });
-
-        if (userId) {
-          await prisma.user.updateMany({
-            where: { id: userId, referralLinkId: null },
+        if (identity.userId) {
+          await tx.user.updateMany({
+            where: { id: identity.userId, referralLinkId: null },
             data: {
               referralLinkId: link.id,
-              referralSource: meta?.source == null ? null : String(meta.source).slice(0, 80),
+              referralSource: normalized.meta.referralSource || null,
               referralAt: new Date(),
             },
           });
         }
       }
     }
+  });
+}
 
-    if (event === 'write_access_requested' && String(meta?.status || '') === 'allowed' && userId && telegramId) {
+// POST /api/events — first-party, privacy-minimized client analytics.
+router.post('/', requireSameOrigin, async (req, res) => {
+  try {
+    const normalized = normalizeClientEvent(req.body);
+    const ipKey = String(req.ip || req.socket?.remoteAddress || 'unknown');
+    const ipLimit = ipRateLimiter.consume(ipKey);
+    const sessionLimit = sessionRateLimiter.consume(`${ipKey}:${normalized.meta.sessionId}`);
+    if (!ipLimit.allowed || !sessionLimit.allowed) {
+      const retryAfter = Math.max(ipLimit.retryAfter, sessionLimit.retryAfter);
+      res.setHeader('Retry-After', String(retryAfter));
+      return res.status(429).json({ ok: false, error: 'EVENT_RATE_LIMITED', retryAfter });
+    }
+
+    const identity = await resolveEventIdentity(req);
+    if (identity.isStaff) return res.json({ ok: true, accepted: false, skipped: 'STAFF' });
+
+    try {
+      await persistClientEvent(identity, normalized);
+    } catch (error) {
+      if (error?.code === 'P2002') return res.json({ ok: true, accepted: true, duplicate: true });
+      throw error;
+    }
+
+    if (normalized.event === 'write_access_requested' && normalized.meta.status === 'allowed' && identity.userId && identity.telegramId) {
       await sendTelegramWelcomeOnce({
-        userId,
-        telegramId,
-        startParam: normalizeRefTag(meta?.tag || ''),
+        userId: identity.userId,
+        telegramId: identity.telegramId,
+        startParam: normalizeRefTag(normalized.meta.tag),
         force: true,
       });
     }
 
-    return res.json({ ok: true });
+    return res.status(202).json({ ok: true, accepted: true, duplicate: false });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: e?.message || 'EVENT_FAILED' });
+    if (e instanceof AnalyticsValidationError) {
+      return res.status(e.status).json({ ok: false, error: e.code });
+    }
+    console.warn('Analytics ingestion failed');
+    return res.status(500).json({ ok: false, error: 'EVENT_FAILED' });
   }
 });
 
 module.exports = router;
+module.exports._test = {
+  setPrisma(client) {
+    prisma = client;
+  },
+  setRateLimiters({ ip, session }) {
+    if (ip) ipRateLimiter = ip;
+    if (session) sessionRateLimiter = session;
+  },
+};

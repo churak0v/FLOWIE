@@ -451,7 +451,7 @@ a[href^='sms:'] {
 
 .ui-stickyBarInner {
   background: var(--c-accent-2);
-  color: var(--c-white);
+  color: var(--c-accent-contrast);
   border-radius: var(--r-lg);
   height: 85px;
   box-shadow: 0 -6px 20px var(--c-ink-12);
@@ -503,7 +503,7 @@ a[href^='sms:'] {
 }
 
 .ui-bottomNavLink--active {
-  color: var(--c-white);
+  color: var(--c-accent-contrast);
   background: linear-gradient(135deg, var(--c-accent), var(--c-accent-2));
 }
 
@@ -541,7 +541,7 @@ a[href^='sms:'] {
 }
 
 .creator-console__desktopNavButton--active {
-  color: var(--c-white);
+  color: var(--c-accent-contrast);
   background: linear-gradient(135deg, var(--c-accent), var(--c-accent-2));
   box-shadow: 0 10px 24px rgba(204, 82, 113, 0.18);
 }
@@ -659,7 +659,7 @@ a[href^='sms:'] {
   }
 
   .creator-console__bottomNavButton--active {
-    color: var(--c-white);
+    color: var(--c-accent-contrast);
     background: linear-gradient(135deg, var(--c-accent), var(--c-accent-2));
   }
 }

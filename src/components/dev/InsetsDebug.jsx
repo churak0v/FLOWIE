@@ -98,7 +98,7 @@ export function InsetsDebug() {
   return (
     <div
       role="dialog"
-      aria-label="Insets debug"
+      aria-label="Отладка отступов"
       style={{
         position: 'fixed',
         left: '50%',
@@ -120,7 +120,7 @@ export function InsetsDebug() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-        <div style={{ fontWeight: 900, fontSize: 12, color: '#fff' }}>Insets debug</div>
+        <div style={{ fontWeight: 900, fontSize: 12, color: '#fff' }}>Отладка отступов</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
             type="button"
@@ -142,7 +142,7 @@ export function InsetsDebug() {
               fontWeight: 800,
             }}
           >
-            Copy
+            Скопировать
           </button>
           <button
             type="button"
@@ -158,7 +158,7 @@ export function InsetsDebug() {
               fontWeight: 900,
               lineHeight: 1,
             }}
-            aria-label="Close"
+            aria-label="Закрыть"
           >
             ×
           </button>

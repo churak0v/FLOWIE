@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   BadgeCheck,
   ChevronLeft,
-  Gift,
+  Flower2,
   Heart,
   MoveHorizontal,
   Play,
@@ -22,26 +22,27 @@ import { OrderHistoryList } from './domain/OrderHistoryList';
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=900&q=80';
-const VIVIENNE_AVATAR = '/vivienne-avatar.jpeg';
-const VIVIENNE_HANDLE = '@_v.morel';
+const DELIVERY_IMAGE =
+  'https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=900&q=80';
+const DELIVERY_HANDLE = '@flowie.delivery';
 const MOMENT_VIDEO = '/videos/vivienne-reaction.mp4';
 const RAIL_CARD_WIDTH = 188;
 const RAIL_CARD_HEIGHT = 334;
 
 function normalizePublicRecipient(recipient, id) {
   if (!recipient) return null;
-  const looksLikeVivienne =
+  const looksLikeLegacyProfile =
     Number(id) === 2 ||
     Number(id) === 2002 ||
     String(recipient?.name || '').trim().toLowerCase() === 'vivienne';
 
-  if (!looksLikeVivienne) return recipient;
+  if (!looksLikeLegacyProfile) return recipient;
   return {
     ...recipient,
     id: recipient.id ?? id,
-    name: 'Vivienne',
-    handle: VIVIENNE_HANDLE,
-    image: VIVIENNE_AVATAR,
+    name: 'Получатель',
+    handle: DELIVERY_HANDLE,
+    image: DELIVERY_IMAGE,
   };
 }
 
@@ -109,7 +110,7 @@ function FunnelHeader({ title, subtitle, action, onAction }) {
   );
 }
 
-function CreatorMomentTile({ recipient, gift, onGift }) {
+function DeliveryMomentTile({ recipient, product, onProduct }) {
   return (
     <Surface
       variant="default"
@@ -119,18 +120,18 @@ function CreatorMomentTile({ recipient, gift, onGift }) {
         flex: `0 0 ${RAIL_CARD_WIDTH}px`,
         padding: 0,
         overflow: 'hidden',
-        cursor: gift ? 'pointer' : 'default',
+        cursor: product ? 'pointer' : 'default',
         background: 'var(--c-text)',
         color: 'var(--c-white)',
         position: 'relative',
       }}
-      onClick={gift ? () => onGift(gift.id) : undefined}
-      role={gift ? 'button' : undefined}
-      tabIndex={gift ? 0 : undefined}
+      onClick={product ? () => onProduct(product.id) : undefined}
+      role={product ? 'button' : undefined}
+      tabIndex={product ? 0 : undefined}
       onKeyDown={
-        gift
+        product
           ? (e) => {
-              if (e.key === 'Enter') onGift(gift.id);
+              if (e.key === 'Enter') onProduct(product.id);
             }
           : undefined
       }
@@ -143,7 +144,7 @@ function CreatorMomentTile({ recipient, gift, onGift }) {
           muted
           playsInline
           preload="auto"
-          aria-label={`${recipient.name} gift reaction`}
+          aria-label={`${recipient.name} flower delivery preview`}
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', background: 'var(--c-text)' }}
         />
         <div
@@ -213,10 +214,10 @@ function CreatorMomentTile({ recipient, gift, onGift }) {
           }}
         >
           <Text variant="subtitle" style={{ color: 'rgba(255,255,255,0.92)' }}>
-            Watch her reaction
+            Превью доставки
           </Text>
           <Text variant="caption" style={{ marginTop: 5, color: 'rgba(255,255,255,0.68)', lineHeight: 1.3 }}>
-            See what this could feel like.
+            Посмотрите, как может приехать букет.
           </Text>
         </div>
       </div>
@@ -229,7 +230,7 @@ function ProductRail({ title, subtitle, products, onOpen, onAdd, onCatalog, lead
 
   return (
     <section style={{ marginTop: 34 }}>
-      <FunnelHeader title={title} subtitle={subtitle} action="See all" onAction={onCatalog} />
+      <FunnelHeader title={title} subtitle={subtitle} action="Все" onAction={onCatalog} />
 
       <div
         style={{
@@ -249,7 +250,7 @@ function ProductRail({ title, subtitle, products, onOpen, onAdd, onCatalog, lead
         }}
       >
         <MoveHorizontal size={14} />
-        Swipe picks
+        Листайте подборку
       </div>
 
       <div
@@ -300,11 +301,11 @@ function FlowerPassCard() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ minWidth: 0 }}>
           <Text variant="caption" style={{ color: 'rgba(255,255,255,0.68)', marginBottom: 6, textTransform: 'uppercase' }}>
-            FLOWIE Pass
+            FLOWIE Plus
           </Text>
-          <Text variant="title">FLOWIE flower pass</Text>
+          <Text variant="title">Цветочный план FLOWIE</Text>
           <Text variant="body" style={{ marginTop: 6, color: 'rgba(255,255,255,0.72)' }}>
-            Send flowers regularly without asking for details. You set the budget; she accepts each drop when it suits her.
+            Планируйте регулярные цветы с понятным бюджетом и доставкой под контролем менеджера.
           </Text>
         </div>
         <span
@@ -333,9 +334,9 @@ function FlowerPassCard() {
             background: 'rgba(255,255,255,0.08)',
           }}
         >
-          <Text variant="subtitle">$49+</Text>
+          <Text variant="subtitle">4 000 ₽+</Text>
           <Text variant="caption" style={{ marginTop: 4, color: 'rgba(255,255,255,0.62)' }}>
-            per month
+            в месяц
           </Text>
         </div>
         <div
@@ -346,9 +347,9 @@ function FlowerPassCard() {
             background: 'rgba(255,255,255,0.08)',
           }}
         >
-          <Text variant="subtitle">Her pace</Text>
+          <Text variant="subtitle">Гибко</Text>
           <Text variant="caption" style={{ marginTop: 4, color: 'rgba(255,255,255,0.62)' }}>
-            recipient-approved
+            окна доставки
           </Text>
         </div>
       </div>
@@ -368,7 +369,7 @@ function FlowerPassCard() {
           cursor: 'default',
         }}
       >
-        Soon
+        Скоро
       </button>
     </Surface>
   );
@@ -388,19 +389,19 @@ function SafetySummary() {
       }}
     >
       <SafetyRow
-        icon={Gift}
-        title="Approved picks only"
-        text="Every item here is something she chose in advance."
+        icon={Flower2}
+        title="Свежие букеты"
+        text="У каждого товара есть фото, цена и понятный сценарий доставки."
       />
       <SafetyRow
         icon={ShieldCheck}
-        title="No blind transfers"
-        text="You pay for a clear item with a visible price."
+        title="Прозрачная оплата"
+        text="Вы оплачиваете конкретный букет, а не расплывчатую заявку."
       />
       <SafetyRow
         icon={Truck}
-        title="Address stays hidden"
-        text="Delivery details are handled on the recipient side."
+        title="Курьерская доставка"
+        text="Детали доставки ведут менеджер FLOWIE и курьер."
       />
     </Surface>
   );
@@ -425,25 +426,25 @@ export function RecipientProfile() {
     [id, state.recipients.items]
   );
 
-  const wishlist = useMemo(() => (state.products.items || []).slice(0, 14), [state.products.items]);
-  const easyPicks = useMemo(() => wishlist.filter((p) => Number(p.price) <= 60).slice(0, 6), [wishlist]);
+  const flowerPicks = useMemo(() => (state.products.items || []).slice(0, 14), [state.products.items]);
+  const easyPicks = useMemo(() => flowerPicks.filter((p) => Number(p.price) <= 60).slice(0, 6), [flowerPicks]);
   const specialPicks = useMemo(
-    () => wishlist
+    () => flowerPicks
       .filter((p) => Number(p.price) > 60 && Number(p.price) <= 95)
       .map((p, index) => ({ p, index }))
       .sort((a, b) => specialPickScore(a.p) - specialPickScore(b.p) || a.index - b.index)
       .map(({ p }) => p)
       .slice(0, 6),
-    [wishlist]
+    [flowerPicks]
   );
-  const premiumPicks = useMemo(() => wishlist.filter((p) => Number(p.price) > 95).slice(0, 6), [wishlist]);
+  const premiumPicks = useMemo(() => flowerPicks.filter((p) => Number(p.price) > 95).slice(0, 6), [flowerPicks]);
 
   if (!Number.isFinite(id) || !recipient) {
     const isReferralPlaceholder = Number(id) === 2 || Number(id) === 2002;
     return (
       <AppShell style={{ display: 'flex', flexDirection: 'column', '--app-content-inset-bottom': '0px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Text variant="title">Wishlist profile</Text>
+          <Text variant="title">Адрес доставки</Text>
         </div>
 
         <div style={{ flex: 1, display: 'grid', placeItems: 'center' }}>
@@ -451,14 +452,14 @@ export function RecipientProfile() {
             variant="soft"
             style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', textAlign: 'center' }}
           >
-            <Text variant="subtitle">{isReferralPlaceholder ? 'Opening profile...' : 'Profile not found'}</Text>
+            <Text variant="subtitle">{isReferralPlaceholder ? 'Открываем адрес...' : 'Адрес не найден'}</Text>
           </Surface>
         </div>
       </AppShell>
     );
   }
 
-  const handle = String(recipient.handle || `@${String(recipient.name || 'creator').toLowerCase().replace(/\s+/g, '')}`).replace(/^@?/, '@');
+  const handle = String(recipient.handle || `@${String(recipient.name || 'address').toLowerCase().replace(/\s+/g, '')}`).replace(/^@?/, '@');
   const openProduct = (productId) => navigate(`/product/${productId}`);
   const addProduct = (productId) => actions.addToCart(productId, 1);
   const openCatalog = () => navigate('/catalog');
@@ -477,7 +478,7 @@ export function RecipientProfile() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <IconButton
           onClick={goBack}
-          aria-label="Back"
+          aria-label="Назад"
           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         >
           <ChevronLeft size={20} />
@@ -506,7 +507,7 @@ export function RecipientProfile() {
         <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 7 }}>
           <Text variant="title">{recipient.name}</Text>
           <span
-            title="Verified account"
+            title="Проверенный контакт"
             style={{
               width: 23,
               height: 23,
@@ -529,7 +530,7 @@ export function RecipientProfile() {
           muted
           style={{ marginTop: 8, maxWidth: 320, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.42 }}
         >
-          Verified profile for private gifting. Pick from approved items; no address needed.
+          Сохранённый контакт для доставки цветов. Выберите букет и подтвердите время при оформлении.
         </Text>
 
         <div
@@ -547,11 +548,11 @@ export function RecipientProfile() {
           }}
         >
           <Text variant="caption" style={{ color: 'var(--accent)' }}>
-            {wishlist.length} approved picks
+            {flowerPicks.length} букетов
           </Text>
           <span style={{ width: 3, height: 3, borderRadius: 999, background: 'var(--c-ink-25)' }} />
           <Text variant="caption" muted>
-            safe checkout
+            быстрое оформление
           </Text>
         </div>
       </section>
@@ -566,25 +567,25 @@ export function RecipientProfile() {
           background: 'linear-gradient(135deg, rgba(198,83,109,0.12), rgba(255,255,255,0.96))',
         }}
       >
-        <Text variant="title">Sorted for easier choosing</Text>
+        <Text variant="title">Подборки для быстрого выбора</Text>
         <Text variant="body" muted style={{ marginTop: 6 }}>
-          We grouped {recipient.name}'s picks by intent, so you can move fast without guessing.
+          Мы сгруппировали букеты по случаю, чтобы не тратить время на догадки.
         </Text>
       </Surface>
 
       <ProductRail
-        title="Easy yes"
-        subtitle="Simple gifts that feel thoughtful without making the decision heavy."
+        title="Лёгкий выбор"
+        subtitle="Нежные букеты на каждый день без долгих сомнений."
         products={easyPicks}
         onOpen={openProduct}
         onAdd={addProduct}
         onCatalog={openCatalog}
-        leadingCard={<CreatorMomentTile recipient={recipient} gift={wishlist[0]} onGift={openProduct} />}
+        leadingCard={<DeliveryMomentTile recipient={recipient} product={flowerPicks[0]} onProduct={openProduct} />}
       />
 
       <ProductRail
-        title="Feels special"
-        subtitle="A stronger gesture when you want the gift to land with more emotion."
+        title="Особый момент"
+        subtitle="Букеты выразительнее, когда хочется добавить эмоций."
         products={specialPicks}
         onOpen={openProduct}
         onAdd={addProduct}
@@ -594,8 +595,8 @@ export function RecipientProfile() {
       <FlowerPassCard />
 
       <ProductRail
-        title="Big gesture"
-        subtitle="For birthdays, milestones, or moments where you want it to feel serious."
+        title="Большой жест"
+        subtitle="Для дней рождения, важных дат и моментов, где цветы должны звучать серьёзно."
         products={premiumPicks}
         onOpen={openProduct}
         onAdd={addProduct}
@@ -625,9 +626,9 @@ export function RecipientProfile() {
             }}
           >
             <div style={{ minWidth: 0 }}>
-              <Text variant="subtitle">Orders with {recipient.name}</Text>
+              <Text variant="subtitle">Заказы для {recipient.name}</Text>
               <Text variant="caption" muted style={{ marginTop: 4 }}>
-                Hidden from the public pitch, available for this buyer.
+                Скрыто из публичного блока, доступно только этому покупателю.
               </Text>
             </div>
             <Text variant="caption" style={{ color: 'var(--accent)', flexShrink: 0 }}>
@@ -636,7 +637,7 @@ export function RecipientProfile() {
           </Surface>
         </summary>
         <div style={{ marginTop: 10 }}>
-          <OrderHistoryList recipientName={recipient.name} limit={5} emptyText={`No orders with ${recipient.name} yet.`} />
+          <OrderHistoryList recipientName={recipient.name} limit={5} emptyText={`Заказов для ${recipient.name} пока нет.`} />
         </div>
       </details>
     </AppShell>

@@ -1,30 +1,19 @@
-
 const express = require('express');
+const { PrismaClient } = require('@prisma/client');
+const { DeliveryZoneError, resolveDeliveryPrice } = require('../services/deliveryZones');
 const router = express.Router();
-
-// POST /api/delivery/estimate
-// Mock Yandex Go estimation
-router.post('/estimate', async (req, res) => {
+let prisma = new PrismaClient();
+async function estimateDelivery(req, res) {
+    const address = String(req.body?.address || '').trim();
+    if (!address) return res.status(400).json({ ok: false, error: 'DELIVERY_DESTINATION_REQUIRED' });
     try {
-        const { address, coords } = req.body;
-
-        // Mock logic: 
-        // 1. If coords provided, calc distance (mock).
-        // 2. Return random price between 300 and 600.
-
-        const mockPrice = Math.floor(Math.random() * (600 - 300 + 1)) + 300;
-
-        // Simulate delay
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        res.json({
-            price: mockPrice,
-            eta: '45 min',
-            provider: 'yandex_go'
-        });
+        const quote = await resolveDeliveryPrice({ prisma, address });
+        return res.json({ ok: true, ...quote, currency: 'RUB' });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        return res.status(error instanceof DeliveryZoneError ? error.status : 500)
+            .json({ ok: false, error: error instanceof DeliveryZoneError ? error.code : 'DELIVERY_ESTIMATE_FAILED' });
     }
-});
-
+}
+router.post('/estimate', require('./deliveryMaps').quota, estimateDelivery);
 module.exports = router;
+module.exports._test = { estimateDelivery, setPrisma(value) { prisma = value; } };

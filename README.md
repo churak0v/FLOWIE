@@ -1,6 +1,6 @@
 # FLOWIE
 
-Telegram Mini App for private wishlist gifting: a delivery-style marketplace where creators keep recipient addresses private and buyers purchase real gifts through a safer checkout flow.
+Telegram Mini App for fast flower delivery with a client storefront, manager cabinet, API server, PostgreSQL, Prisma migrations, uploads, and realtime chat.
 
 ## Local Run
 

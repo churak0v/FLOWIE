@@ -1,6 +1,4 @@
-import React from 'react';
 import { Surface } from '../ui/Surface';
-import { Text } from '../ui/Text';
 import { formatMoney } from '../../lib/money';
 
 function Row({ label, value, strong }) {
@@ -12,21 +10,28 @@ function Row({ label, value, strong }) {
   );
 }
 
-export function PriceBreakdown({ itemsTotal, upsellsTotal, deliveryCost, bonusesApplied }) {
-  const subtotal = itemsTotal + upsellsTotal + deliveryCost;
+export function PriceBreakdown({ itemsTotal, upsellsTotal, deliveryCost, bonusesApplied, deliverySeparate = false }) {
+  const subtotal = itemsTotal + upsellsTotal + (deliverySeparate ? 0 : Number(deliveryCost || 0));
   const total = Math.max(0, subtotal - bonusesApplied);
   const showUpsells = upsellsTotal > 0;
 
   return (
     <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)' }}>
       <div style={{ display: 'grid', gap: 10 }}>
-        <Row label="Items" value={formatMoney(itemsTotal)} />
-        {showUpsells ? <Row label="Add-ons" value={formatMoney(upsellsTotal)} /> : null}
-        <Row label="Gift note" value={formatMoney(0)} />
-        <Row label="Delivery coordination" value={formatMoney(deliveryCost)} />
-        {bonusesApplied ? <Row label="Discount" value={`- ${formatMoney(bonusesApplied)}`} /> : null}
+        <Row label="Товары" value={formatMoney(itemsTotal)} />
+        {showUpsells ? <Row label="Дополнения" value={formatMoney(upsellsTotal)} /> : null}
+        <Row label="Открытка" value={formatMoney(0)} />
+        <Row
+          label="Доставка"
+          value={deliverySeparate
+            ? 'Отдельным счётом после уточнения'
+            : deliveryCost == null
+              ? 'Рассчитывается'
+              : formatMoney(deliveryCost)}
+        />
+        {bonusesApplied ? <Row label="Скидка" value={`- ${formatMoney(bonusesApplied)}`} /> : null}
         <div style={{ height: 1, background: 'var(--border)', margin: '6px 0' }} />
-        <Row label="Total" value={formatMoney(total)} strong />
+        <Row label="Итого" value={formatMoney(total)} strong />
       </div>
     </Surface>
   );

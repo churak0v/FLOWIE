@@ -19,14 +19,15 @@ import { InsetsDebug } from './components/dev/InsetsDebug';
 import { api } from './api';
 import { getTelegramInitData, getTelegramStartParam, getTelegramUserSafe, isTelegramWebApp, requestWriteAccess } from './telegram';
 import { AppStateProvider, useAppState } from './state/AppState';
+import { extractAnalyticsAttribution, markAnalyticsReady, trackAnalytics } from './lib/analytics';
 
 const REFERRAL_PROFILES = {
     vivienne: {
         id: 2002,
-        name: 'Vivienne',
-        handle: '@_v.morel',
-        relation: 'Verified wishlist',
-        image: '/vivienne-avatar.jpeg',
+        name: 'Delivery recipient',
+        handle: '@flowie.delivery',
+        relation: 'Delivery contact',
+        image: 'https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=900&q=80',
         askAddress: true,
     },
 };
@@ -65,6 +66,15 @@ function AppRoutes() {
     const navigate = useNavigate();
     const { pathname } = location;
 
+    useEffect(() => {
+        trackAnalytics('page_view', {
+            meta: {
+                path: pathname,
+                ...extractAnalyticsAttribution(window.location, document.referrer),
+            },
+        }, { dedupeKey: pathname });
+    }, [pathname]);
+
     // Load products from DB-backed API so the client vitrine reflects admin toggles (isActive).
     useEffect(() => {
         actions.loadProducts();
@@ -76,34 +86,6 @@ function AppRoutes() {
         if (!state.products.items.length || !state.cart.items.length) return;
         actions.pruneCartItems(state.products.items.map((p) => p.id));
     }, [actions, state.cart.items, state.products.items]);
-
-    // Load server-side profile (phone, etc). Retry briefly to survive auth bootstrap race.
-    useEffect(() => {
-        let alive = true;
-        let attempt = 0;
-
-        const run = async () => {
-            attempt += 1;
-            try {
-                const me = await actions.loadMe();
-                if (me) return;
-            } catch {
-                // ignore
-            }
-
-            // If still not loaded and we might be mid-login, retry a couple times.
-            if (!alive) return;
-            if (attempt < 4) {
-                setTimeout(run, 250 * attempt);
-            }
-        };
-
-        run();
-        return () => {
-            alive = false;
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [actions]);
 
     useEffect(() => {
         const token = getReferralToken();
@@ -217,10 +199,13 @@ function AppRoutes() {
     );
 }
 
-function App() {
+function AuthBootstrap() {
+    const { actions } = useAppState();
+
     useEffect(() => {
         const bootstrapAuth = async () => {
-            const inTg = isTelegramWebApp();
+            const telegramEnabled = import.meta.env.VITE_DISABLE_TELEGRAM_BOOTSTRAP !== 'true';
+            const inTg = telegramEnabled && isTelegramWebApp();
 
             // Try existing session first.
             let me = null;
@@ -235,10 +220,9 @@ function App() {
 
             // In Telegram we should prefer initData auth. Some clients populate initData shortly after ready/expand,
             // so do a few short retries before falling back.
-            let initData = getTelegramInitData();
+            let initData = telegramEnabled ? getTelegramInitData() : '';
             if (inTg && !initData) {
                 for (const ms of [0, 80, 200, 400, 700]) {
-                    // eslint-disable-next-line no-await-in-loop
                     await sleep(ms);
                     initData = getTelegramInitData();
                     if (initData) break;
@@ -257,29 +241,35 @@ function App() {
             if (shouldTelegramLogin) {
                 try {
                     await api.telegramLogin(initData);
-                    return;
                 } catch (e) {
                     console.error('Telegram login failed:', e);
                     // If Telegram auth fails, do not automatically create a guest account inside Telegram.
                     // Better to keep the user unauthenticated than to split profiles across devices.
-                    return;
                 }
-            }
-
-            // Outside Telegram (or no initData available), fall back to guest session only if we don't have one yet.
-            if (!me) {
+            } else if (!me) {
+                // Outside Telegram, create a revocable guest session so cart and checkout remain registration-free.
                 try {
                     await api.guestLogin();
                 } catch (e) {
                     console.error('Guest login failed:', e);
                 }
             }
+
+            await actions.loadMe();
+            markAnalyticsReady();
         };
 
         bootstrapAuth();
-    }, []);
+    }, [actions]);
+
+    return null;
+}
+
+function App() {
 
     useEffect(() => {
+        if (import.meta.env.VITE_DISABLE_TELEGRAM_BOOTSTRAP === 'true') return;
+
         let cancelled = false;
         let sent = false;
         let attempts = 0;
@@ -294,7 +284,8 @@ function App() {
                     await api.trackEvent('ref_open', {
                         tag: startParam,
                         source: 'startapp',
-                        href: String(window.location?.href || ''),
+                        path: window.location?.pathname || '/',
+                        ...extractAnalyticsAttribution(window.location, document.referrer),
                     });
                 } catch {
                     // ignore
@@ -348,6 +339,7 @@ function App() {
 
     return (
         <AppStateProvider>
+            <AuthBootstrap />
             <BrowserRouter>
                 {showInsetsDebug ? <InsetsDebug /> : null}
                 <AppRoutes />

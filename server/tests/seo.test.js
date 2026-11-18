@@ -1,0 +1,186 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+process.env.PUBLIC_SITE_URL = 'https://flowie.test';
+const { createSeoRouter } = require('../routes/seo');
+const productsRouter = require('../routes/products');
+
+const SHELL = `<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="robots" content="noindex,nofollow"><title>FLOWIE</title></head><body><div id="root"></div><script type="module" src="/assets/app.js"></script></body></html>`;
+
+const maliciousName = 'Розы </script><script>alert("x")</script>';
+const activeProduct = {
+  id: 7,
+  name: maliciousName,
+  price: 5000,
+  discount: 500,
+  image: '/uploads/rose.jpg',
+  description: '<b>Свежие</b> розы & подарок',
+  isActive: true,
+  isUpsell: false,
+  updatedAt: new Date('2026-11-17T10:00:00.000Z'),
+  images: [{ url: 'https://images.example/rose-2.jpg' }],
+  composition: [{ name: 'Роза <аллая>', quantity: '15 шт.' }],
+  collectionItems: [],
+};
+
+const collection = {
+  id: 3,
+  slug: 'romantic',
+  type: 'thematic',
+  title: 'Романтика & любовь',
+  description: 'Нежные букеты',
+  isActive: true,
+  sort: 1,
+  updatedAt: new Date('2026-11-16T10:00:00.000Z'),
+  items: [{ id: 1, product: activeProduct }],
+};
+
+function matchesProduct(where, product) {
+  if (where?.id != null && where.id !== product.id) return false;
+  if (where?.isActive != null && where.isActive !== product.isActive) return false;
+  if (where?.isUpsell != null && where.isUpsell !== product.isUpsell) return false;
+  return true;
+}
+
+function createPrisma() {
+  const inactive = { ...activeProduct, id: 8, name: 'Скрытый товар', isActive: false, updatedAt: new Date('2026-11-15T10:00:00.000Z') };
+  const products = [activeProduct, inactive];
+  return {
+    product: {
+      findMany: async ({ where, select } = {}) => products.filter((item) => matchesProduct(where, item)).map((item) => {
+        if (!select) return item;
+        return Object.fromEntries(Object.keys(select).filter((key) => select[key]).map((key) => [key, item[key]]));
+      }),
+      findFirst: async ({ where } = {}) => products.find((item) => matchesProduct(where, item)) || null,
+    },
+    collection: {
+      findMany: async ({ where, select } = {}) => {
+        const rows = where?.isActive === true ? [collection] : [collection];
+        return rows.map((item) => {
+          if (!select) return item;
+          return Object.fromEntries(Object.keys(select).filter((key) => select[key]).map((key) => [key, item[key]]));
+        });
+      },
+      findFirst: async ({ where } = {}) => {
+        const idMatches = where?.id == null || where.id === collection.id;
+        const slugMatches = where?.slug == null || where.slug === collection.slug;
+        const typeMatches = where?.type == null || where.type === collection.type;
+        return idMatches && slugMatches && typeMatches ? collection : null;
+      },
+    },
+  };
+}
+
+async function withServer(router, run) {
+  const app = express();
+  app.use(express.json());
+  app.use(router);
+  const server = await new Promise((resolve) => {
+    const instance = app.listen(0, '127.0.0.1', () => resolve(instance));
+  });
+  try {
+    const { port } = server.address();
+    await run(`http://127.0.0.1:${port}`);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+function seoRouter() {
+  return createSeoRouter({ prisma: createPrisma(), loadShell: async () => SHELL });
+}
+
+test('product page returns crawlable escaped HTML and Product/Offer/Breadcrumb JSON-LD', async () => {
+  await withServer(seoRouter(), async (base) => {
+    const response = await fetch(`${base}/product/7`, { headers: { host: 'flowie.test' } });
+    const html = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /text\/html/);
+    assert.match(html, /<link rel="canonical" href="https:\/\/flowie\.test\/product\/7">/);
+    assert.match(html, /<meta property="og:type" content="product">/);
+    assert.match(html, /"@type":"Product"/);
+    assert.match(html, /"@type":"Offer"/);
+    assert.match(html, /"price":4500/);
+    assert.match(html, /"priceCurrency":"RUB"/);
+    assert.match(html, /"@type":"BreadcrumbList"/);
+    assert.match(html, /Розы &lt;\/script&gt;&lt;script&gt;alert/);
+    assert.doesNotMatch(html, /<script>alert\("x"\)<\/script>/);
+    assert.match(html, /\\u003c\/script\\u003e/);
+    assert.match(html, /src="\/assets\/app\.js"/);
+  });
+});
+
+test('browser and crawler receive the same server-rendered content', async () => {
+  await withServer(seoRouter(), async (base) => {
+    const browser = await fetch(`${base}/catalog`, { headers: { 'user-agent': 'Mozilla/5.0', host: 'flowie.test' } }).then((r) => r.text());
+    const crawler = await fetch(`${base}/catalog`, { headers: { 'user-agent': 'Googlebot', host: 'flowie.test' } }).then((r) => r.text());
+    assert.equal(crawler, browser);
+    assert.match(browser, /Каталог цветов/);
+    assert.match(browser, /\/product\/7/);
+  });
+});
+
+test('collection pages use real collection products and canonical slug', async () => {
+  await withServer(seoRouter(), async (base) => {
+    const response = await fetch(`${base}/catalog?collection=romantic`, { headers: { host: 'flowie.test' } });
+    const html = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(html, /Романтика &amp; любовь/);
+    assert.match(html, /canonical" href="https:\/\/flowie\.test\/catalog\?collection=romantic/);
+    assert.match(html, /"@type":"ItemList"/);
+  });
+});
+
+test('unknown and inactive products return a real noindex 404', async () => {
+  await withServer(seoRouter(), async (base) => {
+    for (const pathname of ['/product/8', '/product/not-a-number', '/catalog?collection=missing']) {
+      const response = await fetch(`${base}${pathname}`, { headers: { host: 'flowie.test' } });
+      const html = await response.text();
+      assert.equal(response.status, 404, pathname);
+      assert.equal(response.headers.get('x-robots-tag'), 'noindex,nofollow');
+      assert.match(html, /Страница не найдена/);
+    }
+  });
+});
+
+test('sitemap contains only active canonical products and collections', async () => {
+  await withServer(seoRouter(), async (base) => {
+    const response = await fetch(`${base}/sitemap.xml`, { headers: { host: 'flowie.test' } });
+    const xml = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(xml, /<loc>https:\/\/flowie\.test\/product\/7<\/loc>/);
+    assert.doesNotMatch(xml, /product\/8/);
+    assert.match(xml, /catalog\?collection=romantic/);
+    assert.match(xml, /<lastmod>2026-11-17T10:00:00\.000Z<\/lastmod>/);
+  });
+});
+
+test('robots advertises the absolute sitemap without blocking noindex routes', async () => {
+  await withServer(seoRouter(), async (base) => {
+    const text = await fetch(`${base}/robots.txt`, { headers: { host: 'flowie.test' } }).then((r) => r.text());
+    assert.equal(text, 'User-agent: *\nAllow: /\nSitemap: https://flowie.test/sitemap.xml\n');
+    assert.doesNotMatch(text, /Disallow/);
+  });
+});
+
+test('legacy unauthenticated product creation is closed', async () => {
+  await withServer(express.Router().use('/api/products', productsRouter), async (base) => {
+    const response = await fetch(`${base}/api/products`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Injected', price: 1, image: '/x.jpg' }),
+    });
+    assert.equal(response.status, 405);
+    assert.deepEqual(await response.json(), { error: 'METHOD_NOT_ALLOWED' });
+  });
+});
+
+test('static and private SPA fallbacks are marked noindex', () => {
+  const root = path.join(__dirname, '..', '..');
+  const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const nginx = fs.readFileSync(path.join(root, 'nginx', 'production-app.conf'), 'utf8');
+  assert.match(index, /<meta name="robots" content="noindex,nofollow"/);
+  assert.match(nginx, /X-Robots-Tag "noindex, nofollow"/);
+});

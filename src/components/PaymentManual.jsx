@@ -1,19 +1,18 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Copy, ChevronLeft, Clock, Sparkles, Wallet } from 'lucide-react';
-import { TonConnectButton, useTonAddress, useTonConnectUI } from '@tonconnect/ui-react';
+import { Copy, CreditCard, ChevronLeft, Clock, ExternalLink } from 'lucide-react';
 import { api } from '../api';
 import { useAppState } from '../state/AppState';
 import { buildActiveOrderPreview } from '../lib/orderPreview';
 import { formatMoney } from '../lib/money';
-import { openTelegramInvoice } from '../telegram';
 import { AppShell } from './layout/AppShell';
 import { IconButton } from './ui/IconButton';
 import { Surface } from './ui/Surface';
 import { Text } from './ui/Text';
 import { AppImage } from './ui/AppImage';
+import { trackAnalytics } from '../lib/analytics';
 
-const FALLBACK_RECIPIENT_IMAGE = '/vivienne-avatar.jpeg';
+const FALLBACK_RECIPIENT_IMAGE = 'https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=900&q=80';
 
 function fmtMmSs(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -73,7 +72,7 @@ function Row({ icon, label, value, onCopy }) {
       <button
         type="button"
         onClick={onCopy}
-        aria-label="Copy"
+        aria-label="Скопировать"
         style={{
           width: 34,
           height: 34,
@@ -102,10 +101,10 @@ function normalizeProgressStatus(status, paymentStatus) {
 }
 
 const ORDER_STATUS_STEPS = [
-  { key: 'ACCEPTED', label: 'Accepted' },
-  { key: 'ASSEMBLED', label: 'Packed' },
-  { key: 'IN_DELIVERY', label: 'On the way' },
-  { key: 'DELIVERED', label: 'Delivered' },
+  { key: 'ACCEPTED', label: 'Принят' },
+  { key: 'ASSEMBLED', label: 'Собран' },
+  { key: 'IN_DELIVERY', label: 'В пути' },
+  { key: 'DELIVERED', label: 'Доставлен' },
 ];
 
 function OrderStatusTimeline({ current }) {
@@ -194,12 +193,8 @@ function OrderStatusTimeline({ current }) {
 }
 
 function RecipientOrderCard({ recipient }) {
-  const isVivienne =
-    String(recipient?.name || '').trim().toLowerCase() === 'vivienne' ||
-    String(recipient?.id || '') === '2' ||
-    String(recipient?.id || '') === '2002';
-  const image = isVivienne ? FALLBACK_RECIPIENT_IMAGE : recipient?.image || FALLBACK_RECIPIENT_IMAGE;
-  const name = isVivienne ? 'Vivienne' : recipient?.name || 'Recipient';
+  const image = recipient?.image || FALLBACK_RECIPIENT_IMAGE;
+  const name = recipient?.name || 'Получатель';
 
   return (
     <Surface
@@ -229,7 +224,7 @@ function RecipientOrderCard({ recipient }) {
       />
       <div style={{ minWidth: 0 }}>
         <Text variant="caption" muted>
-          Recipient
+          Получатель
         </Text>
         <Text variant="title" style={{ marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {name}
@@ -241,7 +236,7 @@ function RecipientOrderCard({ recipient }) {
 
 function OrderItemCard({ item }) {
   const product = item?.product || {};
-  const title = product.name || product.title || `Item #${item?.productId || ''}`;
+  const title = product.name || product.title || `Товар #${item?.productId || ''}`;
   const image = product.image || product.images?.[0]?.url || '';
   const qty = Number(item?.quantity || 1);
   const price = Number(item?.price || 0) * qty;
@@ -269,10 +264,60 @@ function OrderItemCard({ item }) {
           {title}
         </Text>
         <Text variant="caption" muted style={{ marginTop: 4 }}>
-          Qty {qty}
+          Кол-во: {qty}
         </Text>
       </div>
       <div style={{ fontWeight: 1000, color: 'var(--accent)', whiteSpace: 'nowrap' }}>{formatMoney(price)}</div>
+    </Surface>
+  );
+}
+
+function DeliveryPaymentCard({ info, loading, error, busy, message, onPay, onRefresh }) {
+  const invoice = info?.invoice || null;
+  const order = info?.order || {};
+  const delivery = info?.delivery || order;
+  const deliveryStatus = String(delivery.status || delivery.deliveryStatus || invoice?.status || '').toUpperCase();
+  const invoiceStatus = String(invoice?.status || '').toUpperCase();
+  const addressWasUnknown = Boolean(delivery.askRecipientAddress) && delivery.cost == null && delivery.deliveryCost == null;
+
+  let title = 'Доставка';
+  let description = 'Информация о доставке обновляется отдельно от оплаты букета.';
+  if (deliveryStatus === 'DETAILS_PENDING') {
+    description = addressWasUnknown
+      ? 'FLOWIE уточняет адрес у получателя. Стоимость доставки ещё не рассчитана и не является бесплатной.'
+      : 'FLOWIE уточняет время у получателя. Стоимость доставки уже включена в основной заказ.';
+  }
+  if (deliveryStatus === 'INCLUDED_IN_MAIN') description = 'Доставка уже включена в основной оплаченный заказ.';
+  if (deliveryStatus === 'WAIVED') description = 'Доплата за доставку не требуется — это подтверждено отдельно.';
+  if (invoiceStatus === 'PAID' || deliveryStatus === 'PAID') description = 'Доставка оплачена отдельным счётом.';
+  if (invoiceStatus === 'EXPIRED') description = invoice.registered
+    ? 'Срок счёта истёк. Проверьте предыдущий платёж перед повторной оплатой.'
+    : 'Срок счёта истёк. При переходе к оплате срок будет обновлён, сумма останется прежней.';
+  if (invoiceStatus === 'CANCELLED') description = 'Отдельный счёт на доставку отменён.';
+  if (invoiceStatus === 'RECONCILIATION_REQUIRED') description = 'Платёж за доставку требует проверки менеджером.';
+  if (invoiceStatus === 'PAYMENT_PENDING') title = `Доставка — ${formatMoney(invoice.amount)}`;
+
+  return (
+    <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', display: 'grid', gap: 10 }}>
+      <Text variant="title">{title}</Text>
+      <Text variant="body" muted>{loading ? 'Проверяем статус доставки...' : description}</Text>
+      {(invoiceStatus === 'PAYMENT_PENDING' || (invoiceStatus === 'EXPIRED' && !invoice.registered)) ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onPay}
+          style={{ height: 48, border: 0, borderRadius: 14, background: '#ef3124', color: '#fff', fontWeight: 1000, cursor: busy ? 'default' : 'pointer' }}
+        >
+          {busy ? 'Открываем...' : `Оплатить доставку ${formatMoney(invoice.amount)}`}
+        </button>
+      ) : null}
+      {['PAYMENT_PENDING', 'EXPIRED'].includes(invoiceStatus) ? (
+        <button type="button" disabled={busy} onClick={onRefresh} style={{ height: 42, borderRadius: 14, border: '1px solid var(--border)', background: 'transparent', fontWeight: 900 }}>
+          Проверить оплату доставки
+        </button>
+      ) : null}
+      {message ? <Text variant="caption" style={{ color: 'var(--c-success)' }}>{message}</Text> : null}
+      {error ? <Text variant="caption" style={{ color: 'var(--accent)' }}>{error}</Text> : null}
     </Surface>
   );
 }
@@ -288,13 +333,14 @@ export function PaymentManual() {
   const [order, setOrder] = useState(null);
   const [payment, setPayment] = useState(null); // { cardNumber, receiverName, bankName }
   const [copied, setCopied] = useState(''); // field name
-  const [confirming, setConfirming] = useState(false);
-  const [confirmDone, setConfirmDone] = useState(false);
-  const [confirmError, setConfirmError] = useState('');
   const [gatewayBusy, setGatewayBusy] = useState(false);
   const [gatewayError, setGatewayError] = useState('');
-  const [tonConnectUI] = useTonConnectUI();
-  const tonAddress = useTonAddress();
+  const [gatewayInfo, setGatewayInfo] = useState('');
+  const [deliveryPayment, setDeliveryPayment] = useState(null);
+  const [deliveryPaymentLoading, setDeliveryPaymentLoading] = useState(false);
+  const [deliveryPaymentBusy, setDeliveryPaymentBusy] = useState(false);
+  const [deliveryPaymentError, setDeliveryPaymentError] = useState('');
+  const [deliveryPaymentInfo, setDeliveryPaymentInfo] = useState('');
 
   const expiresAt = useMemo(() => {
     const v = order?.paymentExpiresAt;
@@ -321,13 +367,102 @@ export function PaymentManual() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
   const [cancelConfirm, setCancelConfirm] = useState(false);
+  const alfaPayment = payment?.alfa || {};
 
   const pollRef = useRef(0);
+  const deliverySyncInFlight = useRef(false);
+  const deliveryReturnChecked = useRef('');
+
+  const loadDeliveryPayment = useCallback(async ({ quiet = false } = {}) => {
+    if (!Number.isFinite(orderId) || !isPaidFlow) return null;
+    if (!quiet) setDeliveryPaymentLoading(true);
+    try {
+      const info = await api.getDeliveryPaymentInfo(orderId);
+      setDeliveryPayment(info || null);
+      setDeliveryPaymentError('');
+      return info;
+    } catch (e) {
+      if (e?.status !== 404) setDeliveryPaymentError(e?.data?.error || e?.message || 'Не удалось загрузить доставку');
+      return null;
+    } finally {
+      if (!quiet) setDeliveryPaymentLoading(false);
+    }
+  }, [isPaidFlow, orderId]);
+
+  useEffect(() => {
+    if (!isPaidFlow) return;
+    void loadDeliveryPayment({ quiet: false });
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'hidden') void loadDeliveryPayment({ quiet: true });
+    }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [isPaidFlow, loadDeliveryPayment]);
+
+  const syncDeliveryPayment = useCallback(async ({ quiet = false } = {}) => {
+    if (!Number.isFinite(orderId) || deliverySyncInFlight.current) return null;
+    deliverySyncInFlight.current = true;
+    if (!quiet) {
+      setDeliveryPaymentBusy(true);
+      setDeliveryPaymentError('');
+      setDeliveryPaymentInfo('');
+    }
+    try {
+      const result = await api.syncDeliveryAlfaPayment(orderId);
+      await loadDeliveryPayment({ quiet: true });
+      if (!quiet) setDeliveryPaymentInfo(result?.paid ? 'Оплата доставки подтверждена' : 'Оплата доставки пока не поступила');
+      return result;
+    } catch (e) {
+      if (!quiet) setDeliveryPaymentError(e?.data?.error || e?.message || 'Не удалось проверить оплату доставки');
+      return null;
+    } finally {
+      deliverySyncInFlight.current = false;
+      if (!quiet) setDeliveryPaymentBusy(false);
+    }
+  }, [loadDeliveryPayment, orderId]);
+
+  const payDelivery = useCallback(async () => {
+    if (!Number.isFinite(orderId)) return;
+    setDeliveryPaymentBusy(true);
+    setDeliveryPaymentError('');
+    setDeliveryPaymentInfo('');
+    trackAnalytics('payment_start', { orderId });
+    try {
+      const result = await api.createDeliveryAlfaPayment(orderId);
+      if (result?.alreadyPaid) {
+        await loadDeliveryPayment({ quiet: true });
+        setDeliveryPaymentInfo('Оплата доставки уже подтверждена');
+        return;
+      }
+      if (!result?.formUrl) throw new Error('DELIVERY_PAYMENT_URL_MISSING');
+      window.location.assign(result.formUrl);
+    } catch (e) {
+      setDeliveryPaymentError(e?.data?.error || e?.message || 'Не удалось открыть оплату доставки');
+    } finally {
+      setDeliveryPaymentBusy(false);
+    }
+  }, [loadDeliveryPayment, orderId]);
+
+  const deliveryInvoiceId = deliveryPayment?.invoice?.id;
+  const deliveryInvoiceStatus = String(deliveryPayment?.invoice?.status || '').toUpperCase();
+  const deliveryInvoiceRegistered = Boolean(deliveryPayment?.invoice?.registered);
+  useEffect(() => {
+    if (!isPaidFlow || !deliveryInvoiceRegistered || !['PAYMENT_PENDING', 'EXPIRED'].includes(deliveryInvoiceStatus)) return undefined;
+    const returnResult = new URLSearchParams(window.location.search || '').get('deliveryPayment');
+    const returnKey = `${orderId}:${deliveryInvoiceId}:${returnResult}`;
+    if (['success', 'failed'].includes(returnResult) && deliveryReturnChecked.current !== returnKey) {
+      deliveryReturnChecked.current = returnKey;
+      void syncDeliveryPayment({ quiet: false });
+    }
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'hidden') void syncDeliveryPayment({ quiet: true });
+    }, 6_000);
+    return () => window.clearInterval(timer);
+  }, [deliveryInvoiceId, deliveryInvoiceStatus, deliveryInvoiceRegistered, isPaidFlow, orderId, syncDeliveryPayment]);
 
   useEffect(() => {
     if (!Number.isFinite(orderId)) {
       setLoading(false);
-      setError('Invalid order');
+      setError('Некорректный заказ');
       return;
     }
 
@@ -341,11 +476,10 @@ export function PaymentManual() {
         if (!alive) return;
         setOrder(info?.order || null);
         setPayment(info?.payment || null);
-        setConfirmDone(Boolean(info?.order?.paymentClientConfirmed));
         if (info?.order?.id != null) actions.setActiveOrder(info.order.id, info.order.paymentExpiresAt || null, buildActiveOrderPreview(info.order));
       } catch (e) {
         if (!alive) return;
-        setError(e?.data?.error || e?.message || 'Could not load payment');
+        setError(e?.data?.error || e?.message || 'Не удалось загрузить оплату');
       } finally {
         if (alive) setLoading(false);
       }
@@ -354,7 +488,7 @@ export function PaymentManual() {
     return () => {
       alive = false;
     };
-  }, [orderId]);
+  }, [actions, orderId]);
 
   // Poll payment status until confirmed.
   useEffect(() => {
@@ -402,13 +536,57 @@ export function PaymentManual() {
     return () => clearInterval(t);
   }, [order?.paymentExpiresAt, actions]);
 
+  const syncAlfaPayment = useCallback(async ({ quiet = false } = {}) => {
+    if (!order?.id) return null;
+    if (!quiet) {
+      setGatewayBusy(true);
+      setGatewayError('');
+      setGatewayInfo('');
+    }
+    try {
+      const res = await api.syncAlfaPayment(order.id);
+      if (res?.paid) {
+        setOrder((prev) => ({
+          ...(prev || {}),
+          ...(res.order || {}),
+          paymentStatus: 'CONFIRMED',
+        }));
+        setGatewayInfo('Оплата подтверждена');
+      } else if (res?.retryAllowed) {
+        setPayment((prev) => ({
+          ...(prev || {}),
+          alfa: { ...(prev?.alfa || {}), registered: false },
+        }));
+        setGatewayInfo('Платёж не прошёл. Можно попробовать снова.');
+      } else if (!quiet) {
+        setGatewayInfo('Оплата пока не поступила');
+      }
+      return res;
+    } catch (e) {
+      if (!quiet) setGatewayError(e?.data?.error || e?.message || 'Не удалось проверить оплату');
+      return null;
+    } finally {
+      if (!quiet) setGatewayBusy(false);
+    }
+  }, [order?.id]);
+
+  useEffect(() => {
+    if (paymentStatus === 'CONFIRMED' || !order?.id || !alfaPayment.registered) return undefined;
+    const params = new URLSearchParams(window.location.search || '');
+    if (['success', 'failed'].includes(params.get('payment'))) {
+      syncAlfaPayment({ quiet: false });
+    }
+    const t = setInterval(() => syncAlfaPayment({ quiet: true }), 6000);
+    return () => clearInterval(t);
+  }, [alfaPayment.registered, order?.id, paymentStatus, syncAlfaPayment]);
+
   if (loading) {
     return (
       <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-content-inset-bottom': '0px' }}>
-        <Text variant="title">Payment</Text>
+        <Text variant="title">Оплата</Text>
         <div style={{ marginTop: 'var(--sp-6)' }}>
           <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
-            <Text variant="subtitle">Loading...</Text>
+            <Text variant="subtitle">Загрузка...</Text>
           </Surface>
         </div>
       </AppShell>
@@ -419,14 +597,14 @@ export function PaymentManual() {
     return (
       <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-content-inset-bottom': '0px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <IconButton onClick={() => navigate(-1)} aria-label="Back">
+          <IconButton onClick={() => navigate(-1)} aria-label="Назад">
             <ChevronLeft size={22} />
           </IconButton>
-          <Text variant="title">Payment</Text>
+          <Text variant="title">Оплата</Text>
         </div>
         <div style={{ marginTop: 'var(--sp-6)' }}>
           <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
-            <Text variant="subtitle">Error</Text>
+            <Text variant="subtitle">Ошибка</Text>
             <div style={{ marginTop: 6 }}>
               <Text variant="body" muted>
                 {error}
@@ -442,19 +620,19 @@ export function PaymentManual() {
   if (isPaidFlow) {
     const current = normalizeProgressStatus(order?.status, order?.paymentStatus);
     const deliveredAt = order?.deliveredAt ? new Date(order.deliveredAt) : null;
-    const deliveredStr = deliveredAt ? deliveredAt.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'long' }) : null;
+    const deliveredStr = deliveredAt ? deliveredAt.toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'long' }) : null;
     const canCancel = !['DELIVERED', 'CANCELLED'].includes(current);
     const orderRecipient = (state.recipients.items || []).find(
       (r) => String(r?.name || '').trim().toLowerCase() === String(order?.recipientName || '').trim().toLowerCase()
-    ) || { name: order?.recipientName || 'Recipient', image: FALLBACK_RECIPIENT_IMAGE };
+    ) || { name: order?.recipientName || 'Получатель', image: FALLBACK_RECIPIENT_IMAGE };
 
     return (
       <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '0px', '--app-content-inset-bottom': '0px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <IconButton onClick={() => navigate(-1)} aria-label="Back">
+          <IconButton onClick={() => navigate(-1)} aria-label="Назад">
             <ChevronLeft size={22} />
           </IconButton>
-          <Text variant="title">Order #{order?.id}</Text>
+          <Text variant="title">Заказ #{order?.id}</Text>
         </div>
 
         <div style={{ marginTop: 16 }}>
@@ -467,7 +645,7 @@ export function PaymentManual() {
 
         {order?.floristComment ? (
           <div style={{ marginTop: 16 }}>
-            <Text variant="subtitle">Comment</Text>
+            <Text variant="subtitle">Комментарий</Text>
             <Surface variant="soft" style={{ marginTop: 8, padding: 12, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
               <Text variant="body">{order.floristComment}</Text>
             </Surface>
@@ -475,18 +653,32 @@ export function PaymentManual() {
         ) : null}
 
         <div style={{ marginTop: 16 }}>
-          <Text variant="subtitle">Items</Text>
+          <Text variant="subtitle">Состав заказа</Text>
           <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
             {(order?.items || []).map((it) => (
               <OrderItemCard key={it.id} item={it} />
             ))}
           </div>
-          <div style={{ marginTop: 10, fontWeight: 1000, fontSize: 18 }}>Total: {formatMoney(amount)}</div>
+          <div style={{ marginTop: 10, fontWeight: 1000, fontSize: 18 }}>Итого: {formatMoney(amount)}</div>
         </div>
+
+        {(deliveryPaymentLoading || deliveryPayment || deliveryPaymentError || order?.deliveryStatus) ? (
+          <div style={{ marginTop: 16 }}>
+            <DeliveryPaymentCard
+              info={deliveryPayment || { order }}
+              loading={deliveryPaymentLoading}
+              error={deliveryPaymentError}
+              busy={deliveryPaymentBusy}
+              message={deliveryPaymentInfo}
+              onPay={payDelivery}
+              onRefresh={() => syncDeliveryPayment({ quiet: false })}
+            />
+          </div>
+        ) : null}
 
         {deliveredStr ? (
           <div style={{ marginTop: 16 }}>
-            <Text variant="body" muted>Delivered {deliveredStr}</Text>
+            <Text variant="body" muted>Доставлено: {deliveredStr}</Text>
           </div>
         ) : null}
 
@@ -494,7 +686,7 @@ export function PaymentManual() {
         <div style={{ marginTop: 20 }}>
           {cancelConfirm ? (
             <Surface variant="soft" style={{ padding: 12, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
-              <Text variant="subtitle">Cancel this order?</Text>
+              <Text variant="subtitle">Отменить заказ?</Text>
               <div style={{ marginTop: 10, display: 'flex', gap: 10 }}>
                 <button
                   type="button"
@@ -508,7 +700,7 @@ export function PaymentManual() {
                       actions.clearActiveOrder();
                       navigate('/');
                     } catch (e) {
-                      setCancelError(e?.data?.error || e?.message || 'Could not cancel');
+                      setCancelError(e?.data?.error || e?.message || 'Не удалось отменить');
                     } finally {
                       setCancelling(false);
                     }
@@ -523,7 +715,7 @@ export function PaymentManual() {
                     fontWeight: 900,
                   }}
                 >
-                  {cancelling ? 'Cancelling...' : 'Cancel order'}
+                  {cancelling ? 'Отменяем...' : 'Отменить заказ'}
                 </button>
                 <button
                   type="button"
@@ -537,7 +729,7 @@ export function PaymentManual() {
                     fontWeight: 900,
                   }}
                 >
-                  Keep
+                  Оставить
                 </button>
               </div>
               {cancelError ? (
@@ -560,7 +752,7 @@ export function PaymentManual() {
                 color: 'var(--text)',
               }}
             >
-              Cancel
+              Отменить
             </button>
           )}
         </div>
@@ -569,68 +761,26 @@ export function PaymentManual() {
     );
   }
 
-  const paymentMethod = String(order?.paymentMethod || '').toLowerCase();
-  const isTonPayment = paymentMethod === 'ton';
-  const isStarsPayment = paymentMethod === 'stars';
-  const tonPayment = payment?.ton || {};
-  const starsPayment = payment?.stars || {};
-
-  const payWithStars = async () => {
+  const payWithAlfa = async () => {
     if (!order?.id) return;
+    if (!alfaPayment.enabled) {
+      setGatewayError('Эквайринг Альфа-Банка не настроен');
+      return;
+    }
     setGatewayBusy(true);
     setGatewayError('');
+    setGatewayInfo('');
+    trackAnalytics('payment_start', { orderId: order.id });
     try {
-      const invoice = await api.createStarsInvoice(order.id);
-      if (invoice?.alreadyPaid) {
+      const res = await api.createAlfaPayment(order.id);
+      if (res?.alreadyPaid) {
         setOrder((prev) => ({ ...(prev || {}), paymentStatus: 'CONFIRMED' }));
         return;
       }
-      const status = await openTelegramInvoice(invoice?.invoiceLink);
-      if (status === 'paid') {
-        const next = await api.getOrder(order.id).catch(() => null);
-        if (next?.order) setOrder((prev) => ({ ...(prev || {}), ...next.order }));
-      } else if (status && !['opened', 'pending', 'cancelled'].includes(status)) {
-        setGatewayError(`Invoice status: ${status}`);
-      }
+      if (!res?.formUrl) throw new Error('ALFA_PAYMENT_URL_MISSING');
+      window.location.assign(res.formUrl);
     } catch (e) {
-      setGatewayError(e?.data?.error || e?.message || 'Could not open Stars invoice');
-    } finally {
-      setGatewayBusy(false);
-    }
-  };
-
-  const payWithTon = async () => {
-    if (!order?.id) return;
-    const receiver = String(tonPayment.receiverAddress || '').trim();
-    const amountNano = String(tonPayment.amountNano || '').trim();
-    if (!receiver) {
-      setGatewayError('TON receiver wallet is not configured');
-      return;
-    }
-    if (!tonAddress) {
-      setGatewayError('Connect TON wallet first');
-      return;
-    }
-
-    setGatewayBusy(true);
-    setGatewayError('');
-    try {
-      const result = await tonConnectUI.sendTransaction({
-        validUntil: Math.floor(Date.now() / 1000) + 600,
-        messages: [{ address: receiver, amount: amountNano }],
-      });
-      const boc = result?.boc || '';
-      const res = await api.submitTonPayment(order.id, { boc, walletAddress: tonAddress });
-      actions.clearActiveOrder();
-      setConfirmDone(true);
-      setOrder((prev) => ({
-        ...(prev || {}),
-        paymentClientConfirmed: true,
-        paymentStatus: res?.order?.paymentStatus || prev?.paymentStatus,
-      }));
-      navigate('/');
-    } catch (e) {
-      setGatewayError(e?.data?.error || e?.message || 'TON payment was not submitted');
+      setGatewayError(e?.data?.error || e?.message || 'Не удалось открыть оплату картой');
     } finally {
       setGatewayBusy(false);
     }
@@ -640,125 +790,50 @@ export function PaymentManual() {
   return (
     <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '0px', '--app-content-inset-bottom': '0px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <IconButton onClick={() => navigate(-1)} aria-label="Back">
+        <IconButton onClick={() => navigate(-1)} aria-label="Назад">
           <ChevronLeft size={22} />
         </IconButton>
-        <Text variant="title">Payment</Text>
+        <Text variant="title">Оплата</Text>
       </div>
 
       <div style={{ marginTop: 'var(--sp-6)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <Text variant="title" style={{ fontSize: 24 }}>
-          Pay {formatMoney(amount)}
+          К оплате {formatMoney(amount)}
         </Text>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span className="ui-chip">
             <Clock size={14} />
-            {remainingMs > 0 ? `Left ${fmtMmSs(remainingMs)}` : 'Time expired'}
+            {remainingMs > 0 ? `Осталось ${fmtMmSs(remainingMs)}` : 'Время вышло'}
           </span>
           {paymentStatus === 'CONFIRMED' ? (
-            <span className="ui-chip ui-chip--success">Payment confirmed</span>
+            <span className="ui-chip ui-chip--success">Оплата подтверждена</span>
           ) : (
-            <span className="ui-chip ui-chip--accent">Waiting for confirmation</span>
+            <span className="ui-chip ui-chip--accent">Ждём подтверждение</span>
           )}
-          {copied ? <span className="ui-chip">Copied</span> : null}
+          {copied ? <span className="ui-chip">Скопировано</span> : null}
         </div>
       </div>
 
       <div style={{ marginTop: 'var(--sp-6)', display: 'grid', gap: 12 }}>
-        {isTonPayment ? (
-          <>
-            <Row
-              icon={<Wallet size={20} />}
-              label="TON receiver"
-              value={tonPayment.receiverAddress || 'Not configured'}
-              onCopy={async () => {
-                const ok = await copyToClipboard(tonPayment.receiverAddress || '');
-                if (ok) setCopied('tonReceiver');
-              }}
-            />
-            <Row
-              icon={<div style={{ fontWeight: 1000 }}>T</div>}
-              label="TON amount"
-              value={tonPayment.amountLabel || '—'}
-              onCopy={async () => {
-                const ok = await copyToClipboard(tonPayment.amountNano || '');
-                if (ok) setCopied('tonAmount');
-              }}
-            />
-            <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                <div style={{ minWidth: 0 }}>
-                  <Text variant="subtitle">Wallet</Text>
-                  <Text variant="caption" muted style={{ marginTop: 4, overflowWrap: 'anywhere' }}>
-                    {tonAddress || 'Not connected'}
-                  </Text>
-                </div>
-                <TonConnectButton />
-              </div>
-            </Surface>
-          </>
-        ) : isStarsPayment ? (
-          <>
-            <Row
-              icon={<Sparkles size={20} />}
-              label="Stars amount"
-              value={starsPayment.amountLabel || '—'}
-              onCopy={async () => {
-                const ok = await copyToClipboard(String(starsPayment.amount || ''));
-                if (ok) setCopied('starsAmount');
-              }}
-            />
-            <Row
-              icon={<div style={{ fontWeight: 1000 }}>$</div>}
-              label="Order amount"
-              value={formatMoney(amount)}
-              onCopy={async () => {
-                const ok = await copyToClipboard(String(amount || ''));
-                if (ok) setCopied('amount');
-              }}
-            />
-          </>
-        ) : (
-          <>
-            <Row
-              icon={<div style={{ width: 18, height: 12, border: '2px solid currentColor', borderRadius: 4 }} />}
-              label="Payment details"
-              value={payment?.cardNumber || '—'}
-              onCopy={async () => {
-                const ok = await copyToClipboard(payment?.cardNumber || '');
-                if (ok) setCopied('card');
-              }}
-            />
-            <Row
-              icon={<div style={{ fontWeight: 1000 }}>$</div>}
-              label="Payment amount"
-              value={formatMoney(amount)}
-              onCopy={async () => {
-                const ok = await copyToClipboard(String(amount || ''));
-                if (ok) setCopied('amount');
-              }}
-            />
-            <Row
-              icon={<div style={{ width: 18, height: 18, borderRadius: 999, border: '2px solid currentColor' }} />}
-              label="Recipient"
-              value={payment?.receiverName || '—'}
-              onCopy={async () => {
-                const ok = await copyToClipboard(payment?.receiverName || '');
-                if (ok) setCopied('receiver');
-              }}
-            />
-            <Row
-              icon={<div style={{ width: 18, height: 14, border: '2px solid currentColor', borderRadius: 4 }} />}
-              label="Recipient bank"
-              value={payment?.bankName || '—'}
-              onCopy={async () => {
-                const ok = await copyToClipboard(payment?.bankName || '');
-                if (ok) setCopied('bank');
-              }}
-            />
-          </>
-        )}
+        <Row
+          icon={<CreditCard size={20} />}
+          label="Способ оплаты"
+          value="Банковская карта через Альфа-Банк"
+          onCopy={async () => {
+            const ok = await copyToClipboard('Альфа-Банк');
+            if (ok) setCopied('alfa');
+          }}
+        />
+        <Row
+          icon={<div style={{ fontWeight: 1000 }}>₽</div>}
+          label="Сумма заказа"
+          value={formatMoney(amount)}
+          onCopy={async () => {
+            const ok = await copyToClipboard(String(amount || ''));
+            if (ok) setCopied('amount');
+          }}
+        />
       </div>
 
       <div style={{ marginTop: 'var(--sp-8)', display: 'grid', gap: 10 }}>
@@ -771,128 +846,73 @@ export function PaymentManual() {
               borderRadius: 'var(--r-lg)',
               border: 0,
               background: 'var(--accent)',
-              color: 'var(--c-white)',
+              color: 'var(--c-accent-contrast)',
               fontWeight: 1000,
               cursor: 'pointer',
             }}
           >
-            To order
+            К заказу
           </button>
         ) : remainingMs <= 0 ? (
           <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
             <Text variant="body" muted>
-              Payment time expired. Please create a new order.
+              Время на оплату истекло. Пожалуйста, создайте новый заказ.
             </Text>
           </Surface>
-        ) : isTonPayment ? (
-          <>
-            <button
-              type="button"
-              disabled={gatewayBusy || !tonPayment.receiverAddress || !tonAddress}
-              onClick={payWithTon}
-              style={{
-                height: 54,
-                borderRadius: 'var(--r-lg)',
-                border: 0,
-                background: 'var(--accent)',
-                color: 'var(--c-white)',
-                fontWeight: 1000,
-                cursor: gatewayBusy ? 'default' : 'pointer',
-                opacity: !tonPayment.receiverAddress || !tonAddress ? 0.58 : 1,
-              }}
-            >
-              {gatewayBusy ? 'Sending...' : 'Pay with TON'}
-            </button>
-            <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
-              <Text variant="body" muted>
-                After the wallet sends the transaction, we will verify the transfer and confirm the order.
-              </Text>
-              {gatewayError ? (
-                <div style={{ marginTop: 6 }}>
-                  <Text variant="caption" style={{ color: 'var(--c-accent)' }}>
-                    {gatewayError}
-                  </Text>
-                </div>
-              ) : null}
-            </Surface>
-          </>
-        ) : isStarsPayment ? (
-          <>
-            <button
-              type="button"
-              disabled={gatewayBusy || !starsPayment.enabled}
-              onClick={payWithStars}
-              style={{
-                height: 54,
-                borderRadius: 'var(--r-lg)',
-                border: 0,
-                background: '#f6b73c',
-                color: '#3b2600',
-                fontWeight: 1000,
-                cursor: gatewayBusy ? 'default' : 'pointer',
-                opacity: !starsPayment.enabled ? 0.58 : 1,
-              }}
-            >
-              {gatewayBusy ? 'Opening...' : 'Pay with Stars'}
-            </button>
-            <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
-              <Text variant="body" muted>
-                Telegram will confirm the Stars payment automatically after checkout.
-              </Text>
-              {gatewayError ? (
-                <div style={{ marginTop: 6 }}>
-                  <Text variant="caption" style={{ color: 'var(--c-accent)' }}>
-                    {gatewayError}
-                  </Text>
-                </div>
-              ) : null}
-            </Surface>
-          </>
         ) : (
           <>
             <button
               type="button"
-              disabled={confirming || confirmDone}
-              onClick={async () => {
-                if (!order?.id) return;
-                setConfirming(true);
-                setConfirmError('');
-                try {
-                  const res = await api.confirmPaymentClient(order.id);
-                  actions.clearActiveOrder(); // hide FAB
-                  setConfirmDone(true);
-                  setOrder((prev) => ({
-                    ...(prev || {}),
-                    paymentClientConfirmed: true,
-                    paymentStatus: res?.order?.paymentStatus || prev?.paymentStatus,
-                  }));
-                  navigate('/'); // show the card on home without FAB
-                } catch (e) {
-                  setConfirmError(e?.data?.error || e?.message || 'Could not send confirmation');
-                } finally {
-                  setConfirming(false);
-                }
-              }}
+              disabled={gatewayBusy || !alfaPayment.enabled}
+              onClick={payWithAlfa}
               style={{
                 height: 54,
                 borderRadius: 'var(--r-lg)',
                 border: 0,
-              background: 'var(--accent)',
-              color: 'var(--c-white)',
-              fontWeight: 1000,
-              cursor: confirming ? 'default' : 'pointer',
-            }}
-          >
-              {confirming ? 'Sending...' : 'Confirm payment'}
+                background: '#ef3124',
+                color: '#fff',
+                fontWeight: 1000,
+                cursor: gatewayBusy ? 'default' : 'pointer',
+                opacity: !alfaPayment.enabled ? 0.58 : 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <ExternalLink size={18} />
+              {gatewayBusy ? 'Открываем...' : 'Оплатить картой'}
+            </button>
+            <button
+              type="button"
+              disabled={gatewayBusy}
+              onClick={() => syncAlfaPayment({ quiet: false })}
+              style={{
+                height: 48,
+                borderRadius: 'var(--r-lg)',
+                border: '1px solid var(--border)',
+                background: 'transparent',
+                fontWeight: 900,
+                cursor: gatewayBusy ? 'default' : 'pointer',
+              }}
+            >
+              Проверить оплату
             </button>
             <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
               <Text variant="body" muted>
-                We will confirm payment after the transfer arrives. This page updates automatically.
+                После оплаты банк вернёт вас к заказу, а статус обновится автоматически.
               </Text>
-              {confirmError ? (
+              {gatewayInfo ? (
+                <div style={{ marginTop: 6 }}>
+                  <Text variant="caption" style={{ color: 'var(--c-success)' }}>
+                    {gatewayInfo}
+                  </Text>
+                </div>
+              ) : null}
+              {gatewayError ? (
                 <div style={{ marginTop: 6 }}>
                   <Text variant="caption" style={{ color: 'var(--c-accent)' }}>
-                    {confirmError}
+                    {gatewayError}
                   </Text>
                 </div>
               ) : null}

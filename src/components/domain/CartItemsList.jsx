@@ -12,10 +12,10 @@ export function CartItemsList({ items, productsById, onDec, onInc, onRemove }) {
   if (!validItems.length) {
     return (
       <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)' }}>
-        <Text variant="subtitle">Your cart is empty</Text>
+        <Text variant="subtitle">Корзина пуста</Text>
         <div style={{ marginTop: 6 }}>
           <Text variant="body" muted>
-            Add a wishlist item from the marketplace or a creator profile.
+            Добавьте букет из каталога цветов.
           </Text>
         </div>
       </Surface>
@@ -88,7 +88,7 @@ export function CartItemsList({ items, productsById, onDec, onInc, onRemove }) {
                   <button
                     type="button"
                     onClick={() => onDec(it.productId)}
-                    aria-label="Decrease"
+                    aria-label="Уменьшить"
                     style={{
                       width: 24,
                       height: 24,
@@ -107,14 +107,14 @@ export function CartItemsList({ items, productsById, onDec, onInc, onRemove }) {
                   <button
                     type="button"
                     onClick={() => onInc(it.productId)}
-                    aria-label="Increase"
+                    aria-label="Увеличить"
                     style={{
                       width: 24,
                       height: 24,
                       border: 0,
                       borderRadius: 999,
                       background: 'var(--accent)',
-                      color: 'var(--c-white)',
+                      color: 'var(--c-accent-contrast)',
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -128,7 +128,7 @@ export function CartItemsList({ items, productsById, onDec, onInc, onRemove }) {
                 <button
                   type="button"
                   onClick={() => onRemove(it.productId)}
-                  aria-label={`Remove ${p.title}`}
+                  aria-label={`Удалить ${p.title}`}
                   style={{
                     width: 34,
                     height: 34,

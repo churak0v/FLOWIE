@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../state/AppState';
@@ -11,7 +11,7 @@ import { FloristComment } from './domain/FloristComment';
 import { UpsellsBlock } from './domain/UpsellsBlock';
 import { PriceBreakdown } from './domain/PriceBreakdown';
 import { CartFooterCTA } from './domain/CartFooterCTA';
-import { PaymentQuoteStrip } from './domain/PaymentQuoteStrip';
+import { trackAnalytics } from '../lib/analytics';
 
 function calcUpsellsTotal(upsellsQty, upsellsItems) {
   const byId = new Map((upsellsItems || []).map((u) => [String(u.id), u]));
@@ -29,8 +29,8 @@ export function Cart() {
   const itemsTotal = useMemo(() => state.cart.items.reduce((sum, it) => sum + (productsById.get(String(it.productId))?.price || 0) * it.qty, 0), [productsById, state.cart.items]);
   const validCartItemsCount = useMemo(() => state.cart.items.filter((it) => productsById.get(String(it.productId))).length, [productsById, state.cart.items]);
   const upsellsTotal = useMemo(() => calcUpsellsTotal(state.cart.upsells, state.upsells.items), [state.cart.upsells, state.upsells.items]);
-  const deliveryCost = 0;
-  const subtotal = itemsTotal + upsellsTotal + deliveryCost;
+  const deliveryCost = null;
+  const subtotal = itemsTotal + upsellsTotal;
   const bonusesApplied = 0;
   const total = Math.max(0, subtotal - bonusesApplied);
 
@@ -40,10 +40,10 @@ export function Cart() {
     <>
       <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '140px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <IconButton onClick={() => navigate(-1)} aria-label="Back">
+            <IconButton onClick={() => navigate(-1)} aria-label="Назад">
             <ChevronLeft size={22} />
           </IconButton>
-          <Text variant="title">Cart</Text>
+          <Text variant="title">Корзина</Text>
         </div>
 
         <div style={{ marginTop: 'var(--sp-4)' }}>
@@ -56,9 +56,9 @@ export function Cart() {
               background: 'linear-gradient(135deg, rgba(198,83,109,0.12), rgba(255,255,255,0.82))',
             }}
           >
-            <Text variant="subtitle">Review your gift</Text>
+            <Text variant="subtitle">Проверьте букет</Text>
             <Text variant="body" muted style={{ marginTop: 4 }}>
-              Add a note or a small extra before checkout.
+              Добавьте открытку или небольшой комплимент перед оплатой.
             </Text>
           </Surface>
         </div>
@@ -67,9 +67,22 @@ export function Cart() {
           <CartItemsList
             items={state.cart.items}
             productsById={productsById}
-            onDec={(pid) => actions.setCartQty(pid, Math.max(1, (state.cart.items.find((i) => i.productId === pid)?.qty || 1) - 1))}
-            onInc={(pid) => actions.setCartQty(pid, Math.min(99, (state.cart.items.find((i) => i.productId === pid)?.qty || 1) + 1))}
-            onRemove={(pid) => actions.removeFromCart(pid)}
+            onDec={(pid) => {
+              const current = state.cart.items.find((i) => i.productId === pid)?.qty || 1;
+              const next = Math.max(1, current - 1);
+              if (next < current) trackAnalytics('cart_remove', { productId: pid, meta: { quantity: current - next } });
+              actions.setCartQty(pid, next);
+            }}
+            onInc={(pid) => {
+              const current = state.cart.items.find((i) => i.productId === pid)?.qty || 1;
+              const next = Math.min(99, current + 1);
+              if (next > current) trackAnalytics('cart_add', { productId: pid, meta: { quantity: next - current } });
+              actions.setCartQty(pid, next);
+            }}
+            onRemove={(pid) => {
+              const quantity = state.cart.items.find((i) => i.productId === pid)?.qty || 1;
+              actions.removeFromCart(pid, quantity);
+            }}
           />
         </div>
 
@@ -78,23 +91,32 @@ export function Cart() {
         </div>
 
         <div style={{ marginTop: 'var(--sp-8)' }}>
-          <UpsellsBlock upsells={state.upsells.items} qtyById={state.cart.upsells} onAdd={actions.setUpsellQty} />
+          <UpsellsBlock
+            upsells={state.upsells.items}
+            qtyById={state.cart.upsells}
+            onAdd={(productId, quantity) => {
+              const current = Number(state.cart.upsells?.[String(productId)] || 0);
+              const next = Number(quantity || 0);
+              if (next > current) trackAnalytics('cart_add', { productId, meta: { quantity: next - current } });
+              if (next < current) trackAnalytics('cart_remove', { productId, meta: { quantity: current - next } });
+              actions.setUpsellQty(productId, next);
+            }}
+          />
         </div>
 
         <div style={{ marginTop: 'var(--sp-6)' }}>
           <PriceBreakdown itemsTotal={itemsTotal} upsellsTotal={upsellsTotal} deliveryCost={deliveryCost} bonusesApplied={bonusesApplied} />
-        </div>
-
-        <div style={{ marginTop: 'var(--sp-4)' }}>
-          <PaymentQuoteStrip totalUsd={total} />
         </div>
       </AppShell>
 
       <CartFooterCTA
         total={total}
         disabled={!canContinue}
-        label="Continue"
-        onClick={() => navigate('/checkout')}
+        label="Продолжить"
+        onClick={() => {
+          trackAnalytics('checkout_start');
+          navigate('/checkout');
+        }}
       />
     </>
   );

@@ -32,29 +32,46 @@ function getPublicSiteUrl() {
   return String(process.env.PUBLIC_SITE_URL || '').trim();
 }
 
+function getWebhookSecret() {
+  return String(process.env.TELEGRAM_WEBHOOK_SECRET || '').trim();
+}
+
 function makeSig(orderId) {
   const secret = getAppSecret();
+  if (!secret) return '';
   return crypto.createHmac('sha256', secret).update(String(orderId)).digest('hex').slice(0, 16);
 }
 
-function verifyPaymentPayload(payload, expectedKind) {
-  const parts = String(payload || '').split(':');
-  const kind = parts[0] || '';
-  const orderId = Number(parts[1] || '');
-  const sig = parts[2] || '';
-  if (kind !== expectedKind || !Number.isFinite(orderId) || !sig) return null;
-  if (sig !== makeSig(orderId)) return null;
-  return orderId;
+function safeEqual(left, right) {
+  const a = Buffer.from(String(left || ''));
+  const b = Buffer.from(String(right || ''));
+  return a.length === b.length && a.length > 0 && crypto.timingSafeEqual(a, b);
+}
+
+function requireWebhookSecret(req, res, next) {
+  const expected = getWebhookSecret();
+  const received = req.headers['x-telegram-bot-api-secret-token'];
+  if (!expected || !safeEqual(received, expected)) {
+    return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
+  }
+  return next();
 }
 
 async function tgApi(token, method, payload) {
   if (!token) return null;
-  const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload || {}),
-  });
-  return res.json().catch(() => null);
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 3000);
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+      signal: ac.signal,
+    });
+    return res.json().catch(() => null);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function setAdminBotWebhook() {
@@ -63,7 +80,9 @@ async function setAdminBotWebhook() {
     const publicUrl = getPublicSiteUrl();
     if (!token || !publicUrl) return;
     const url = `${publicUrl.replace(/\/$/, '')}/api/telegram/admin-webhook`;
-    await tgApi(token, 'setWebhook', { url, drop_pending_updates: false });
+    const secretToken = getWebhookSecret();
+    if (!secretToken) return;
+    await tgApi(token, 'setWebhook', { url, secret_token: secretToken, drop_pending_updates: false });
   } catch {
     // ignore
   }
@@ -76,41 +95,30 @@ async function setClientBotWebhook() {
     if (!token || !publicUrl) return;
     if (process.env.ADMIN_BOT_TOKEN && token === process.env.ADMIN_BOT_TOKEN) return;
     const url = `${publicUrl.replace(/\/$/, '')}/api/telegram/webhook`;
-    await tgApi(token, 'setWebhook', { url, drop_pending_updates: false });
+    const secretToken = getWebhookSecret();
+    if (!secretToken) return;
+    await tgApi(token, 'setWebhook', { url, secret_token: secretToken, drop_pending_updates: false });
   } catch {
     // ignore
   }
 }
 
-// Try to keep webhook in sync on each boot (best-effort).
-setTimeout(setAdminBotWebhook, 0);
-setTimeout(setClientBotWebhook, 0);
+// Webhook mutation is opt-in. Deployments normally configure it explicitly.
+if (process.env.TELEGRAM_AUTO_SET_WEBHOOK === 'true') {
+  setTimeout(setAdminBotWebhook, 0);
+  setTimeout(setClientBotWebhook, 0);
+}
 
 // POST /api/telegram/webhook
-router.post('/webhook', async (req, res) => {
+router.post('/webhook', requireWebhookSecret, async (req, res) => {
   try {
     const update = req.body || {};
     const preCheckout = update.pre_checkout_query || null;
     if (preCheckout) {
-      const orderId = verifyPaymentPayload(preCheckout.invoice_payload, 'stars');
-      let ok = false;
-      let errorMessage = 'Order is not available for payment';
-
-      if (orderId) {
-        const order = await prisma.order.findUnique({ where: { id: orderId } });
-        const expectedPayload = `stars:${orderId}:${makeSig(orderId)}`;
-        const isPending = order && String(order.paymentStatus || '').toUpperCase() !== 'CONFIRMED';
-        const isPayloadMatch = order && (!order.paymentPayload || order.paymentPayload === expectedPayload);
-        ok = Boolean(isPending && isPayloadMatch);
-        if (!ok && order && String(order.paymentStatus || '').toUpperCase() === 'CONFIRMED') {
-          errorMessage = 'This order has already been paid';
-        }
-      }
-
       await tgApi(getClientBotToken(), 'answerPreCheckoutQuery', {
         pre_checkout_query_id: preCheckout.id,
-        ok,
-        ...(ok ? {} : { error_message: errorMessage }),
+        ok: false,
+        error_message: 'Card payment is available in the app',
       });
       return res.json({ ok: true });
     }
@@ -118,51 +126,7 @@ router.post('/webhook', async (req, res) => {
     const msg = update.message || update.edited_message || null;
     const successfulPayment = msg?.successful_payment || null;
     if (successfulPayment) {
-      const orderId = verifyPaymentPayload(successfulPayment.invoice_payload, 'stars');
-      if (!orderId) return res.json({ ok: true });
-
-      const chargeId = String(successfulPayment.telegram_payment_charge_id || '');
-      const now = new Date();
-      const order = await prisma.order.findUnique({ where: { id: orderId }, include: { user: true } });
-      if (!order) return res.json({ ok: true });
-
-      const updated = await prisma.order.update({
-        where: { id: orderId },
-        data: {
-          paymentMethod: 'stars',
-          paymentStatus: 'CONFIRMED',
-          paymentClientConfirmed: true,
-          status: 'PAID',
-          paidAt: order.paidAt || now,
-          paymentPayload: successfulPayment.invoice_payload,
-          paymentChargeId: chargeId || order.paymentChargeId,
-          paymentMeta: JSON.stringify({
-            currency: successfulPayment.currency,
-            totalAmount: successfulPayment.total_amount,
-            providerPaymentChargeId: successfulPayment.provider_payment_charge_id || '',
-          }),
-        },
-      });
-
-      try {
-        const ids = getAdminIds();
-        const amount = Number(order.totalPrice || 0);
-        const userLabel = order.user?.username ? `@${order.user.username}` : (order.user?.name || `User ${order.user?.id || '—'}`);
-        const text =
-          `Оплата Stars подтверждена\n` +
-          `Заказ: #${orderId}\n` +
-          `Amount: $${amount}\n` +
-          `Stars: ${successfulPayment.total_amount}\n` +
-          `Клиент: ${userLabel}`;
-        for (const chatId of ids) {
-          // eslint-disable-next-line no-await-in-loop
-          await tgApi(getAdminBotToken(), 'sendMessage', { chat_id: chatId, text });
-        }
-      } catch {
-        // ignore
-      }
-
-      return res.json({ ok: true, order: { id: updated.id, paymentStatus: updated.paymentStatus } });
+      return res.json({ ok: true });
     }
 
     if (!msg?.text) return res.json({ ok: true });
@@ -181,15 +145,15 @@ router.post('/webhook', async (req, res) => {
     const appUrl = startParam && baseUrl ? `${baseUrl}?startapp=${encodeURIComponent(startParam)}` : baseUrl;
 
     const reply_markup = appUrl
-      ? { inline_keyboard: [[{ text: 'Open FLOWIE', web_app: { url: appUrl } }]] }
+      ? { inline_keyboard: [[{ text: 'Открыть FLOWIE', web_app: { url: appUrl } }]] }
       : undefined;
 
     await tgApi(getClientBotToken(), 'sendMessage', {
       chat_id: chatId,
       text:
-        'Welcome to FLOWIE.\n\n' +
-        'Choose real gifts from a private wishlist and pay securely with TON Connect or Telegram Stars. ' +
-        'Recipient details stay private, and the order is handled through the app.',
+        'Добро пожаловать в FLOWIE.\n\n' +
+        'Заказывайте свежие цветы с быстрой доставкой и оплачивайте банковской картой. ' +
+        'Флорист и курьер ведут заказ прямо в приложении.',
       reply_markup,
     });
 
@@ -200,7 +164,7 @@ router.post('/webhook', async (req, res) => {
 });
 
 // POST /api/telegram/admin-webhook
-router.post('/admin-webhook', async (req, res) => {
+router.post('/admin-webhook', requireWebhookSecret, async (req, res) => {
   try {
     const update = req.body || {};
     const cb = update.callback_query || null;
@@ -224,7 +188,8 @@ router.post('/admin-webhook', async (req, res) => {
     const parts = data.split(':');
     const orderId = Number(parts[1] || '');
     const sig = String(parts[2] || '');
-    if (!Number.isFinite(orderId) || !sig || sig !== makeSig(orderId)) {
+    const expectedSig = makeSig(orderId);
+    if (!Number.isInteger(orderId) || orderId <= 0 || !expectedSig || !safeEqual(sig, expectedSig)) {
       try {
         await tgApi(getAdminBotToken(), 'answerCallbackQuery', { callback_query_id: cb.id, text: 'Неверная подпись', show_alert: true });
       } catch {
@@ -242,22 +207,49 @@ router.post('/admin-webhook', async (req, res) => {
       return res.json({ ok: true });
     }
 
+    if (String(order.status || '').toUpperCase() === 'CANCELLED') {
+      await tgApi(getAdminBotToken(), 'answerCallbackQuery', { callback_query_id: cb.id, text: 'Заказ отменён', show_alert: true });
+      return res.json({ ok: true });
+    }
+
+    const alreadyConfirmed = String(order.paymentStatus || '').toUpperCase() === 'CONFIRMED';
+    if (!alreadyConfirmed && !['PAYMENT_PENDING', 'NEW', 'PAID'].includes(String(order.status || '').toUpperCase())) {
+      await tgApi(getAdminBotToken(), 'answerCallbackQuery', {
+        callback_query_id: cb.id,
+        text: 'Статус заказа уже изменён',
+        show_alert: true,
+      });
+      return res.json({ ok: true });
+    }
+    let didConfirm = false;
     const now = new Date();
-    const updated = await prisma.order.update({
-      where: { id: orderId },
-      data: {
-        paymentStatus: 'CONFIRMED',
-        paymentClientConfirmed: true,
-        status: 'PAID',
-        paidAt: now,
-      },
-    });
+    const updated = alreadyConfirmed
+      ? order
+      : await prisma.$transaction(async (tx) => {
+        const changed = await tx.order.updateMany({
+          where: { id: orderId, paymentStatus: { not: 'CONFIRMED' }, status: { not: 'CANCELLED' } },
+          data: {
+            paymentStatus: 'CONFIRMED',
+            paymentClientConfirmed: true,
+            status: 'PAID',
+            paidAt: order.paidAt || now,
+          },
+        });
+        didConfirm = changed.count > 0;
+        const next = await tx.order.findUnique({ where: { id: orderId } });
+        if (!next) throw new Error('ORDER_NOT_FOUND');
+        if (changed.count > 0) await tx.orderStatusHistory.create({ data: { orderId, status: 'PAID' } });
+        return next;
+      });
 
     // Answer callback quickly.
-    await tgApi(getAdminBotToken(), 'answerCallbackQuery', { callback_query_id: cb.id, text: 'Оплата подтверждена' });
+    await tgApi(getAdminBotToken(), 'answerCallbackQuery', {
+      callback_query_id: cb.id,
+      text: didConfirm ? 'Оплата подтверждена' : 'Оплата уже подтверждена',
+    });
 
     // Update message UI.
-    try {
+    if (didConfirm) try {
       const chatId = cb.message?.chat?.id;
       const messageId = cb.message?.message_id;
       if (chatId != null && messageId != null) {
@@ -266,7 +258,7 @@ router.post('/admin-webhook', async (req, res) => {
         const text =
           `Оплата подтверждена\n` +
           `Заказ: #${orderId}\n` +
-          `Amount: $${amount}\n` +
+          `Сумма: ${Math.round(amount).toLocaleString('ru-RU')} ₽\n` +
           `Клиент: ${userLabel}`;
         await tgApi(getAdminBotToken(), 'editMessageText', {
           chat_id: chatId,
@@ -279,7 +271,7 @@ router.post('/admin-webhook', async (req, res) => {
     }
 
     // Notify client (best-effort).
-    try {
+    if (didConfirm) try {
       const chatId = order.user?.telegramId ? String(order.user.telegramId) : '';
       if (chatId) {
         await tgApi(getClientBotToken(), 'sendMessage', {
@@ -298,3 +290,4 @@ router.post('/admin-webhook', async (req, res) => {
 });
 
 module.exports = router;
+module.exports._test = { makeSig, safeEqual, requireWebhookSecret };

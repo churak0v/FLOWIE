@@ -1,25 +1,25 @@
 {
   "heroSlides": [
     {
-      "id": "wishlist-first",
-      "caption": "Only gifts she actually wants.",
-      "subtitle": "Shop her verified wishlist, not random suggestions",
+      "id": "flowers-now",
+      "caption": "Свежие цветы быстро.",
+      "subtitle": "Букеты собираются сегодня и приезжают в нужный момент",
       "image": "/hero/flowie-hero-wishlist-grounded.jpg",
       "imagePosition": "center 54%",
       "href": "/catalog"
     },
     {
-      "id": "recipient-controls-delivery",
-      "caption": "She chooses where and when.",
-      "subtitle": "You pay for the gift, she confirms delivery herself",
+      "id": "delivery-fast",
+      "caption": "Доставка от 45 минут.",
+      "subtitle": "Выберите букет, добавьте адрес и следите за заказом",
       "image": "/hero/flowie-hero-delivery-grounded.jpg",
       "imagePosition": "center 58%",
-      "href": "/recipients"
+      "href": "/catalog"
     },
     {
-      "id": "no-blind-transfers",
-      "caption": "Real gifts. No blind transfers.",
-      "subtitle": "Buy products through the platform with clear checkout",
+      "id": "real-bouquets",
+      "caption": "Настоящие букеты. Честные цены.",
+      "subtitle": "Без звонков и догадок — просто цветы уже в пути",
       "image": "/hero/flowie-hero-real-gifts-grounded.jpg",
       "imagePosition": "center 58%",
       "href": "/catalog"

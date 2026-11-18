@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { Camera, ChevronRight, Clock3, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { Surface } from './ui/Surface';
@@ -14,6 +14,152 @@ import { useAppState } from '../state/AppState';
 import { buildActiveOrderPreview } from '../lib/orderPreview';
 import { isCacheFresh, readCacheEntry, writeCacheEntry } from '../lib/persistedCache';
 
+function PickTile({ title, subtitle, image, href, onClick, accent = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        position: 'relative',
+        minWidth: 156,
+        height: 126,
+        border: 0,
+        borderRadius: 18,
+        padding: 0,
+        overflow: 'hidden',
+        cursor: 'pointer',
+        textAlign: 'left',
+        background: accent ? 'var(--c-text)' : 'var(--surface)',
+        boxShadow: 'var(--shadow-1)',
+        flex: '0 0 156px',
+      }}
+      aria-label={title}
+      data-href={href}
+    >
+      {image ? (
+        <img
+          src={image}
+          alt=""
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            filter: 'saturate(1.04)',
+          }}
+        />
+      ) : null}
+      <span
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: accent
+            ? 'linear-gradient(180deg, rgba(13,13,13,0.16), rgba(13,13,13,0.74))'
+            : 'linear-gradient(180deg, rgba(13,13,13,0.03), rgba(13,13,13,0.58))',
+        }}
+      />
+      <span
+        style={{
+          position: 'absolute',
+          left: 12,
+          right: 12,
+          bottom: 12,
+          color: 'var(--c-white)',
+          display: 'grid',
+          gap: 3,
+        }}
+      >
+        <span style={{ fontSize: 15, fontWeight: 1000, lineHeight: 1.1 }}>{title}</span>
+        <span style={{ fontSize: 11, fontWeight: 850, opacity: 0.82, lineHeight: 1.15 }}>{subtitle}</span>
+      </span>
+    </button>
+  );
+}
+
+function QuickPicks({ products, onNavigate }) {
+  const cards = [
+    {
+      title: 'Нежные',
+      subtitle: 'воздушные букеты',
+      href: '/catalog?scenario=easy-yes',
+      image: products[1]?.image || products[0]?.image,
+    },
+    {
+      title: 'Яркие',
+      subtitle: 'когда хочется вау',
+      href: '/catalog?scenario=make-it-special',
+      image: products[4]?.image || products[2]?.image,
+      accent: true,
+    },
+    {
+      title: 'До 5 000 ₽',
+      subtitle: 'красиво без перегруза',
+      href: '/catalog?scenario=under-5000',
+      image: products[2]?.image || products[0]?.image,
+    },
+    {
+      title: 'Большой жест',
+      subtitle: 'для важных дат',
+      href: '/catalog?scenario=big-gesture',
+      image: products[12]?.image || products[5]?.image,
+    },
+  ].filter((x) => x.image);
+
+  if (!cards.length) return null;
+
+  return (
+    <section style={{ marginTop: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+        <Text variant="subtitle">Выбрать по настроению</Text>
+        <Text variant="caption" muted>без долгих поисков</Text>
+      </div>
+      <div className="hide-scrollbar" style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '2px 2px 8px' }}>
+        {cards.map((card) => (
+          <PickTile key={card.title} {...card} onClick={() => onNavigate(card.href)} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TrustRibbon() {
+  const items = [
+    { icon: Clock3, label: 'Сегодня' },
+    { icon: Camera, label: 'Фото до доставки' },
+    { icon: Sparkles, label: 'Открытка' },
+  ];
+
+  return (
+    <div className="hide-scrollbar" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+      {items.map(({ icon: Icon, label }) => (
+        <span
+          key={label}
+          style={{
+            height: 34,
+            padding: '0 11px',
+            borderRadius: 999,
+            border: '1px solid var(--border)',
+            background: 'var(--surface)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            flexShrink: 0,
+            color: 'var(--text)',
+            fontSize: 12,
+            fontWeight: 950,
+            boxShadow: '0 8px 22px rgba(13,13,13,0.05)',
+          }}
+        >
+          <Icon size={14} color="var(--accent)" strokeWidth={2.5} />
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function Home() {
   const navigate = useNavigate();
   const { state, actions } = useAppState();
@@ -24,7 +170,7 @@ export function Home() {
   useEffect(() => {
     let alive = true;
 
-    const cacheKey = 'home_config_v7';
+    const cacheKey = 'home_config_v9_ru_flowers';
     const cached = readCacheEntry(cacheKey);
     const cachedSlides = Array.isArray(cached?.data?.heroSlides) ? cached.data.heroSlides : null;
     if (cachedSlides?.length) setHeroSlides(cachedSlides);
@@ -149,11 +295,17 @@ export function Home() {
 
             <SubscriptionRow />
 
+            <div style={{ marginTop: 18 }}>
+              <TrustRibbon />
+            </div>
+
+            <QuickPicks products={state.products.items || []} onNavigate={(href) => navigate(href)} />
+
             {activeOrders.length ? (
               <div style={{ marginTop: 'var(--sp-6)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-                  <Text variant="title">Active gifts</Text>
-                  <Text variant="caption" muted>{activeOrders.length} in progress</Text>
+                  <Text variant="title">Активные заказы</Text>
+                  <Text variant="caption" muted>В работе: {activeOrders.length}</Text>
                 </div>
 
                 <div style={{ display: 'grid', gap: 10 }}>
@@ -170,7 +322,7 @@ export function Home() {
 
             <div style={{ marginTop: 'var(--sp-8)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 'var(--sp-4)' }}>
-                <Text variant="title">What would make her smile?</Text>
+                <Text variant="title">Цветы на сегодня</Text>
                 <button
                   type="button"
                   onClick={() => navigate('/shop')}
@@ -187,11 +339,11 @@ export function Home() {
                     padding: 0,
                   }}
                 >
-                  Shop
+                  Каталог
                   <ChevronRight size={16} />
                 </button>
               </div>
-              <FrequentlyOrderedSection products={state.products.items} limit={8} showMoreHref="/shop" showMoreLabel="Show more gifts" />
+              <FrequentlyOrderedSection products={state.products.items} limit={8} showMoreHref="/shop" showMoreLabel="Показать ещё букеты" />
             </div>
 
           </Surface>

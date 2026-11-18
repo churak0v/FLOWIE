@@ -3,6 +3,7 @@ import { getTelegramInitData } from '../../src/telegram';
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const MEM_CACHE = new Map();
+let cacheRevision = 0;
 
 async function fetchJson(path, options = {}) {
   const {
@@ -26,6 +27,7 @@ async function fetchJson(path, options = {}) {
     if (hit && Date.now() - hit.ts < ttl) return hit.data;
   }
 
+  const requestRevision = cacheRevision;
   const res = await fetch(`${API_URL}${path}`, {
     ...fetchOptions,
     headers,
@@ -44,7 +46,11 @@ async function fetchJson(path, options = {}) {
     throw error;
   }
 
-  if (method === 'GET' && ttl > 0) {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    cacheRevision += 1;
+    MEM_CACHE.clear();
+  }
+  if (method === 'GET' && ttl > 0 && requestRevision === cacheRevision) {
     MEM_CACHE.set(key, { ts: Date.now(), data });
   }
 
@@ -167,6 +173,12 @@ export const adminApi = {
     }),
   ensureOrderChat: async (orderId) => fetchJson(`/admin/orders/${encodeURIComponent(orderId)}/chat`, { method: 'POST' }),
   confirmOrderPayment: async (orderId) => fetchJson(`/admin/orders/${encodeURIComponent(orderId)}/confirm-payment`, { method: 'POST' }),
+  quoteOrderDelivery: async (orderId, payload) =>
+    fetchJson(`/admin/orders/${encodeURIComponent(orderId)}/delivery-quote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    }),
   getCouriers: async () => fetchJson('/admin/couriers', { cache: 'no-store', cacheTtlMs: 5_000 }),
 
   // Collections
@@ -214,6 +226,13 @@ export const adminApi = {
     const tail = qs.toString() ? `?${qs.toString()}` : '';
     return fetchJson(`/admin/analytics/summary${tail}`, { cache: 'no-store', cacheTtlMs: 10_000, cacheKey: `GET:/admin/analytics/summary${tail}`, ...(opts || {}) });
   },
+  getAnalyticsReport: async (days = 7, opts = {}) =>
+    fetchJson(`/admin/analytics/report?days=${encodeURIComponent(days)}`, {
+      cache: 'no-store',
+      cacheTtlMs: 10_000,
+      cacheKey: `GET:/admin/analytics/report?days=${encodeURIComponent(days)}`,
+      ...(opts || {}),
+    }),
   getFinance: async (query = {}, opts = {}) => {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(query || {})) {
@@ -238,6 +257,14 @@ export const adminApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload || {}),
     }),
+
+  // Delivery zones
+  getDeliveryZones: () => fetchJson('/admin/delivery-zones', { cache: 'no-store' }),
+  setDeliveryMode: (mode) => fetchJson('/admin/delivery-zones/mode', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }) }),
+  saveDeliveryZone: (id, data) => fetchJson(`/admin/delivery-zones${id ? `/${id}` : ''}`, {
+    method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+  }),
+  deleteDeliveryZone: (id) => fetchJson(`/admin/delivery-zones/${id}`, { method: 'DELETE' }),
 
   // Working hours / Staff
   getWorkingHours: async (opts = {}) => fetchJson('/admin/working-hours', { cache: 'no-store', cacheTtlMs: 10_000, ...(opts || {}) }),

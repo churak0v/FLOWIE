@@ -23,7 +23,7 @@ export function FloristComment({ value, onChange }) {
           gap: 12,
         }}
       >
-        <Text variant="subtitle">Gift note and delivery comment</Text>
+        <Text variant="subtitle">Текст открытки и комментарий флористу</Text>
         {open ? <ChevronUp size={18} color="var(--muted)" /> : <ChevronDown size={18} color="var(--muted)" />}
       </button>
 
@@ -31,7 +31,7 @@ export function FloristComment({ value, onChange }) {
         <textarea
           value={value}
           onChange={(e) => onChange?.(e.target.value)}
-          placeholder="Example: keep the note short, neutral packaging, no price receipt..."
+          placeholder="Например: белая упаковка, короткий текст открытки, позвонить перед доставкой..."
           style={{
             marginTop: 12,
             width: '100%',

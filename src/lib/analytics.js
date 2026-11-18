@@ -1,0 +1,290 @@
+const API_BASE = import.meta.env?.VITE_API_URL || '/api';
+
+export const ANALYTICS_OPT_OUT_KEY = 'flowie_analytics_opt_out';
+export const ANALYTICS_SESSION_KEY = 'flowie_analytics_session_id';
+
+const ALLOWED_EVENTS = new Set([
+  'page_view',
+  'product_view',
+  'search',
+  'filter_change',
+  'favorite_add',
+  'favorite_remove',
+  'cart_add',
+  'cart_remove',
+  'checkout_start',
+  'checkout_error',
+  'payment_start',
+]);
+
+const META_LIMITS = {
+  path: 180,
+  query: 120,
+  filter: 60,
+  value: 100,
+  errorCode: 80,
+  utm_source: 80,
+  utm_medium: 80,
+  utm_campaign: 80,
+  referrerHost: 255,
+};
+
+const ATTRIBUTION_KEYS = ['path', 'utm_source', 'utm_medium', 'utm_campaign', 'referrerHost'];
+const EVENT_META_KEYS = {
+  page_view: new Set(ATTRIBUTION_KEYS),
+  product_view: new Set(ATTRIBUTION_KEYS),
+  search: new Set([...ATTRIBUTION_KEYS, 'query', 'resultCount']),
+  filter_change: new Set([...ATTRIBUTION_KEYS, 'filter', 'value']),
+  favorite_add: new Set(ATTRIBUTION_KEYS),
+  favorite_remove: new Set(ATTRIBUTION_KEYS),
+  cart_add: new Set([...ATTRIBUTION_KEYS, 'quantity']),
+  cart_remove: new Set([...ATTRIBUTION_KEYS, 'quantity']),
+  checkout_start: new Set(ATTRIBUTION_KEYS),
+  checkout_error: new Set([...ATTRIBUTION_KEYS, 'errorCode']),
+  payment_start: new Set(ATTRIBUTION_KEYS),
+};
+
+const MAX_QUEUE_SIZE = 40;
+const MAX_ATTEMPTS = 3;
+const VIEW_DEDUPE_MS = 2_000;
+const queue = [];
+const recentViews = new Map();
+let flushTimer = null;
+let flushing = false;
+let bootstrapReady = false;
+let memorySessionId = '';
+
+function safeStorage(storageName) {
+  try {
+    return globalThis[storageName] || null;
+  } catch {
+    return null;
+  }
+}
+
+function boundedString(value, limit) {
+  if (typeof value !== 'string' && typeof value !== 'number') return '';
+  return String(value).trim().slice(0, limit);
+}
+
+function positiveInteger(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return undefined;
+  return Math.max(0, Math.min(99_999, Math.round(number)));
+}
+
+function entityId(value) {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number <= 0) return undefined;
+  return number;
+}
+
+function privacySafeQuery(value) {
+  return boundedString(value, META_LIMITS.query)
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[email]')
+    .replace(/(?:\+?\d[\s().-]*){7,}/g, '[phone] ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function createAnalyticsUuid() {
+  const cryptoApi = globalThis.crypto;
+  if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID();
+  const bytes = new Uint8Array(16);
+  if (typeof cryptoApi?.getRandomValues === 'function') cryptoApi.getRandomValues(bytes);
+  else bytes.forEach((_, index) => { bytes[index] = Math.floor(Math.random() * 256); });
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export function getAnalyticsSessionId() {
+  if (memorySessionId) return memorySessionId;
+  const storage = safeStorage('sessionStorage');
+  try {
+    const existing = storage?.getItem(ANALYTICS_SESSION_KEY);
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(existing || '')) {
+      memorySessionId = existing;
+      return memorySessionId;
+    }
+    const sessionId = createAnalyticsUuid();
+    storage?.setItem(ANALYTICS_SESSION_KEY, sessionId);
+    memorySessionId = sessionId;
+    return memorySessionId;
+  } catch {
+    memorySessionId = createAnalyticsUuid();
+    return memorySessionId;
+  }
+}
+
+export function isDoNotTrackEnabled() {
+  try {
+    return globalThis.navigator?.doNotTrack === '1'
+      || globalThis.navigator?.globalPrivacyControl === true
+      || globalThis.doNotTrack === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function isAnalyticsOptedOut() {
+  try {
+    return /^(1|true|yes)$/i.test(safeStorage('localStorage')?.getItem(ANALYTICS_OPT_OUT_KEY) || '');
+  } catch {
+    return false;
+  }
+}
+
+export function isAnalyticsEnabled() {
+  return !isAnalyticsOptedOut() && !isDoNotTrackEnabled();
+}
+
+export function setAnalyticsOptOut(optedOut) {
+  try {
+    const storage = safeStorage('localStorage');
+    if (optedOut) storage?.setItem(ANALYTICS_OPT_OUT_KEY, '1');
+    else storage?.removeItem(ANALYTICS_OPT_OUT_KEY);
+  } catch {
+    // Storage can be unavailable in restricted webviews.
+  }
+  if (optedOut || isDoNotTrackEnabled()) clearAnalyticsQueue();
+}
+
+export function sanitizeAnalyticsPayload(event, input = {}) {
+  if (!ALLOWED_EVENTS.has(event)) return null;
+  const payload = {
+    event,
+    eventId: createAnalyticsUuid(),
+    sessionId: getAnalyticsSessionId(),
+  };
+
+  const productId = entityId(input.productId);
+  const orderId = entityId(input.orderId);
+  if (productId !== undefined) payload.productId = productId;
+  if (orderId !== undefined) payload.orderId = orderId;
+
+  const rawMeta = input.meta && typeof input.meta === 'object' ? input.meta : {};
+  const meta = {};
+  const allowedMeta = EVENT_META_KEYS[event];
+  for (const [key, limit] of Object.entries(META_LIMITS)) {
+    if (!allowedMeta.has(key)) continue;
+    let value = key === 'query' ? privacySafeQuery(rawMeta[key]) : boundedString(rawMeta[key], limit);
+    if (!value) continue;
+    if (key === 'path') {
+      value = value.split(/[?#]/, 1)[0] || '/';
+      meta[key] = value.startsWith('/') ? value : `/${value}`;
+    } else if (key === 'filter' || key === 'errorCode') {
+      const token = value.replace(/[^A-Za-z0-9_.:-]+/g, '_').replace(/^_+|_+$/g, '');
+      if (token) meta[key] = token;
+    } else meta[key] = value;
+  }
+  for (const key of ['resultCount', 'quantity']) {
+    if (!allowedMeta.has(key)) continue;
+    let value = positiveInteger(rawMeta[key]);
+    if (key === 'quantity' && value !== undefined) value = Math.min(99, value);
+    if (value !== undefined) meta[key] = value;
+  }
+  if (Object.keys(meta).length) payload.meta = meta;
+  return payload;
+}
+
+export function extractAnalyticsAttribution(locationLike = globalThis.location, referrer = globalThis.document?.referrer) {
+  const meta = {};
+  try {
+    const params = new URLSearchParams(locationLike?.search || '');
+    for (const key of ['utm_source', 'utm_medium', 'utm_campaign']) {
+      const value = boundedString(params.get(key) || '', META_LIMITS[key]);
+      if (value) meta[key] = value;
+    }
+  } catch {
+    // Ignore malformed URLs.
+  }
+  try {
+    const host = boundedString(new URL(referrer).hostname, META_LIMITS.referrerHost);
+    const currentHost = boundedString(locationLike?.hostname || '', META_LIMITS.referrerHost);
+    if (host && host !== currentHost) meta.referrerHost = host;
+  } catch {
+    // Referrer may be absent or invalid.
+  }
+  return meta;
+}
+
+function scheduleFlush(delay = bootstrapReady ? 0 : 1_500) {
+  if (flushTimer || !queue.length || !isAnalyticsEnabled()) return;
+  flushTimer = globalThis.setTimeout(() => {
+    flushTimer = null;
+    void flushAnalytics();
+  }, delay);
+}
+
+export function clearAnalyticsQueue() {
+  queue.length = 0;
+  recentViews.clear();
+  if (flushTimer) globalThis.clearTimeout(flushTimer);
+  flushTimer = null;
+}
+
+export function trackAnalytics(event, input = {}, options = {}) {
+  if (!isAnalyticsEnabled()) return false;
+  const payload = sanitizeAnalyticsPayload(event, input);
+  if (!payload) return false;
+
+  if (options.dedupeKey) {
+    const key = `${event}:${boundedString(options.dedupeKey, 260)}`;
+    const now = Date.now();
+    const previous = recentViews.get(key) || 0;
+    if (now - previous < VIEW_DEDUPE_MS) return false;
+    recentViews.set(key, now);
+  }
+
+  if (queue.length >= MAX_QUEUE_SIZE) queue.shift();
+  queue.push({ payload, attempts: 0 });
+  scheduleFlush();
+  return true;
+}
+
+export async function flushAnalytics() {
+  if (flushing || !queue.length || !isAnalyticsEnabled() || typeof globalThis.fetch !== 'function') return;
+  flushing = true;
+  try {
+    while (queue.length && isAnalyticsEnabled()) {
+      const item = queue[0];
+      let response;
+      try {
+        response = await globalThis.fetch(`${API_BASE}/events`, {
+          method: 'POST',
+          credentials: 'include',
+          keepalive: true,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item.payload),
+        });
+      } catch {
+        item.attempts += 1;
+        if (item.attempts >= MAX_ATTEMPTS) queue.shift();
+        break;
+      }
+
+      if (response.ok) {
+        queue.shift();
+        continue;
+      }
+      item.attempts += 1;
+      if (![401, 403, 408, 429].includes(response.status) && response.status < 500) queue.shift();
+      else if (item.attempts >= MAX_ATTEMPTS) queue.shift();
+      break;
+    }
+  } finally {
+    flushing = false;
+    if (queue.length) scheduleFlush(5_000);
+  }
+}
+
+export function markAnalyticsReady() {
+  bootstrapReady = true;
+  scheduleFlush(0);
+}
+
+export function getAnalyticsDebugState() {
+  return { queued: queue.length, enabled: isAnalyticsEnabled(), bootstrapReady };
+}

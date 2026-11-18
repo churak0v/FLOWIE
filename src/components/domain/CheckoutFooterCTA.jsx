@@ -26,13 +26,13 @@ export function CheckoutFooterCTA({ total, disabled, onClick }) {
           border: 0,
           borderRadius: 'var(--r-lg)',
           background: disabled ? 'var(--c-ink-14)' : 'var(--accent)',
-          color: 'var(--c-white)',
+          color: disabled ? 'var(--c-white)' : 'var(--c-accent-contrast)',
           cursor: disabled ? 'default' : 'pointer',
           fontWeight: 900,
           fontSize: 16,
         }}
       >
-        Pay {formatMoney(total)}
+        Оплатить {formatMoney(total)}
       </button>
     </div>
   );

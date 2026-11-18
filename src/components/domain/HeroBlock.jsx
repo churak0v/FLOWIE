@@ -27,7 +27,7 @@ export function HeroBlock({ slides }) {
 
         <button
           type="button"
-          aria-label="Account"
+          aria-label="Профиль"
           onClick={() => navigate('/account')}
           style={{
             width: 40,

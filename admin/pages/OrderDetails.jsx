@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Copy, MapPin, MessageSquare, X } from 'lucide-react';
 import { adminApi } from '../lib/adminApi';
@@ -34,6 +34,42 @@ function paymentMeta(paymentStatus) {
   if (ps === 'EXPIRED') return { label: 'Просрочен', color: '#d92d20' };
   return { label: ps || '—', color: 'var(--text)' };
 }
+
+function deliveryMeta(status, invoiceStatus) {
+  const value = String(invoiceStatus || status || '').toUpperCase();
+  if (value === 'DETAILS_PENDING') return { label: 'Нужно уточнить данные', color: 'var(--accent)', tone: 'pending' };
+  if (value === 'PAYMENT_PENDING') return { label: 'Счёт доставки ожидает оплаты', color: 'var(--accent)', tone: 'pending' };
+  if (value === 'PAID') return { label: 'Доставка оплачена отдельно', color: 'var(--success)', tone: 'ready' };
+  if (value === 'INCLUDED_IN_MAIN') return { label: 'Доставка в основном счёте', color: 'var(--success)', tone: 'ready' };
+  if (value === 'WAIVED') return { label: 'Стоимость доставки обнулена сотрудником', color: 'var(--success)', tone: 'ready' };
+  if (value === 'NOT_REQUIRED') return { label: 'Отдельная оплата не требуется', color: 'var(--muted)', tone: 'ready' };
+  if (value === 'EXPIRED') return { label: 'Счёт доставки просрочен', color: '#d92d20', tone: 'blocked' };
+  if (value === 'CANCELLED') return { label: 'Счёт доставки отменён', color: '#d92d20', tone: 'blocked' };
+  if (value === 'RECONCILIATION_REQUIRED') return { label: 'Нужна сверка оплаты доставки', color: '#d92d20', tone: 'blocked' };
+  return { label: 'Статус доставки не определён', color: 'var(--muted)', tone: 'pending' };
+}
+
+function newQuoteKey() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
+function money(value) {
+  return `${new Intl.NumberFormat('ru-RU').format(Number(value || 0))} ₽`;
+}
+
+const fieldStyle = {
+  width: '100%',
+  border: '1px solid var(--border)',
+  borderRadius: 16,
+  padding: 12,
+  background: 'var(--c-white)',
+  color: 'var(--text)',
+};
 
 function yandexMapsUrl(address) {
   const q = encodeURIComponent(String(address || '').trim());
@@ -178,9 +214,14 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-export function OrderDetailsPage() {
+export function OrderDetailsPage({ user }) {
   const navigate = useNavigate();
   const params = useParams();
+  const role = String(user?.role || '');
+  const canConfirmPayment = role === 'admin' || role === 'moderator';
+  const canPrepare = canConfirmPayment || role === 'florist';
+  const canComplete = canConfirmPayment || role === 'courier';
+  const canManageOrder = canConfirmPayment;
   const orderId = Number(params.id);
 
   const [busy, setBusy] = useState(true);
@@ -188,6 +229,11 @@ export function OrderDetailsPage() {
   const [order, setOrder] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState('');
+
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [deliveryForm, setDeliveryForm] = useState({ quoteKey: '', deliveryAddress: '', deliveryTime: '', amount: '' });
+  const [deliveryBusy, setDeliveryBusy] = useState(false);
+  const [deliveryError, setDeliveryError] = useState('');
 
   const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -234,15 +280,29 @@ export function OrderDetailsPage() {
   const customerPhone = useMemo(() => order?.user?.phone || 'Телефон не указан', [order?.user?.phone]);
 
   const address = useMemo(() => order?.deliveryAddress || '', [order?.deliveryAddress]);
+  const addressWasUnknown = Boolean(order?.askRecipientAddress);
+  const addressPending = addressWasUnknown && !String(order?.deliveryAddress || '').trim();
+  const timePending = Boolean(order?.askRecipientTime) && !String(order?.deliveryTime || '').trim();
+  const deliveryInfo = useMemo(
+    () => deliveryMeta(order?.deliveryStatus, order?.deliveryInvoice?.status),
+    [order?.deliveryStatus, order?.deliveryInvoice?.status],
+  );
+  const deliveryReady = useMemo(() => {
+    const value = String(order?.deliveryStatus || 'NOT_REQUIRED').toUpperCase();
+    const statusReady = ['PAID', 'WAIVED', 'INCLUDED_IN_MAIN', 'NOT_REQUIRED'].includes(value);
+    const hasAddress = Boolean(String(order?.deliveryAddress || '').trim());
+    const hasRequestedTime = !order?.askRecipientTime || Boolean(String(order?.deliveryTime || '').trim());
+    return statusReady && hasAddress && hasRequestedTime;
+  }, [order?.askRecipientTime, order?.deliveryAddress, order?.deliveryStatus, order?.deliveryTime]);
 
   const topAction = useMemo(() => {
     if (!order) return null;
-    if (status === 'NEW') return { type: 'accept' };
-    if (status === 'ACCEPTED') return { type: 'accepted' };
-    if (status === 'ASSEMBLED') return { type: 'dispatch' };
-    if (status === 'IN_DELIVERY') return { type: 'complete' };
+    if (status === 'NEW' && canPrepare && String(order.paymentStatus || '').toUpperCase() === 'CONFIRMED') return { type: 'accept' };
+    if (status === 'ACCEPTED' && canPrepare) return { type: 'accepted' };
+    if (status === 'ASSEMBLED' && canPrepare) return { type: 'dispatch' };
+    if (status === 'IN_DELIVERY' && canComplete) return { type: 'complete' };
     return { type: 'none' };
-  }, [order, status]);
+  }, [order, status, canPrepare, canComplete]);
 
   async function confirmPayment() {
     if (!orderId) return;
@@ -255,6 +315,56 @@ export function OrderDetailsPage() {
       setConfirmError(e?.data?.error || e?.message || 'Не удалось подтвердить оплату');
     } finally {
       setConfirming(false);
+    }
+  }
+
+  function openDeliveryForm() {
+    setDeliveryError('');
+    setDeliveryForm({
+      quoteKey: newQuoteKey(),
+      deliveryAddress: String(order?.deliveryAddress || ''),
+      deliveryTime: String(order?.deliveryTime || ''),
+      amount: order?.deliveryCost == null ? '' : String(order.deliveryCost),
+    });
+    setDeliveryOpen(true);
+  }
+
+  async function submitDeliveryQuote() {
+    const deliveryAddress = String(deliveryForm.deliveryAddress || '').trim();
+    const deliveryTime = String(deliveryForm.deliveryTime || '').trim();
+    const amount = deliveryForm.amount === '' ? null : Number(deliveryForm.amount);
+    if (addressPending && !deliveryAddress) {
+      setDeliveryError('Укажите уточнённый адрес');
+      return;
+    }
+    if (timePending && !deliveryTime) {
+      setDeliveryError('Укажите уточнённое время');
+      return;
+    }
+    if (addressWasUnknown && (!Number.isSafeInteger(amount) || amount < 0)) {
+      setDeliveryError('Укажите стоимость доставки целым числом от 0 ₽');
+      return;
+    }
+
+    const payload = { quoteKey: deliveryForm.quoteKey };
+    if (addressWasUnknown || addressPending) payload.deliveryAddress = deliveryAddress;
+    if (order?.askRecipientTime) payload.deliveryTime = deliveryTime;
+    if (addressWasUnknown) payload.amount = amount;
+
+    setDeliveryBusy(true);
+    setDeliveryError('');
+    try {
+      const response = await adminApi.quoteOrderDelivery(orderId, payload);
+      setOrder((current) => ({
+        ...current,
+        ...(response?.order || {}),
+        deliveryInvoice: response?.invoice ?? current?.deliveryInvoice ?? null,
+      }));
+      setDeliveryOpen(false);
+    } catch (e) {
+      setDeliveryError(e?.data?.error || e?.message || 'Не удалось сохранить данные доставки');
+    } finally {
+      setDeliveryBusy(false);
     }
   }
 
@@ -314,28 +424,16 @@ export function OrderDetailsPage() {
           <div style={{ marginTop: 14, fontSize: 13, fontWeight: 1000, color: st.color }}>{st.label}</div>
           <div style={{ marginTop: 8, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <span className="ui-chip" style={{ background: 'var(--surface-2)', color: paymentMetaInfo.color }}>
-              {paymentMetaInfo.label}
+              Основной счёт: {paymentMetaInfo.label.toLowerCase()}
             </span>
             <span className="ui-chip">Клиент отметил: {order.paymentClientConfirmed ? 'да' : 'нет'}</span>
-            {String(order.paymentStatus || '').toUpperCase() === 'PENDING' ? (
+            {canConfirmPayment && String(order.paymentStatus || '').toUpperCase() === 'PENDING' ? (
               <>
                 <PrimaryButton
                   label={confirming ? 'Подтверждаем…' : 'Подтвердить оплату'}
                   disabled={confirming}
                   onClick={confirmPayment}
                   style={{ height: 34 }}
-                />
-                <PrimaryButton
-                  label="Принять заказ"
-                  onClick={async () => {
-                    try {
-                      await adminApi.acceptOrder(orderId);
-                      await load();
-                    } catch (e) {
-                      alert(e?.data?.error || e?.message || 'Не удалось принять');
-                    }
-                  }}
-                  style={{ height: 34, background: 'var(--accent)' }}
                 />
               </>
             ) : null}
@@ -387,10 +485,18 @@ export function OrderDetailsPage() {
             <div style={{ marginTop: 12 }}>
               <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
                 <Text variant="subtitle">Букет собран</Text>
+                {!deliveryReady ? (
+                  <div style={{ marginTop: 6 }}>
+                    <Text variant="body" style={{ color: '#d92d20' }}>
+                      Нельзя передать в доставку: сначала уточните адрес/время и завершите оплату доставки.
+                    </Text>
+                  </div>
+                ) : null}
                 <div style={{ marginTop: 10 }}>
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     <PrimaryButton
                       label="Отвезу сам"
+                      disabled={!deliveryReady}
                       onClick={async () => {
                         try {
                           await adminApi.dispatchOrder(orderId);
@@ -402,6 +508,7 @@ export function OrderDetailsPage() {
                     />
                     <PrimaryButton
                       label="Назначить курьера"
+                      disabled={!deliveryReady}
                       onClick={async () => {
                         const val = window.prompt('ID курьера');
                         const idNum = Number(val);
@@ -467,8 +574,8 @@ export function OrderDetailsPage() {
                 <span style={{ whiteSpace: 'nowrap' }}>{order.createdAt ? new Date(order.createdAt).toLocaleString('ru-RU') : '—'}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontWeight: 900 }}>
-                <span style={{ color: 'var(--muted)' }}>Оплачено</span>
-                <span style={{ whiteSpace: 'nowrap' }}>{order.totalPrice} ₽</span>
+                <span style={{ color: 'var(--muted)' }}>Основной счёт</span>
+                <span style={{ whiteSpace: 'nowrap' }}>{money(order.totalPrice)} · {paymentMetaInfo.label}</span>
               </div>
             </div>
           </Surface>
@@ -476,19 +583,69 @@ export function OrderDetailsPage() {
           <Divider />
 
           <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
-            <Text variant="subtitle">Адрес</Text>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+              <div>
+                <Text variant="subtitle">Доставка</Text>
+                <div style={{ marginTop: 6 }}>
+                  <span className="ui-chip" style={{ color: deliveryInfo.color, background: 'var(--surface-2)' }}>
+                    {deliveryInfo.label}
+                  </span>
+                </div>
+              </div>
+              {canPrepare && String(order.paymentStatus || '').toUpperCase() === 'CONFIRMED' && (addressPending || timePending) ? (
+                <SecondaryButton label="Уточнить" onClick={openDeliveryForm} style={{ height: 38 }} />
+              ) : null}
+            </div>
             <div style={{ marginTop: 10, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
               <MapPin size={16} color="var(--muted)" style={{ marginTop: 2, flexShrink: 0 }} />
               <div style={{ minWidth: 0 }}>
                 <Text variant="body" muted>
-                  {address || 'Адрес не указан'}
+                  {address || (order.askRecipientAddress ? 'Ожидаем адрес от получателя' : 'Адрес не указан')}
                 </Text>
                 {order.deliveryTime ? (
                   <div style={{ marginTop: 6 }}>
                     <Text variant="caption">Время: {order.deliveryTime}</Text>
                   </div>
+                ) : order.askRecipientTime ? (
+                  <div style={{ marginTop: 6 }}><Text variant="caption">Ожидаем время от получателя</Text></div>
                 ) : null}
               </div>
+            </div>
+
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--c-ink-06)', display: 'grid', gap: 8 }}>
+              {order.deliveryCost == null ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontWeight: 900 }}>
+                  <span style={{ color: 'var(--muted)' }}>Стоимость доставки</span>
+                  <span style={{ color: 'var(--accent)' }}>Ещё не рассчитана</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontWeight: 900 }}>
+                  <span style={{ color: 'var(--muted)' }}>
+                    {addressWasUnknown ? 'Отдельная доставка' : 'Доставка в основном счёте'}
+                  </span>
+                  <span>{money(order.deliveryCost)}</span>
+                </div>
+              )}
+              {order.deliveryInvoice ? (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontWeight: 900 }}>
+                    <span style={{ color: 'var(--muted)' }}>Отдельный счёт</span>
+                    <span>{money(order.deliveryInvoice.amount)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontWeight: 900 }}>
+                    <span style={{ color: 'var(--muted)' }}>Оплата доставки</span>
+                    <span style={{ color: deliveryInfo.color }}>{deliveryInfo.label}</span>
+                  </div>
+                  {order.deliveryInvoice.paymentExpiresAt && String(order.deliveryInvoice.status || '').toUpperCase() === 'PAYMENT_PENDING' ? (
+                    <Text variant="caption" muted>Счёт действует до {new Date(order.deliveryInvoice.paymentExpiresAt).toLocaleString('ru-RU')}.</Text>
+                  ) : null}
+                </>
+              ) : addressWasUnknown && order.deliveryStatus === 'WAIVED' ? (
+                <Text variant="caption" muted>0 ₽ — явное решение сотрудника. Это не значение по умолчанию.</Text>
+              ) : null}
+              {String(order.paymentStatus || '').toUpperCase() !== 'CONFIRMED' && (addressPending || timePending) ? (
+                <Text variant="caption" muted>Уточнить данные и выставить доставку можно после подтверждения оплаты основного счёта.</Text>
+              ) : null}
             </div>
 
             <div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -590,12 +747,24 @@ export function OrderDetailsPage() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontWeight: 900 }}>
                 <span style={{ color: 'var(--muted)' }}>Доставка</span>
-                <span style={{ whiteSpace: 'nowrap' }}>{order.deliveryCost ?? 0} ₽</span>
+                <span style={{ whiteSpace: 'nowrap' }}>
+                  {order.deliveryCost == null
+                    ? 'ожидает расчёта'
+                    : addressWasUnknown
+                      ? `${money(order.deliveryCost)} · отдельный счёт`
+                      : `${money(order.deliveryCost)} · включена`}
+                </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontWeight: 1000 }}>
-                <span style={{ color: 'var(--muted)' }}>Итого</span>
-                <span style={{ whiteSpace: 'nowrap', color: 'var(--accent)' }}>{order.totalPrice} ₽</span>
+                <span style={{ color: 'var(--muted)' }}>Основной счёт</span>
+                <span style={{ whiteSpace: 'nowrap', color: 'var(--accent)' }}>{money(order.totalPrice)}</span>
               </div>
+              {order.deliveryInvoice ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontWeight: 1000 }}>
+                  <span style={{ color: 'var(--muted)' }}>Отдельный счёт доставки</span>
+                  <span style={{ whiteSpace: 'nowrap', color: deliveryInfo.color }}>{money(order.deliveryInvoice.amount)}</span>
+                </div>
+              ) : null}
             </div>
           </Surface>
 
@@ -783,9 +952,9 @@ export function OrderDetailsPage() {
 
           <Divider />
 
-          <SecondaryButton label="Отправить промокод" onClick={() => setPromoOpen(true)} style={{ width: '100%' }} />
+          {canManageOrder ? <SecondaryButton label="Отправить промокод" onClick={() => setPromoOpen(true)} style={{ width: '100%' }} /> : null}
 
-          <div style={{ marginTop: 'var(--sp-6)' }}>
+          {canManageOrder ? <div style={{ marginTop: 'var(--sp-6)' }}>
             <DangerButton
               label="Отменить заказ"
               disabled={status === 'CANCELLED' || status === 'DELIVERED'}
@@ -795,7 +964,89 @@ export function OrderDetailsPage() {
                 setCancelOpen(true);
               }}
             />
-          </div>
+          </div> : null}
+
+          {deliveryOpen ? (
+            <Modal title="Уточнить доставку" onClose={() => { if (!deliveryBusy) setDeliveryOpen(false); }}>
+              <div style={{ display: 'grid', gap: 12 }}>
+                {order.askRecipientAddress ? (
+                  <div>
+                    <Text variant="caption">Адрес от получателя</Text>
+                    <textarea
+                      value={deliveryForm.deliveryAddress}
+                      onChange={(e) => setDeliveryForm((value) => ({ ...value, deliveryAddress: e.target.value }))}
+                      placeholder="Город, улица, дом, квартира"
+                      style={{ ...fieldStyle, marginTop: 6, minHeight: 78, resize: 'vertical' }}
+                    />
+                  </div>
+                ) : (
+                  <Surface variant="soft" style={{ padding: 12, borderRadius: 16, border: '1px solid var(--border)' }}>
+                    <Text variant="caption">Адрес уже был известен при оплате</Text>
+                    <div style={{ marginTop: 4 }}><Text variant="body">{order.deliveryAddress || '—'}</Text></div>
+                  </Surface>
+                )}
+
+                {order.askRecipientTime ? (
+                  <div>
+                    <Text variant="caption">Время от получателя</Text>
+                    <input
+                      value={deliveryForm.deliveryTime}
+                      onChange={(e) => setDeliveryForm((value) => ({ ...value, deliveryTime: e.target.value }))}
+                      placeholder="Например: 19 ноября, 18:00–20:00"
+                      style={{ ...fieldStyle, marginTop: 6 }}
+                    />
+                  </div>
+                ) : order.deliveryTime ? (
+                  <Surface variant="soft" style={{ padding: 12, borderRadius: 16, border: '1px solid var(--border)' }}>
+                    <Text variant="caption">Время доставки</Text>
+                    <div style={{ marginTop: 4 }}><Text variant="body">{order.deliveryTime}</Text></div>
+                  </Surface>
+                ) : null}
+
+                {addressWasUnknown ? (
+                  <div>
+                    <Text variant="caption">Стоимость отдельной доставки, ₽</Text>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      inputMode="numeric"
+                      value={deliveryForm.amount}
+                      onChange={(e) => setDeliveryForm((value) => ({ ...value, amount: e.target.value }))}
+                      placeholder="Не подставляется автоматически"
+                      style={{ ...fieldStyle, marginTop: 6 }}
+                    />
+                    <div style={{ marginTop: 6 }}>
+                      <Text variant="caption" muted>
+                        Тариф не рассчитывается автоматически. 0 ₽ — явное освобождение от оплаты, а пустое поле означает, что стоимость ещё не определена.
+                      </Text>
+                    </div>
+                  </div>
+                ) : (
+                  <Surface variant="soft" style={{ padding: 12, borderRadius: 16, border: '1px solid var(--border)' }}>
+                    <Text variant="body">Доплата не создаётся: доставка уже включена в основной счёт. Сохраняется только уточнённое время.</Text>
+                  </Surface>
+                )}
+
+                {deliveryError ? <Text variant="caption" style={{ color: '#d92d20' }}>{deliveryError}</Text> : null}
+
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <PrimaryButton
+                    label={deliveryBusy
+                      ? 'Сохраняем…'
+                      : addressWasUnknown
+                        ? Number(deliveryForm.amount) === 0 && deliveryForm.amount !== ''
+                          ? 'Сохранить и подтвердить 0 ₽'
+                          : 'Сохранить и выставить счёт'
+                        : 'Сохранить время'}
+                    disabled={deliveryBusy}
+                    onClick={submitDeliveryQuote}
+                  />
+                  <SecondaryButton label="Отмена" disabled={deliveryBusy} onClick={() => setDeliveryOpen(false)} />
+                </div>
+              </div>
+            </Modal>
+          ) : null}
 
           {historyOpen ? (
             <Modal title="История статусов" onClose={() => setHistoryOpen(false)}>

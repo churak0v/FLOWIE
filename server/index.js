@@ -7,6 +7,7 @@ const { Server } = require('socket.io');
 const { validate, parse } = require('@tma.js/init-data-node');
 const { PrismaClient } = require('@prisma/client');
 const { startAutoFulfillment } = require('./services/autoFulfillment');
+const { createCorsOriginCallback } = require('./services/corsOrigins');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -14,8 +15,10 @@ const prisma = new PrismaClient();
 startAutoFulfillment(prisma);
 
 app.set('trust proxy', 1);
-app.use(cors({ origin: true, credentials: true }));
+const corsOrigin = createCorsOriginCallback();
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 // Uploaded files are immutable (random filenames), so we can cache them aggressively.
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { maxAge: 31536000000, immutable: true }));
 
@@ -39,11 +42,14 @@ const deliveryRoutes = require('./routes/delivery');
 	const collectionsRoutes = require('./routes/collections');
 	const paymentsRoutes = require('./routes/payments');
 	const telegramRoutes = require('./routes/telegram');
+	const seoRoutes = require('./routes/seo');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/delivery', deliveryRoutes);
+app.use('/api/delivery', require('./routes/deliveryMaps'));
+app.use('/api/search', require('./routes/search'));
 	app.use('/api/upload', uploadRoutes);
 	app.use('/api/chats', chatsRoutes);
 	app.use('/api/recipients', recipientsRoutes);
@@ -52,6 +58,10 @@ app.use('/api/delivery', deliveryRoutes);
 	app.use('/api/telegram', telegramRoutes);
 	app.use('/api/admin', adminRoutes);
 	app.use('/api/events', eventsRoutes);
+
+// Public crawlable HTML uses the same Prisma data as the React storefront.
+// Route matching is path-based only; users and crawlers receive identical markup.
+app.use('/', seoRoutes);
 
 // --- WebSocket (Chat) ---
 function tryParseInitData(initData) {
@@ -94,7 +104,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     path: '/api/socket.io',
-    cors: { origin: true, credentials: true },
+    cors: { origin: corsOrigin, credentials: true },
 });
 
 io.use(async (socket, next) => {

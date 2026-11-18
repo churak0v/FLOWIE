@@ -62,7 +62,7 @@ export function ProfileStaffPage() {
 
       <div style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
         <Text variant="title" style={{ fontSize: 20 }}>
-          Staff доступ
+          Доступ сотрудников
         </Text>
         <button
           type="button"

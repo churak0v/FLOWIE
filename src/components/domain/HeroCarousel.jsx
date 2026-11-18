@@ -102,11 +102,35 @@ export function HeroCarousel({ slides, className }) {
               style={{
                 position: 'absolute',
                 inset: 0,
-                background: 'linear-gradient(180deg, rgba(40,20,25,0.06), rgba(40,20,25,0.46))',
+              background: 'linear-gradient(180deg, rgba(40,20,25,0.10), rgba(40,20,25,0.16) 42%, rgba(40,20,25,0.58))',
               }}
             />
           </div>
         ))}
+      </div>
+
+      <div
+        style={{
+          position: 'absolute',
+          left: 'var(--sp-4)',
+          top: 'calc(var(--sp-4) + var(--app-inset-top))',
+          height: 34,
+          padding: '0 12px',
+          borderRadius: 999,
+          background: 'rgba(255,255,255,0.82)',
+          color: 'var(--text)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 7,
+          fontSize: 12,
+          fontWeight: 1000,
+          boxShadow: '0 12px 28px rgba(13,13,13,0.18)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+        }}
+      >
+        <span style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--accent)' }} />
+        FLOWIE букеты
       </div>
 
       {/* Caption + dots */}
@@ -121,7 +145,7 @@ export function HeroCarousel({ slides, className }) {
           textAlign: 'left',
         }}
       >
-        <div style={{ maxWidth: 360, fontSize: 24, fontWeight: 900, lineHeight: 1.12, textShadow: '0 2px 10px var(--c-ink-25)' }}>
+        <div style={{ maxWidth: 360, fontSize: 30, fontWeight: 1000, lineHeight: 1.02, letterSpacing: 0, textShadow: '0 2px 12px var(--c-ink-25)' }}>
           {safeSlides[active]?.caption || ''}
         </div>
 
@@ -133,7 +157,7 @@ export function HeroCarousel({ slides, className }) {
               if (href) navigate(href);
             }}
             style={{
-              marginTop: 8,
+              marginTop: 10,
               border: 0,
               background: 'transparent',
               padding: 0,

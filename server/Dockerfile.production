@@ -1,0 +1,23 @@
+FROM node:20.18.1-bookworm-slim
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+# Prisma CLI is retained because the same immutable image runs the one-shot
+# migration job before the API is replaced.
+RUN npm ci --no-audit --no-fund \
+    && node ./node_modules/prisma/build/index.js generate
+
+COPY . .
+RUN mkdir -p /app/uploads \
+    && chown node:node /app/uploads
+
+USER node
+EXPOSE 3001
+CMD ["node", "index.js"]

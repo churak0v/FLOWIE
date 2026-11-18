@@ -1,37 +1,9 @@
 import { getTelegramInitData } from './telegram';
+import { createAnalyticsUuid, getAnalyticsSessionId } from './lib/analytics';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const MEM_CACHE = new Map();
-
-const SESSION_TOKEN_KEY = 'flowie_session_token';
-
-function getSessionToken() {
-    try {
-        const t = localStorage.getItem(SESSION_TOKEN_KEY);
-        return t ? String(t) : '';
-    } catch {
-        return '';
-    }
-}
-
-function setSessionToken(token) {
-    try {
-        const t = String(token || '').trim();
-        if (!t) return;
-        localStorage.setItem(SESSION_TOKEN_KEY, t);
-    } catch {
-        // ignore
-    }
-}
-
-function clearSessionToken() {
-    try {
-        localStorage.removeItem(SESSION_TOKEN_KEY);
-    } catch {
-        // ignore
-    }
-}
 
 async function fetchJson(path, options = {}) {
     const method = String(options.method || 'GET').toUpperCase();
@@ -45,10 +17,8 @@ async function fetchJson(path, options = {}) {
         }
     }
 
-    const token = getSessionToken();
     const headers = {
         ...(options.headers || {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
 
     const res = await fetch(path, {
@@ -65,8 +35,6 @@ async function fetchJson(path, options = {}) {
         const error = new Error(data?.error || `HTTP_${res.status}`);
         error.status = res.status;
         error.data = data;
-        // If our local token is invalid/expired, clear it so bootstrap can re-auth.
-        if (res.status === 401) clearSessionToken();
         throw error;
     }
 
@@ -91,31 +59,39 @@ export const api = {
         });
     },
     telegramLogin: async (initData) => {
-        const res = await fetchJson(`${API_URL}/auth/telegram`, {
+        return fetchJson(`${API_URL}/auth/telegram`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ initData }),
         });
-        if (res?.token) setSessionToken(res.token);
-        return res;
     },
     guestLogin: async () => {
-        const res = await fetchJson(`${API_URL}/auth/guest`, {
+        return fetchJson(`${API_URL}/auth/guest`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
         });
-        if (res?.token) setSessionToken(res.token);
-        return res;
+    },
+    requestPhoneOtp: async (phone) => {
+        return fetchJson(`${API_URL}/auth/phone/request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone }),
+        });
+    },
+    verifyPhoneOtp: async ({ challengeId, code }) => {
+        return fetchJson(`${API_URL}/auth/phone/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ challengeId, code }),
+        });
     },
     logout: async () => {
-        const res = await fetchJson(`${API_URL}/auth/logout`, {
+        return fetchJson(`${API_URL}/auth/logout`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
         });
-        clearSessionToken();
-        return res;
     },
 
     // Analytics (best-effort)
@@ -126,7 +102,12 @@ export const api = {
         return fetchJson(`${API_URL}/events`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ event, meta }),
+            body: JSON.stringify({
+                event,
+                eventId: createAnalyticsUuid(),
+                sessionId: getAnalyticsSessionId(),
+                meta,
+            }),
         });
     },
 
@@ -155,6 +136,15 @@ export const api = {
     },
 
     // Products
+    searchCatalog: async (payload, { signal } = {}) => {
+        return fetchJson(`${API_URL}/search/catalog`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            cache: 'no-store',
+            signal,
+        });
+    },
     getProducts: async () => {
         return fetchJson(`${API_URL}/products`, { cache: 'no-store', cacheTtlMs: 15_000 });
     },
@@ -232,19 +222,17 @@ export const api = {
             body: JSON.stringify({ orderId }),
         });
     },
-    createStarsInvoice: async (orderId) => {
-        return fetchJson(`${API_URL}/payments/stars-invoice`, {
+    createAlfaPayment: async (orderId) => {
+        return fetchJson(`${API_URL}/payments/alfa-register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ orderId }),
         });
     },
-    submitTonPayment: async (orderId, payload = {}) => {
-        return fetchJson(`${API_URL}/payments/ton-submitted`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderId, ...payload }),
-        });
+    syncAlfaPayment: async (orderId) => {
+        const qs = new URLSearchParams();
+        qs.set('orderId', String(orderId));
+        return fetchJson(`${API_URL}/payments/alfa-status?${qs.toString()}`, { cache: 'no-store' });
     },
     rateOrderPhoto: async (orderId, rating) => {
         return fetchJson(`${API_URL}/orders/${encodeURIComponent(orderId)}/photo-rating`, {
@@ -281,5 +269,31 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(addressData)
         });
-    }
+    },
+    getDeliveryMapConfig: async () => {
+        return fetchJson(`${API_URL}/delivery/map-config`, { cache: 'no-store', cacheTtlMs: 5 * 60_000 });
+    },
+    suggestDeliveryAddresses: async (query) => {
+        const params = new URLSearchParams({ q: String(query || '') });
+        return fetchJson(`${API_URL}/delivery/suggest?${params.toString()}`, { cache: 'no-store' });
+    },
+    geocodeDeliveryAddress: async (address) => {
+        const params = new URLSearchParams({ address: String(address || '') });
+        return fetchJson(`${API_URL}/delivery/geocode?${params.toString()}`, { cache: 'no-store' });
+    },
+    getDeliveryPaymentInfo: async (orderId) => {
+        const params = new URLSearchParams({ orderId: String(orderId) });
+        return fetchJson(`${API_URL}/payments/delivery?${params.toString()}`, { cache: 'no-store' });
+    },
+    createDeliveryAlfaPayment: async (orderId) => {
+        return fetchJson(`${API_URL}/payments/delivery/alfa-register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId }),
+        });
+    },
+    syncDeliveryAlfaPayment: async (orderId) => {
+        const params = new URLSearchParams({ orderId: String(orderId) });
+        return fetchJson(`${API_URL}/payments/delivery/alfa-status?${params.toString()}`, { cache: 'no-store' });
+    },
 };

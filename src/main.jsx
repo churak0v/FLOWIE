@@ -1,6 +1,5 @@
 import React, { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { TonConnectUIProvider } from '@tonconnect/ui-react'
 import './index.css'
 import App from './App.jsx'
 import { telegramReady } from './telegram'
@@ -99,14 +98,6 @@ class ErrorBoundary extends React.Component {
 }
 
 const rootElement = document.getElementById('root');
-const tonManifestUrl = (() => {
-    try {
-        return `${window.location.origin}/tonconnect-manifest.json`;
-    } catch {
-        return 'https://flowie.churakov.tech/tonconnect-manifest.json';
-    }
-})();
-
 if (!rootElement) {
     console.error("Root element not found!");
 } else {
@@ -114,9 +105,7 @@ if (!rootElement) {
     createRoot(rootElement).render(
         <StrictMode>
             <ErrorBoundary>
-                <TonConnectUIProvider manifestUrl={tonManifestUrl}>
-                    <App />
-                </TonConnectUIProvider>
+                <App />
             </ErrorBoundary>
         </StrictMode>,
     );

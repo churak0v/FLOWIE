@@ -16,12 +16,12 @@ function normalizedStatus(order) {
 
 function statusMeta(order) {
   const st = normalizedStatus(order);
-  if (st === 'PAYMENT_PENDING') return { label: 'Payment', done: false };
-  if (st === 'ACCEPTED') return { label: 'Accepted', done: false };
-  if (st === 'ASSEMBLED') return { label: 'Packed', done: false };
-  if (st === 'IN_DELIVERY') return { label: 'On the way', done: false };
-  if (st === 'DELIVERED') return { label: 'Delivered', done: true };
-  return { label: 'In progress', done: false };
+  if (st === 'PAYMENT_PENDING') return { label: 'Оплата', done: false };
+  if (st === 'ACCEPTED') return { label: 'Принят', done: false };
+  if (st === 'ASSEMBLED') return { label: 'Собран', done: false };
+  if (st === 'IN_DELIVERY') return { label: 'В пути', done: false };
+  if (st === 'DELIVERED') return { label: 'Доставлен', done: true };
+  return { label: 'В работе', done: false };
 }
 
 function itemLabel(order) {
@@ -29,9 +29,9 @@ function itemLabel(order) {
   const names = items
     .map((it) => it?.product?.name || it?.product?.title || '')
     .filter(Boolean);
-  if (!names.length) return 'Wishlist gift';
+  if (!names.length) return 'Заказ цветов';
   if (names.length === 1) return names[0];
-  return `${names[0]} + ${names.length - 1} more`;
+  return `${names[0]} + ещё ${names.length - 1}`;
 }
 
 export function ActiveOrderCard({ order, onClick }) {
@@ -39,7 +39,7 @@ export function ActiveOrderCard({ order, onClick }) {
   const firstItem = order.items?.[0];
   const img = firstItem?.product?.image || firstItem?.product?.images?.[0]?.url || '';
   const meta = statusMeta(order);
-  const recipient = order.recipientName || 'Vivienne';
+  const recipient = order.recipientName || 'получателя';
   const amount = Number(order.totalPrice || order.amount || 0);
 
   return (
@@ -47,7 +47,7 @@ export function ActiveOrderCard({ order, onClick }) {
       type="button"
       onClick={onClick}
       style={{ width: '100%', border: 0, background: 'transparent', padding: 0, textAlign: 'left' }}
-      aria-label="Active order"
+      aria-label="Активный заказ"
     >
       <Surface
         variant="default"
@@ -78,7 +78,7 @@ export function ActiveOrderCard({ order, onClick }) {
 
           <div style={{ minWidth: 0 }}>
             <Text variant="subtitle" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Gift for {recipient}
+              Цветы для {recipient}
             </Text>
             <Text variant="body" muted style={{ marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {itemLabel(order)}

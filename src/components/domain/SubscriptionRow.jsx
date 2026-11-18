@@ -113,11 +113,11 @@ export function SubscriptionRow() {
 
     return (
       <Tile
-        onClick={() => alert('FLOWIE Pass is coming soon')}
+        onClick={() => alert('FLOWIE Plus скоро появится')}
         style={{
           position: 'relative',
           background: 'linear-gradient(145deg, var(--c-accent), var(--c-accent-2))',
-          color: 'var(--c-white)',
+          color: 'var(--c-accent-contrast)',
         }}
       >
         <span
@@ -135,12 +135,12 @@ export function SubscriptionRow() {
             fontWeight: 900,
           }}
         >
-          Soon
+          Скоро
         </span>
         <Text variant="subtitle" style={{ color: 'var(--c-white)' }}>
-          FLOWIE Pass
+          FLOWIE Plus
         </Text>
-        <div style={{ fontSize: 42, fontWeight: 900, letterSpacing: 0, opacity: 0.92 }}>PASS</div>
+        <div style={{ fontSize: 42, fontWeight: 900, letterSpacing: 0, opacity: 0.92 }}>PLUS</div>
       </Tile>
     );
   };

@@ -124,6 +124,13 @@ export function ProfilePage({ user }) {
         </Surface>
 
         <MenuItem
+          title="Доставка"
+          caption={isAdmin ? 'Зоны на карте, тарифы и условия' : 'Доступно только admin'}
+          disabled={!isAdmin}
+          onClick={() => navigate('/delivery')}
+        />
+
+        <MenuItem
           title="Режим работы"
           caption={isAdmin ? 'Расписание по дням недели' : 'Доступно только admin'}
           disabled={!isAdmin}

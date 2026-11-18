@@ -1,10 +1,12 @@
-node_modules
 .env
 .env.*
 !.env.example
+node_modules
+uploads
+tests
+*.log
+*.bak
 prisma/*.db
 prisma/*.db-journal
-uploads
 .DS_Store
 npm-debug.log
-*.log

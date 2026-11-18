@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Calendar, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { BarChart3, Calendar, X } from 'lucide-react';
 import { adminApi } from '../lib/adminApi';
 import { Surface } from '../../src/components/ui/Surface';
 import { Text } from '../../src/components/ui/Text';
@@ -29,13 +30,6 @@ function formatRange(fromYmd, toYmdValue) {
   return `${fStr} → ${tStr}`;
 }
 
-function pct(n, d) {
-  const num = Number(n || 0);
-  const den = Number(d || 0);
-  if (!den) return null;
-  return (num / den) * 100;
-}
-
 function normalizeStartParam(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return '';
@@ -55,20 +49,6 @@ function Stat({ label, value, accent = false }) {
       <span style={{ color: 'var(--muted)' }}>{label}</span>
       <span style={{ whiteSpace: 'nowrap', color: accent ? 'var(--accent)' : 'var(--text)' }}>{value}</span>
     </div>
-  );
-}
-
-function Tile({ title, value, caption }) {
-  return (
-    <Surface variant="soft" style={{ padding: 12, borderRadius: 18, border: '1px solid var(--border)' }}>
-      <Text variant="caption">{title}</Text>
-      <div style={{ marginTop: 6, fontSize: 20, fontWeight: 1100 }}>{value}</div>
-      {caption ? (
-        <div style={{ marginTop: 6 }}>
-          <Text variant="caption">{caption}</Text>
-        </div>
-      ) : null}
-    </Surface>
   );
 }
 
@@ -154,27 +134,7 @@ export function CashPage() {
   const [periodOpen, setPeriodOpen] = useState(false);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
-  const [summary, setSummary] = useState(null);
   const [finance, setFinance] = useState(null);
-
-  const counts = summary?.counts || {};
-
-  const conv = useMemo(() => {
-    const productView = Number(counts.product_view || 0);
-    const addToCart = Number(counts.add_to_cart || 0);
-    const checkoutStart = Number(counts.checkout_start || 0);
-    const paymentSuccess = Number(counts.payment_success || 0);
-
-    return {
-      productView,
-      addToCart,
-      checkoutStart,
-      paymentSuccess,
-      pvToCart: pct(addToCart, productView),
-      cartToCheckout: pct(checkoutStart, addToCart),
-      checkoutToPay: pct(paymentSuccess, checkoutStart),
-    };
-  }, [counts]);
 
   const startParam = useMemo(() => normalizeStartParam(refTag) || 'flowie', [refTag]);
   const referralLink = useMemo(
@@ -187,18 +147,10 @@ export function CashPage() {
     setError('');
     setReferralsError('');
     try {
-      const [sRes, fRes, rRes] = await Promise.allSettled([
-        adminApi.getAnalyticsSummary({ from, to }),
+      const [fRes, rRes] = await Promise.allSettled([
         adminApi.getFinance({ from, to }),
         adminApi.getReferrals({ from, to }),
       ]);
-
-      if (sRes.status === 'fulfilled') {
-        setSummary(sRes.value || null);
-      } else {
-        setSummary(null);
-        setError(sRes.reason?.data?.error || sRes.reason?.message || 'Не удалось загрузить данные');
-      }
 
       if (fRes.status === 'fulfilled') {
         setFinance(fRes.value || null);
@@ -281,13 +233,18 @@ export function CashPage() {
     <div style={{ paddingBottom: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
         <Text variant="title">Бизнес</Text>
-        <button
-          type="button"
-          onClick={load}
-          style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--muted)', fontWeight: 900 }}
-        >
-          Обновить
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Link to="/analytics" style={{ color: 'var(--text)', fontWeight: 900, textDecoration: 'none', display: 'flex', gap: 6 }}>
+            <BarChart3 size={17} /> Отчёты
+          </Link>
+          <button
+            type="button"
+            onClick={load}
+            style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--muted)', fontWeight: 900 }}
+          >
+            Обновить
+          </button>
+        </div>
       </div>
 
       <div style={{ marginTop: 14 }}>
@@ -492,39 +449,15 @@ export function CashPage() {
           <Divider />
 
           <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
-            <Text variant="subtitle">Конверсия</Text>
-            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <Tile
-                title="Товар → В корзину"
-                value={conv.pvToCart == null ? '—' : `${conv.pvToCart.toFixed(0)}%`}
-                caption={`${conv.addToCart} / ${conv.productView}`}
-              />
-              <Tile
-                title="В корзину → Оформление"
-                value={conv.cartToCheckout == null ? '—' : `${conv.cartToCheckout.toFixed(0)}%`}
-                caption={`${conv.checkoutStart} / ${conv.addToCart}`}
-              />
-              <Tile
-                title="Оформление → Оплата"
-                value={conv.checkoutToPay == null ? '—' : `${conv.checkoutToPay.toFixed(0)}%`}
-                caption={`${conv.paymentSuccess} / ${conv.checkoutStart}`}
-              />
-              <Tile title="Заказов (создано)" value={String(summary?.orders ?? 0)} caption={null} />
+            <Text variant="subtitle">Аналитика без ложной конверсии</Text>
+            <div style={{ marginTop: 8 }}>
+              <Text variant="body" muted>
+                Проценты из несопоставимых счётчиков событий убраны. События, известные сессии и подтверждённые оплаты разделены в новом отчёте.
+              </Text>
             </div>
-          </Surface>
-
-          <Divider />
-
-          <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
-            <Text variant="subtitle">События</Text>
-            <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-              <Stat label="Главная (просмотры)" value={counts.home_view ?? 0} />
-              <Stat label="Товар (просмотры)" value={counts.product_view ?? 0} />
-              <Stat label="Клик по товару" value={counts.product_click ?? 0} />
-              <Stat label="Добавили в корзину" value={counts.add_to_cart ?? 0} accent />
-              <Stat label="Начали оформление" value={counts.checkout_start ?? 0} />
-              <Stat label="Оплата успешна" value={counts.payment_success ?? 0} accent />
-            </div>
+            <Link to="/analytics" style={{ marginTop: 12, display: 'inline-flex', color: 'var(--text)', fontWeight: 900 }}>
+              Открыть отчёт
+            </Link>
           </Surface>
 
           <Divider />
@@ -532,7 +465,12 @@ export function CashPage() {
           <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
             <Text variant="subtitle">Финансы</Text>
             <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-              <Stat label="Выручка (delivered)" value={`${finance?.totals?.deliveredRevenue ?? 0} ₽`} accent />
+              <Stat label="Основные оплаты" value={`${finance?.totals?.confirmedMainRevenue ?? 0} ₽`} accent />
+              <Stat label="Оплаченных основных счетов" value={finance?.totals?.confirmedMainCount ?? 0} />
+              <Stat label="Оплаченные доплаты доставки" value={`${finance?.totals?.paidDeliveryRevenue ?? 0} ₽`} />
+              <Stat label="Доплат доставки" value={finance?.totals?.paidDeliveryCount ?? 0} />
+              <Stat label="Всего поступлений" value={`${finance?.totals?.totalReceipts ?? 0} ₽`} accent />
+              <Stat label="Выручка выполненных заказов" value={`${finance?.totals?.deliveredRevenue ?? 0} ₽`} />
               <Stat label="Выполнено" value={finance?.totals?.deliveredCount ?? 0} />
               <Stat label="Отмен" value={finance?.totals?.cancelledCount ?? 0} />
               <Stat label="Средний чек" value={`${finance?.totals?.avgCheck ?? 0} ₽`} />
@@ -551,7 +489,7 @@ export function CashPage() {
           <Divider />
 
           <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
-            <Text variant="subtitle">Выручка по дням</Text>
+            <Text variant="subtitle">Подтверждённые поступления по дням</Text>
             <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
               {(finance?.revenueByDay || []).length ? (
                 finance.revenueByDay.map((d) => (
@@ -567,7 +505,10 @@ export function CashPage() {
                     }}
                   >
                     <span style={{ color: 'var(--muted)' }}>{d.day}</span>
-                    <span style={{ whiteSpace: 'nowrap', color: 'var(--accent)' }}>{d.revenue} ₽</span>
+                    <span style={{ whiteSpace: 'nowrap', color: 'var(--accent)' }}>
+                      {d.totalReceipts ?? d.revenue} ₽
+                      {d.deliveryRevenue ? ` (доставка ${d.deliveryRevenue} ₽)` : ''}
+                    </span>
                   </div>
                 ))
               ) : (

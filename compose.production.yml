@@ -1,0 +1,194 @@
+name: flowie-prod
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  networks:
+    - backend
+
+services:
+  db:
+    <<: *service-defaults
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env.production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env.production}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    volumes:
+      - flowie_pgdata:/var/lib/postgresql/data
+    stop_grace_period: 60s
+
+  migrate:
+    image: flowie-api:${RELEASE_TAG:?Set an immutable RELEASE_TAG}
+    build:
+      context: ./server
+      dockerfile: Dockerfile.production
+    profiles: ["tools"]
+    environment: &api-environment
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env.production}
+      NODE_ENV: production
+      PORT: "3001"
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?Set APP_JWT_SECRET in .env.production}
+      BOT_TOKEN: ${BOT_TOKEN:?Set BOT_TOKEN in .env.production}
+      ADMIN_BOT_TOKEN: ${ADMIN_BOT_TOKEN:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:?Set TELEGRAM_WEBHOOK_SECRET in .env.production}
+      TELEGRAM_AUTO_SET_WEBHOOK: "false"
+      APP_COOKIE_DOMAIN: ${APP_COOKIE_DOMAIN:-}
+      ADMIN_TG_IDS: ${ADMIN_TG_IDS:?Set ADMIN_TG_IDS in .env.production}
+      DEV_ADMIN_ENABLED: "false"
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:?Set PUBLIC_SITE_URL in .env.production}
+      AUTH_ALLOWED_ORIGINS: ${AUTH_ALLOWED_ORIGINS:?Set AUTH_ALLOWED_ORIGINS in .env.production}
+      SEO_APP_SHELL_URL: http://web:8080/_flowie_app_shell
+      ALFA_BANK_ENABLED: ${ALFA_BANK_ENABLED:-false}
+      ALFA_BANK_MODE: ${ALFA_BANK_MODE:-test}
+      ALFA_BANK_API_URL: ${ALFA_BANK_API_URL:-}
+      ALFA_BANK_USER_NAME: ${ALFA_BANK_USER_NAME:-}
+      ALFA_BANK_PASSWORD: ${ALFA_BANK_PASSWORD:-}
+      ALFA_BANK_TOKEN: ${ALFA_BANK_TOKEN:-}
+      NODE_EXTRA_CA_CERTS: /app/certs/russian-trusted-root-ca.pem
+      AUTO_FULFILLMENT_ENABLED: ${AUTO_FULFILLMENT_ENABLED:-false}
+      AUTO_FULFILLMENT_INTERVAL_MS: ${AUTO_FULFILLMENT_INTERVAL_MS:-60000}
+      NOMINATIM_BASE_URL: ${NOMINATIM_BASE_URL:-https://nominatim.openstreetmap.org}
+      NOMINATIM_USER_AGENT: ${NOMINATIM_USER_AGENT:-FLOWIE/production}
+      PAYMENT_BANK_NAME: ${PAYMENT_BANK_NAME:-}
+      PAYMENT_CARD_NUMBER: ${PAYMENT_CARD_NUMBER:-}
+      PAYMENT_RECEIVER_NAME: ${PAYMENT_RECEIVER_NAME:-}
+      RUB_PER_USD: ${RUB_PER_USD:-}
+      SPB_LO_VIEWBOX: ${SPB_LO_VIEWBOX:-}
+      DELIVERY_TARIFF_RUB: ${DELIVERY_TARIFF_RUB:-}
+      DELIVERY_INVOICE_TTL_HOURS: ${DELIVERY_INVOICE_TTL_HOURS:-24}
+      YANDEX_MAPS_ENABLED: ${YANDEX_MAPS_ENABLED:-false}
+      YANDEX_MAPS_JS_API_KEY: ${YANDEX_MAPS_JS_API_KEY:-}
+      YANDEX_MAPS_SUGGEST_API_KEY: ${YANDEX_MAPS_SUGGEST_API_KEY:-}
+      YANDEX_MAPS_GEOCODER_API_KEY: ${YANDEX_MAPS_GEOCODER_API_KEY:-}
+      CATALOG_EMBEDDINGS_ENABLED: ${CATALOG_EMBEDDINGS_ENABLED:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CATALOG_EMBEDDING_MODEL: ${CATALOG_EMBEDDING_MODEL:-text-embedding-3-small}
+      CATALOG_EMBEDDING_DIMENSIONS: ${CATALOG_EMBEDDING_DIMENSIONS:-512}
+      CATALOG_EMBEDDING_TIMEOUT_MS: ${CATALOG_EMBEDDING_TIMEOUT_MS:-2500}
+      CATALOG_SEARCH_MIN_SIMILARITY: ${CATALOG_SEARCH_MIN_SIMILARITY:-0.25}
+      CATALOG_REINDEX_MAX_PRODUCTS: ${CATALOG_REINDEX_MAX_PRODUCTS:-2000}
+      CATALOG_REINDEX_BATCH_SIZE: ${CATALOG_REINDEX_BATCH_SIZE:-20}
+      SMS_AUTH_ENABLED: ${SMS_AUTH_ENABLED:-false}
+      SMS_RU_API_ID: ${SMS_RU_API_ID:-}
+      SMS_RU_SENDER: ${SMS_RU_SENDER:-}
+    command: ["node", "./node_modules/prisma/build/index.js", "migrate", "deploy"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+
+  api:
+    <<: *service-defaults
+    image: flowie-api:${RELEASE_TAG:?Set an immutable RELEASE_TAG}
+    build:
+      context: ./server
+      dockerfile: Dockerfile.production
+    environment: *api-environment
+    expose:
+      - "3001"
+    volumes:
+      - flowie_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    stop_grace_period: 30s
+    networks:
+      - backend
+      - egress
+
+  web:
+    <<: *service-defaults
+    image: flowie-web:${RELEASE_TAG:?Set an immutable RELEASE_TAG}
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      args:
+        VITE_API_URL: /api
+        VITE_DISABLE_TELEGRAM_BOOTSTRAP: "false"
+        VITE_HERO_IMAGE: ${VITE_HERO_IMAGE:-}
+        VITE_RECIPIENT_IMAGE: ${VITE_RECIPIENT_IMAGE:-}
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  admin:
+    <<: *service-defaults
+    image: flowie-admin:${RELEASE_TAG:?Set an immutable RELEASE_TAG}
+    build:
+      context: .
+      dockerfile: Dockerfile.admin.production
+      args:
+        VITE_API_URL: /api
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  edge:
+    restart: unless-stopped
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "80:8080"
+      - "443:8443"
+    environment:
+      FLOWIE_DOMAIN: ${FLOWIE_DOMAIN:?Set FLOWIE_DOMAIN in .env.production}
+      FLOWIE_ADMIN_DOMAIN: ${FLOWIE_ADMIN_DOMAIN:?Set FLOWIE_ADMIN_DOMAIN in .env.production}
+    volumes:
+      - ./nginx/production-edge.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${TLS_CERT_DIR:?Set TLS_CERT_DIR in .env.production}/fullchain.pem:/etc/nginx/certs/fullchain.pem:ro
+      - ${TLS_CERT_DIR:?Set TLS_CERT_DIR in .env.production}/privkey.pem:/etc/nginx/certs/privkey.pem:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/edge-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+      - /etc/nginx/conf.d
+
+networks:
+  backend:
+    internal: true
+  egress:
+
+volumes:
+  flowie_pgdata:
+  flowie_uploads:

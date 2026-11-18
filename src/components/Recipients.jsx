@@ -17,10 +17,10 @@ export function Recipients() {
     <>
       <AppShell style={{ display: 'flex', flexDirection: 'column', '--app-content-inset-bottom': '0px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <IconButton onClick={() => navigate(-1)} aria-label="Back">
+          <IconButton onClick={() => navigate(-1)} aria-label="Назад">
             <ChevronLeft size={22} />
           </IconButton>
-          <Text variant="title">Profiles</Text>
+          <Text variant="title">Адреса</Text>
         </div>
 
         <Surface
@@ -51,13 +51,13 @@ export function Recipients() {
               <Link2 size={18} />
             </span>
             <div style={{ minWidth: 0 }}>
-              <Text variant="subtitle">Shared wishlist profiles</Text>
+              <Text variant="subtitle">Адресная книга</Text>
               <Text variant="body" muted style={{ marginTop: 6, lineHeight: 1.35 }}>
-                Profiles appear here when someone shares a FLOWIE wishlist with you. The app is only for choosing real wishlist gifts and checking out safely.
+                Сохраняйте получателей и комментарии к доставке, чтобы повторные заказы оформлялись быстрее.
               </Text>
               <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--accent)', fontWeight: 900, fontSize: 13 }}>
                 <ShieldCheck size={15} />
-                No open catalog of people, only shared wishlists.
+                Адреса используются только для выполнения заказа.
               </div>
             </div>
           </div>
@@ -66,10 +66,10 @@ export function Recipients() {
         {empty ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', textAlign: 'center' }}>
-              <Text variant="subtitle">No profiles yet</Text>
+              <Text variant="subtitle">Адресов пока нет</Text>
               <div style={{ marginTop: 6 }}>
                 <Text variant="body" muted>
-                  Open a shared wishlist link to see a profile here.
+                  Добавьте детали доставки при оформлении, и они появятся здесь.
                 </Text>
               </div>
             </Surface>

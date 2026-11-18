@@ -1,6 +1,11 @@
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
+const RUB_PER_USD = 82;
+
+function usdToRubPrice(usd) {
+  return Math.round((Number(usd || 0) * RUB_PER_USD) / 10) * 10;
+}
 
 const FLOWWOW_FLOWERS = [
   {
@@ -639,29 +644,89 @@ const FLOWWOW_FLOWERS = [
 ];
 
 
-function flowerTier(price) {
-  if (price <= 55) return 'easy yes';
-  if (price <= 90) return 'make it special';
+function flowerTier(priceRub) {
+  if (priceRub <= 4500) return 'easy yes';
+  if (priceRub <= 7400) return 'make it special';
   return 'big gesture';
 }
 
 function flowerComposition(name) {
   const parts = [];
-  if (/rose/i.test(name)) parts.push('Roses');
-  if (/hydrangea/i.test(name)) parts.push('Hydrangea');
-  if (/dianthus|carnation/i.test(name)) parts.push('Dianthus');
-  if (/chrysanthemum|newton/i.test(name)) parts.push('Chrysanthemum');
-  if (/eustoma/i.test(name)) parts.push('Eustoma');
-  if (/matthiola/i.test(name)) parts.push('Matthiola');
-  if (/tulip/i.test(name)) parts.push('Tulips');
-  if (/orchid/i.test(name)) parts.push('Orchids');
-  if (/ranunculus/i.test(name)) parts.push('Ranunculus');
-  if (!parts.length) parts.push('Seasonal flowers');
-  return [...parts, 'Fresh greenery', 'Gift wrap'];
+  if (/rose/i.test(name)) parts.push('Розы');
+  if (/hydrangea/i.test(name)) parts.push('Гортензия');
+  if (/dianthus|carnation/i.test(name)) parts.push('Диантус');
+  if (/chrysanthemum|newton/i.test(name)) parts.push('Хризантема');
+  if (/eustoma|lisianthus/i.test(name)) parts.push('Эустома');
+  if (/matthiola/i.test(name)) parts.push('Маттиола');
+  if (/tulip/i.test(name)) parts.push('Тюльпаны');
+  if (/orchid/i.test(name)) parts.push('Орхидеи');
+  if (/ranunculus/i.test(name)) parts.push('Ранункулюсы');
+  if (/peon/i.test(name)) parts.push('Пионы');
+  if (/chamomile|daisy/i.test(name)) parts.push('Ромашка');
+  if (/eucalyptus/i.test(name)) parts.push('Эвкалипт');
+  if (!parts.length) parts.push('Сезонные цветы');
+  return [...parts, 'Свежая зелень', 'Цветочная упаковка'];
+}
+
+function russianFlowerName(name) {
+  const exact = {
+    'Newton Chrysanthemum & Dianthus Hatbox': 'Хризантема Ньютон и диантус в коробке',
+    'French Rose, Hydrangea & Matthiola Bouquet': 'Букет из французской розы, гортензии и маттиолы',
+    'Spray Roses & Dianthus with Eucalyptus': 'Кустовые розы и диантус с эвкалиптом',
+    'French Roses, Newton Chrysanthemum & Eucalyptus Bouquet': 'Букет из французских роз, хризантемы Ньютон и эвкалипта',
+    'Coral Peonies with Eucalyptus': 'Коралловые пионы с эвкалиптом',
+    'Hydrangea, Daisy Chrysanthemum & Chamomile Bouquet': 'Букет из гортензии, кустовой хризантемы и ромашки',
+    'Spray Roses & Lisianthus Author Bouquet': 'Авторский букет из кустовых роз и эустомы',
+    'White Newton Chrysanthemum & Eucalyptus Bouquet': 'Букет из белой хризантемы Ньютон и эвкалипта',
+    'White Peonies with Eucalyptus': 'Белые пионы с эвкалиптом',
+    'Pastel French Roses with Eucalyptus': 'Пастельные французские розы с эвкалиптом',
+    'Sarah Bernhardt Peonies, 11 Stems': 'Пионы Сара Бернар, 11 стеблей',
+    'Hydrangea, Dianthus, Spray Roses & Chrysanthemums Bouquet': 'Букет из гортензии, диантуса, кустовых роз и хризантем',
+    'Matthiola, Dianthus & Altai Chrysanthemum Basket': 'Корзина из маттиолы, диантуса и алтайской хризантемы',
+    'Coral Peony Roses with Eucalyptus': 'Коралловые пионовидные розы с эвкалиптом',
+    'Sarah Bernhardt Peonies, 31 Stems': 'Пионы Сара Бернар, 31 стебель',
+    'Snow-White Newton Grand Bouquet': 'Большой белоснежный букет Ньютон',
+    'Coral Peonies, Hydrangea & Chamomile Bouquet': 'Букет из коралловых пионов, гортензии и ромашки',
+    'Peony Roses, Hydrangea & Matthiola Wow Bouquet': 'Большой букет из пионовидных роз, гортензии и маттиолы',
+    'Roses, Dianthus & Eucalyptus Author Bouquet': 'Авторский букет из роз, диантуса и эвкалипта',
+    'Dianthus & Eucalyptus Hatbox': 'Диантус и эвкалипт в коробке',
+    'Soft Dianthus & Eucalyptus Hatbox': 'Нежный диантус и эвкалипт в коробке',
+    'Peony Roses, Chrysanthemum & Chamomile Hatbox': 'Пионовидные розы, хризантема и ромашка в коробке',
+    'Peony Roses Hatbox': 'Пионовидные розы в коробке',
+    'Author Flower Composition in Hatbox': 'Авторская цветочная композиция в коробке',
+    'Cream Dianthus with Eucalyptus': 'Кремовый диантус с эвкалиптом',
+    'Peonies, Spray Roses & Viburnum Bouquet': 'Букет из пионов, кустовых роз и вибурнума',
+    'Gerbera, Peony Rose, Eustoma & Viburnum Composition': 'Композиция из герберы, пионовидной розы, эустомы и вибурнума',
+    '15 Soft Pink Carnations with Eucalyptus': '15 нежно-розовых гвоздик с эвкалиптом',
+    'White Hydrangea Air Bouquet': 'Воздушный букет из белой гортензии',
+    'Pink French Roses & Eucalyptus Compliment Bouquet': 'Комплимент-букет из розовых французских роз и эвкалипта',
+    'Altai Chrysanthemums & Eucalyptus Compliment Bouquet': 'Комплимент-букет из алтайских хризантем и эвкалипта',
+    'White Lisianthus, Chamomile & Eucalyptus Bouquet': 'Букет из белой эустомы, ромашки и эвкалипта',
+    'Hydrangea Cheesecake Bouquet': 'Букет «Гортензия Чизкейк»',
+    'White Dianthus & Eucalyptus Air Bouquet': 'Воздушный букет из белого диантуса и эвкалипта',
+    'Pink Hydrangea & Eucalyptus Bouquet': 'Букет из розовой гортензии и эвкалипта',
+    'Spray Chrysanthemum & Eucalyptus Compliment Bouquet': 'Комплимент-букет из кустовой хризантемы и эвкалипта',
+    'White Chrysanthemum & Eucalyptus Air Bouquet': 'Воздушный букет из белой хризантемы и эвкалипта',
+    'French Roses with Eucalyptus Compliment Bouquet': 'Комплимент-букет из французских роз с эвкалиптом',
+    'Tender Dianthus Bouquet': 'Нежный букет из диантуса',
+    'Compact White Newton Chrysanthemum & Eucalyptus Bouquet': 'Компактный букет из белой хризантемы Ньютон и эвкалипта',
+    'Hanoi Dianthus Mono Bouquet, 15 Stems': 'Монобукет из диантуса Ханой, 15 стеблей',
+    'White Peonies & Eucalyptus Compliment Bouquet': 'Комплимент-букет из белых пионов и эвкалипта',
+    'White Dianthus Mono Bouquet': 'Монобукет из белого диантуса',
+    'Alice Pink Eustoma Mono Bouquet': 'Монобукет из розовой эустомы Алиса',
+    'White Hydrangea, Chrysanthemum & Eucalyptus Bouquet': 'Букет из белой гортензии, хризантемы и эвкалипта',
+    'Pink French Rose & Chamomile Bouquet': 'Букет из розовой французской розы и ромашки',
+    'White Matthiola, Spray Chrysanthemum & Eucalyptus Bouquet': 'Букет из белой маттиолы, кустовой хризантемы и эвкалипта',
+    'Hydrangea, French Rose, Chrysanthemum & Eucalyptus Bouquet': 'Букет из гортензии, французской розы, хризантемы и эвкалипта',
+    'Pink Hydrangea, Dianthus & Eucalyptus Bouquet': 'Букет из розовой гортензии, диантуса и эвкалипта',
+    'Pink Hydrangea, Chrysanthemum & Eucalyptus Bouquet': 'Букет из розовой гортензии, хризантемы и эвкалипта',
+  };
+  return exact[name] || name;
 }
 
 const PRODUCTS = FLOWWOW_FLOWERS.map(({ name, price, image, images = [] }, idx) => {
-  const tier = flowerTier(price);
+  const priceRub = usdToRubPrice(price);
+  const tier = flowerTier(priceRub);
   const gallery = [];
   const seen = new Set();
   for (const url of [image, ...images]) {
@@ -671,13 +736,13 @@ const PRODUCTS = FLOWWOW_FLOWERS.map(({ name, price, image, images = [] }, idx) 
     gallery.push(u);
   }
   return {
-    name,
-    price,
+    name: russianFlowerName(name),
+    price: priceRub,
     image: gallery[0] || image,
     images: gallery,
-    description: `Fresh floral arrangement with a polished look and clear price. The recipient confirms delivery after checkout.`,
+    description: 'Свежая цветочная композиция с понятной ценой. После оформления можно следить за сборкой, передачей курьеру и доставкой.',
     tags: `flowers,${tier}`,
-    deliveryTime: '45 min',
+    deliveryTime: '45 мин',
     sort: (idx + 1) * 10,
     composition: flowerComposition(name),
   };
@@ -685,30 +750,30 @@ const PRODUCTS = FLOWWOW_FLOWERS.map(({ name, price, image, images = [] }, idx) 
 
 const UPSELLS = [
   {
-    name: 'Gift note',
+    name: 'Открытка',
     price: 0,
     image: '/upsells/gift-note.jpg',
-    description: 'A short message included with the order.',
+    description: 'Короткое сообщение, которое добавим к заказу.',
     tags: 'note',
     deliveryTime: '',
     isUpsell: true,
     upsellSort: 10,
   },
   {
-    name: 'Chocolate',
-    price: 4,
+    name: 'Шоколад',
+    price: usdToRubPrice(4),
     image: '/upsells/chocolate.jpg',
-    description: 'A small add-on for a warmer gift.',
+    description: 'Небольшое дополнение для более тёплой доставки цветов.',
     tags: 'add-on',
     deliveryTime: '',
     isUpsell: true,
     upsellSort: 20,
   },
   {
-    name: 'Scented candle',
-    price: 9,
+    name: 'Аромасвеча',
+    price: usdToRubPrice(9),
     image: '/upsells/scented-candle.jpg',
-    description: 'A clean, giftable add-on for creator wishlists.',
+    description: 'Аккуратное дополнение к премиальной доставке цветов.',
     tags: 'add-on',
     deliveryTime: '',
     isUpsell: true,
@@ -719,13 +784,13 @@ const UPSELLS = [
 const namesWhere = (predicate, limit = 50) => PRODUCTS.filter(predicate).slice(0, limit).map((p) => p.name);
 
 const COLLECTIONS = [
-  { slug: 'flowers', title: 'Flowers', type: 'thematic', sort: 10, names: PRODUCTS.map((p) => p.name) },
-  { slug: 'easy-yes', title: 'Easy yes', type: 'scenario', sort: 20, names: namesWhere((p) => p.price <= 55, 18) },
-  { slug: 'make-it-special', title: 'Make it special', type: 'scenario', sort: 30, names: namesWhere((p) => p.price > 55 && p.price <= 90, 18) },
-  { slug: 'big-gesture', title: 'Big gesture', type: 'scenario', sort: 40, names: namesWhere((p) => p.price > 90, 12) },
-  { slug: 'under-60', title: 'Under $60', type: 'scenario', sort: 50, names: namesWhere((p) => p.price < 60, 18) },
-  { slug: 'premium-flowers', title: 'Premium flowers', type: 'thematic', sort: 60, names: namesWhere((p) => p.price >= 80, 14) },
-  { slug: 'top-picks', title: 'Top picks', type: 'scenario', sort: 70, names: PRODUCTS.filter((_, idx) => [0, 7, 11, 14, 18, 23, 31, 39, 45, 49].includes(idx)).map((p) => p.name) },
+  { slug: 'flowers', title: 'Цветы', type: 'thematic', sort: 10, names: PRODUCTS.map((p) => p.name) },
+  { slug: 'easy-yes', title: 'Лёгкий выбор', type: 'scenario', sort: 20, names: namesWhere((p) => p.price <= usdToRubPrice(55), 18) },
+  { slug: 'make-it-special', title: 'Особый момент', type: 'scenario', sort: 30, names: namesWhere((p) => p.price > usdToRubPrice(55) && p.price <= usdToRubPrice(90), 18) },
+  { slug: 'big-gesture', title: 'Большой жест', type: 'scenario', sort: 40, names: namesWhere((p) => p.price > usdToRubPrice(90), 12) },
+  { slug: 'under-5000', title: 'До 5 000 ₽', type: 'scenario', sort: 50, names: namesWhere((p) => p.price < 5000, 18) },
+  { slug: 'premium-flowers', title: 'Премиальные цветы', type: 'thematic', sort: 60, names: namesWhere((p) => p.price >= usdToRubPrice(80), 14) },
+  { slug: 'top-picks', title: 'Популярное', type: 'scenario', sort: 70, names: PRODUCTS.filter((_, idx) => [0, 7, 11, 14, 18, 23, 31, 39, 45, 49].includes(idx)).map((p) => p.name) },
 ];
 
 async function upsertProduct(data) {
@@ -773,7 +838,7 @@ async function upsertProduct(data) {
 }
 
 async function main() {
-  console.log('Start seeding Flowie private wishlist data...');
+  console.log('Запускаем seed для Flowie доставки цветов...');
 
   const productsByName = new Map();
   const seedNames = [...PRODUCTS, ...UPSELLS].map((item) => item.name);
@@ -785,7 +850,7 @@ async function main() {
   for (const item of [...PRODUCTS, ...UPSELLS]) {
     const product = await upsertProduct(item);
     productsByName.set(product.name, product);
-    console.log(`Upserted product: ${product.name}`);
+    console.log(`Обновлён товар: ${product.name}`);
   }
 
   await prisma.collectionItem.deleteMany({});
@@ -823,10 +888,10 @@ async function main() {
       });
     }
 
-    console.log(`Upserted collection: ${row.title}`);
+    console.log(`Обновлена подборка: ${row.title}`);
   }
 
-  console.log('Seeding finished.');
+  console.log('Seed завершён.');
 }
 
 main()

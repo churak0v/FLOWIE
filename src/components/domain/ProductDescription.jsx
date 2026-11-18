@@ -127,7 +127,7 @@ function CheckItem({ children }) {
 }
 
 function SectionAccordion({ index, title, items, defaultOpen = false }) {
-  const safeTitle = String(title || '').trim() || 'Details';
+  const safeTitle = String(title || '').trim() || 'Детали';
   return (
     <details className="ui-accordion" open={Boolean(defaultOpen)}>
       <summary className="ui-accordion__summary">

@@ -24,7 +24,7 @@ export function MiniCartBar({ count, sum, bottom = 'calc(72px + var(--app-nav-in
         <button
           type="button"
           onClick={() => navigate('/cart')}
-          aria-label={`Cart, ${count} item${count === 1 ? '' : 's'}, ${formatMoney(sum)}`}
+          aria-label={`Корзина, товаров: ${count}, ${formatMoney(sum)}`}
           style={{
             marginLeft: 'auto',
             width: 'auto',
@@ -33,8 +33,8 @@ export function MiniCartBar({ count, sum, bottom = 'calc(72px + var(--app-nav-in
             border: 0,
             borderRadius: 999,
             background: 'linear-gradient(135deg, var(--c-accent), var(--c-accent-2))',
-            color: 'var(--c-white)',
-            boxShadow: '0 18px 42px rgba(198,83,109,0.34)',
+            color: 'var(--c-accent-contrast)',
+            boxShadow: 'var(--shadow-accent)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -59,7 +59,7 @@ export function MiniCartBar({ count, sum, bottom = 'calc(72px + var(--app-nav-in
             <ShoppingBag size={18} strokeWidth={2.6} />
           </span>
           <span style={{ display: 'grid', gap: 1, textAlign: 'left', lineHeight: 1 }}>
-            <span style={{ fontSize: 12, fontWeight: 900, opacity: 0.82 }}>Cart</span>
+            <span style={{ fontSize: 12, fontWeight: 900, opacity: 0.82 }}>Корзина</span>
             <span style={{ fontSize: 15, fontWeight: 1000 }}>
               {count} · {formatMoney(sum)}
             </span>
@@ -100,7 +100,7 @@ export function MiniCartBar({ count, sum, bottom = 'calc(72px + var(--app-nav-in
           padding: '0 14px',
         }}
       >
-        <div style={{ fontWeight: 900, fontSize: 16 }}>Cart</div>
+        <div style={{ fontWeight: 900, fontSize: 16 }}>Корзина</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="ui-chip" style={{ borderColor: 'transparent', background: 'var(--surface-2)' }}>
             {count}

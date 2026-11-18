@@ -1,4 +1,3 @@
-import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Boxes, MessageSquare, ReceiptRussianRuble, ShoppingBag, User } from 'lucide-react';
 
@@ -14,14 +13,16 @@ function Tab({ to, label, icon: Icon }) {
   );
 }
 
-export function AdminBottomNav() {
+export function AdminBottomNav({ role }) {
+  const canManageCatalog = role === 'admin' || role === 'moderator';
+  const canViewBusiness = role === 'admin';
   return (
     <nav className="ui-bottomNav" aria-label="Навигация админки">
       <div className="ui-bottomNavInner">
         <Tab to="/orders" label="Заказы" icon={ShoppingBag} />
-        <Tab to="/products" label="Товары" icon={Boxes} />
+        {canManageCatalog ? <Tab to="/products" label="Товары" icon={Boxes} /> : null}
         <Tab to="/chats" label="Чаты" icon={MessageSquare} />
-        <Tab to="/cash" label="Бизнес" icon={ReceiptRussianRuble} />
+        {canViewBusiness ? <Tab to="/cash" label="Бизнес" icon={ReceiptRussianRuble} /> : null}
         <Tab to="/profile" label="Профиль" icon={User} />
       </div>
     </nav>

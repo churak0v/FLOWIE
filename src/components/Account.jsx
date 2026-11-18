@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../state/AppState';
@@ -7,24 +7,8 @@ import { BottomSheet } from './ui/BottomSheet';
 import { Surface } from './ui/Surface';
 import { Text } from './ui/Text';
 import { OrderHistoryList } from './domain/OrderHistoryList';
-
-function normalizePhone(raw) {
-  const s = String(raw || '').trim();
-  if (!s) return '';
-  const digits = s.replace(/[^\d+]/g, '');
-  if (!digits) return '';
-  const dOnly = digits.replace(/[^\d]/g, '');
-  if (dOnly.length === 11 && (dOnly.startsWith('8') || dOnly.startsWith('7'))) {
-    return `+7${dOnly.slice(1)}`;
-  }
-  return digits.startsWith('+') ? digits : `+${digits}`;
-}
-
-function validatePhone(phone) {
-  const v = normalizePhone(phone);
-  if (!v) return false;
-  return /^\+\d{10,15}$/.test(v);
-}
+import { PhoneLogin } from './PhoneLogin';
+import { isAnalyticsEnabled, isDoNotTrackEnabled, setAnalyticsOptOut } from '../lib/analytics';
 
 function RowButton({ title, subtitle, onClick, right }) {
   return (
@@ -100,17 +84,17 @@ export function Account() {
   const tg = state.auth.telegramUser;
   const me = state.auth.me;
   const displayName = useMemo(() => {
-    if (tg) return [tg.firstName, tg.lastName].filter(Boolean).join(' ') || 'Profile';
-    return me?.name || 'Profile';
+    if (tg) return [tg.firstName, tg.lastName].filter(Boolean).join(' ') || 'Профиль';
+    return me?.name || 'Профиль';
   }, [me?.name, tg]);
 
-  const tag = tg?.username ? `@${tg.username}` : me?.username ? `@${me.username}` : 'No username';
+  const tag = tg?.username ? `@${tg.username}` : me?.username ? `@${me.username}` : 'Без username';
   const photoUrl = tg?.photoUrl || '';
-  const phoneBound = Boolean(me?.phone);
+  const phoneBound = Boolean(me?.phoneVerified);
 
   const [phoneOpen, setPhoneOpen] = useState(false);
-  const [phone, setPhone] = useState('+');
-  const phoneOk = validatePhone(phone);
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(() => isAnalyticsEnabled());
+  const dntEnabled = isDoNotTrackEnabled();
 
   return (
     <>
@@ -125,7 +109,7 @@ export function Account() {
             boxSizing: 'border-box',
           }}
         >
-          <Text variant="title">Account</Text>
+          <Text variant="title">Профиль</Text>
 
           <div
             style={{
@@ -181,29 +165,26 @@ export function Account() {
             </div>
 
             <div style={{ flexShrink: 0, textAlign: 'right' }}>
-              <Text variant="caption">Status</Text>
+              <Text variant="caption">Статус</Text>
               <div style={{ marginTop: 6, fontSize: 15, fontWeight: 1000, color: 'var(--accent)' }}>
-                Buyer
+                Покупатель
               </div>
             </div>
           </Surface>
 
           {state.auth.meLoading ? (
             <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
-              <Text variant="subtitle">Loading profile...</Text>
+              <Text variant="subtitle">Загружаем профиль...</Text>
             </Surface>
           ) : !phoneBound ? (
             <RowButton
-              title="Add a contact phone"
-              subtitle="Used only if fulfillment needs clarification."
-              onClick={() => {
-                setPhone(me?.phone || '+');
-                setPhoneOpen(true);
-              }}
+              title="Войти по телефону"
+              subtitle="Заказы гостя сохранятся, а профиль будет доступен на других устройствах."
+              onClick={() => setPhoneOpen(true)}
             />
           ) : (
             <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
-              <Text variant="subtitle">Phone</Text>
+              <Text variant="subtitle">Телефон</Text>
               <div style={{ marginTop: 6 }}>
                 <Text variant="body" muted>
                   {me.phone}
@@ -213,96 +194,58 @@ export function Account() {
           )}
 
           <RowButton
-            title="Contact support"
-            subtitle="Questions about payment, delivery, or a wishlist order."
+            title="Связаться с поддержкой"
+            subtitle="Вопросы по оплате, доставке или заказу цветов."
             onClick={openSupport}
           />
           <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
-            <Text variant="title">Order history</Text>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, cursor: dntEnabled ? 'default' : 'pointer' }}>
+              <span style={{ minWidth: 0 }}>
+                <Text variant="subtitle">Аналитика использования</Text>
+                <span style={{ display: 'block', marginTop: 6 }}>
+                  <Text variant="body" muted>
+                    {dntEnabled
+                      ? 'Отключена настройкой Do Not Track браузера.'
+                      : 'Помогает улучшать каталог и оформление без передачи полей форм и сообщений.'}
+                  </Text>
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={analyticsEnabled && !dntEnabled}
+                disabled={dntEnabled}
+                onChange={(event) => {
+                  const enabled = event.target.checked;
+                  setAnalyticsOptOut(!enabled);
+                  setAnalyticsEnabled(enabled && !isDoNotTrackEnabled());
+                }}
+                aria-label="Аналитика использования"
+                style={{ width: 22, height: 22, flexShrink: 0 }}
+              />
+            </label>
+          </Surface>
+          <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
+            <Text variant="title">История заказов</Text>
             <div style={{ marginTop: 12 }}>
               <OrderHistoryList limit={8} />
             </div>
           </Surface>
-          <RowButton title="Data processing consent" onClick={() => navigate('/legal/consent')} />
-          <RowButton title="Privacy policy" onClick={() => navigate('/legal/privacy')} />
-          <RowButton title="Public offer" onClick={() => navigate('/legal/offer')} />
+          <RowButton title="Согласие на обработку данных" onClick={() => navigate('/legal/consent')} />
+          <RowButton title="Политика конфиденциальности" onClick={() => navigate('/legal/privacy')} />
+          <RowButton title="Публичная оферта" onClick={() => navigate('/legal/offer')} />
         </div>
         </div>
       </AppShell>
 
       <BottomSheet open={phoneOpen} onClose={() => setPhoneOpen(false)}>
-        <Text variant="title">Phone number</Text>
-        <div style={{ marginTop: 10 }}>
-          <Text variant="body" muted>
-            Enter a phone number in international format.
-          </Text>
-        </div>
-
-        <div style={{ marginTop: 14 }}>
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            inputMode="tel"
-            placeholder="+1 555 000 0000"
-            style={{
-              width: '100%',
-              border: '1px solid var(--border)',
-              borderRadius: 16,
-              padding: 12,
-              background: 'var(--c-white)',
-            }}
-          />
-          {!phone ? null : phoneOk ? null : (
-            <div style={{ marginTop: 6 }}>
-              <Text variant="caption">Check the phone number format.</Text>
-            </div>
-          )}
-        </div>
-
-        <div style={{ marginTop: 14, display: 'flex', gap: 10, minWidth: 0, maxWidth: '100%' }}>
-          <button
-            type="button"
-            disabled={!phoneOk}
-            onClick={async () => {
-              if (!phoneOk) return;
-              try {
-                await actions.updateMyPhone(normalizePhone(phone));
-                setPhoneOpen(false);
-              } catch (e) {
-                alert(e?.data?.error || e?.message || 'Could not save the phone number');
-              }
-            }}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              height: 52,
-              border: 0,
-              borderRadius: 'var(--r-lg)',
-              background: phoneOk ? 'var(--accent)' : 'var(--c-ink-14)',
-              color: 'var(--c-white)',
-              fontWeight: 1000,
-              cursor: phoneOk ? 'pointer' : 'default',
-            }}
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            onClick={() => setPhoneOpen(false)}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              height: 52,
-              borderRadius: 'var(--r-lg)',
-              border: '1px solid var(--border)',
-              background: 'transparent',
-              fontWeight: 1000,
-              cursor: 'pointer',
-            }}
-          >
-            Cancel
-          </button>
-        </div>
+        <PhoneLogin
+          initialPhone={me?.phone || ''}
+          onCancel={() => setPhoneOpen(false)}
+          onSuccess={async () => {
+            await actions.loadMe();
+            setPhoneOpen(false);
+          }}
+        />
       </BottomSheet>
     </>
   );

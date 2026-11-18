@@ -1,10 +1,9 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../../state/AppState';
 import { Grid } from '../layout/Grid';
 import { ProductCard } from './ProductCard';
 
-export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMoreLabel = 'Show more' }) {
+export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMoreLabel = 'Показать ещё', view = 'grid' }) {
   const navigate = useNavigate();
   const { actions } = useAppState();
   const shownProducts = typeof limit === 'number' ? (products || []).slice(0, limit) : (products || []);
@@ -12,7 +11,7 @@ export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMo
 
   return (
     <>
-      <Grid>
+      <Grid style={view === 'list' ? { gridTemplateColumns: 'minmax(0, 1fr)', gap: 10 } : undefined}>
         {shownProducts.map((p) => (
           <ProductCard
             key={p.id}
@@ -22,6 +21,7 @@ export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMo
             price={p.price}
             image={p.image}
             images={p.images}
+            view={view}
             onOpen={() => navigate(`/product/${p.id}`)}
             onAdd={() => actions.addToCart(p.id, 1)}
           />
@@ -39,10 +39,10 @@ export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMo
             borderRadius: 'var(--r-pill)',
             border: '1px solid var(--c-ink-12)',
             background: 'var(--accent)',
-            color: 'var(--c-white)',
+            color: 'var(--c-accent-contrast)',
             fontSize: 18,
             fontWeight: 1000,
-            boxShadow: '0 14px 34px rgba(198, 78, 113, 0.22)',
+            boxShadow: 'var(--shadow-accent)',
             cursor: 'pointer',
           }}
         >

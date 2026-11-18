@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { adminApi } from './lib/adminApi';
 import { getTelegramUserSafe } from '../src/telegram';
@@ -12,6 +12,8 @@ import { CollectionEditPage, CollectionNewPage } from './pages/CollectionUpsert'
 import { ChatsPage } from './pages/Chats';
 import { ChatThreadPage } from './pages/ChatThread';
 import { CashPage } from './pages/Cash';
+import { AnalyticsPage } from './pages/Analytics';
+import { DeliveryZonesPage } from './pages/DeliveryZones';
 import { ProfilePage } from './pages/Profile';
 import { ProfileWorkingHoursPage } from './pages/ProfileWorkingHours';
 import { ProfileStaffPage } from './pages/ProfileStaff';
@@ -20,35 +22,40 @@ import { Text } from '../src/components/ui/Text';
 import { AppShell } from '../src/components/layout/AppShell';
 
 function AdminFrame({ user }) {
+  const role = String(user?.role || '');
+  const canManageCatalog = role === 'admin' || role === 'moderator';
+  const isAdmin = role === 'admin';
   return (
     <>
       {/* Keep the scroll container stable (no route wrapper transforms) so fixed UI never "jumps". */}
       <AppShell style={{ '--app-content-inset-bottom': '0px' }}>
         <Routes>
           <Route path="/" element={<Navigate to="/orders" replace />} />
-          <Route path="/orders" element={<OrdersPage />} />
-          <Route path="/orders/:id" element={<OrderDetailsPage />} />
+          <Route path="/orders" element={<OrdersPage user={user} />} />
+          <Route path="/orders/:id" element={<OrderDetailsPage user={user} />} />
 
-          <Route path="/products" element={<ProductsPage />} />
-          <Route path="/products/new" element={<ProductNewPage />} />
-          <Route path="/products/:id" element={<ProductEditPage />} />
+          <Route path="/products" element={canManageCatalog ? <ProductsPage /> : <Navigate to="/orders" replace />} />
+          <Route path="/products/new" element={canManageCatalog ? <ProductNewPage /> : <Navigate to="/orders" replace />} />
+          <Route path="/products/:id" element={canManageCatalog ? <ProductEditPage /> : <Navigate to="/orders" replace />} />
 
           <Route path="/chats" element={<ChatsPage />} />
           <Route path="/chats/:id" element={<ChatThreadPage />} />
-          <Route path="/cash" element={<CashPage />} />
+          <Route path="/cash" element={isAdmin ? <CashPage /> : <Navigate to="/orders" replace />} />
+          <Route path="/analytics" element={isAdmin ? <AnalyticsPage /> : <Navigate to="/orders" replace />} />
+          <Route path="/delivery" element={isAdmin ? <DeliveryZonesPage /> : <Navigate to="/orders" replace />} />
           <Route path="/profile" element={<ProfilePage user={user} />} />
-          <Route path="/profile/working-hours" element={<ProfileWorkingHoursPage />} />
-          <Route path="/profile/staff" element={<ProfileStaffPage />} />
+          <Route path="/profile/working-hours" element={isAdmin ? <ProfileWorkingHoursPage /> : <Navigate to="/profile" replace />} />
+          <Route path="/profile/staff" element={isAdmin ? <ProfileStaffPage /> : <Navigate to="/profile" replace />} />
 
-          <Route path="/collections" element={<CollectionsPage />} />
-          <Route path="/collections/new" element={<CollectionNewPage />} />
-          <Route path="/collections/:id" element={<CollectionEditPage />} />
+          <Route path="/collections" element={canManageCatalog ? <CollectionsPage /> : <Navigate to="/orders" replace />} />
+          <Route path="/collections/new" element={canManageCatalog ? <CollectionNewPage /> : <Navigate to="/orders" replace />} />
+          <Route path="/collections/:id" element={canManageCatalog ? <CollectionEditPage /> : <Navigate to="/orders" replace />} />
 
           <Route path="*" element={<Navigate to="/orders" replace />} />
         </Routes>
       </AppShell>
 
-      <AdminBottomNav />
+      <AdminBottomNav role={role} />
     </>
   );
 }
@@ -69,7 +76,7 @@ function Unauthorized() {
         </Surface>
 
         <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)' }}>
-          <Text variant="subtitle">Bootstrap первого админа</Text>
+          <Text variant="subtitle">Первичная настройка админа</Text>
           <div style={{ marginTop: 6 }}>
             <Text variant="body" muted>
               Добавьте ваш Telegram ID в переменную `ADMIN_TG_IDS` на API-сервере (через запятую) и перезапустите контейнер.

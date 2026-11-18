@@ -17,6 +17,6 @@ ENV VITE_API_PROXY_TARGET=${VITE_API_PROXY_TARGET}
 RUN npm run build:admin
 
 FROM nginx:1.27-alpine
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY nginx/admin.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist-admin /usr/share/nginx/html
 

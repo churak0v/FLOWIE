@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Heart } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppState } from '../state/AppState';
@@ -13,6 +13,7 @@ import { prefetchImages } from '../lib/prefetch';
 import { readCacheEntry, writeCacheEntry, isCacheFresh } from '../lib/persistedCache';
 import { Text } from './ui/Text';
 import { toUiComposition, toUiSize } from '../lib/productUi';
+import { trackAnalytics } from '../lib/analytics';
 
 export function ProductDetails() {
   const { id } = useParams();
@@ -23,11 +24,16 @@ export function ProductDetails() {
   const productFromList = useMemo(() => state.products.items.find((p) => p.id === productId) || null, [productId, state.products.items]);
   const [product, setProduct] = useState(productFromList);
   const [qty, setQty] = useState(1);
-  const cacheKey = useMemo(() => (Number.isFinite(productId) ? `product_detail_v4_${productId}` : ''), [productId]);
+  const cacheKey = useMemo(() => (Number.isFinite(productId) ? `product_detail_v6_ru_rub_${productId}` : ''), [productId]);
 
   useEffect(() => {
     setProduct(productFromList);
   }, [productFromList]);
+
+  useEffect(() => {
+    if (!Number.isFinite(productId)) return;
+    trackAnalytics('product_view', { productId, meta: { path: `/product/${productId}` } }, { dedupeKey: productId });
+  }, [productId]);
 
   useEffect(() => {
     if (!cacheKey || productFromList) return;
@@ -94,7 +100,7 @@ export function ProductDetails() {
     return () => {
       alive = false;
     };
-  }, [productFromList, productId]);
+  }, [cacheKey, productFromList, productId]);
 
   const cartItem = useMemo(
     () => state.cart.items.find((it) => Number(it.productId) === Number(productId)) || null,
@@ -116,14 +122,20 @@ export function ProductDetails() {
   const handleDec = () => {
     if (!product) return;
     const next = Math.max(1, qty - 1);
-    if (inCart) actions.setCartQty(product.id, next);
+    if (inCart) {
+      if (next < qty) trackAnalytics('cart_remove', { productId: product.id, meta: { quantity: qty - next } });
+      actions.setCartQty(product.id, next);
+    }
     else setQty(next);
   };
 
   const handleInc = () => {
     if (!product) return;
     const next = Math.min(99, qty + 1);
-    if (inCart) actions.setCartQty(product.id, next);
+    if (inCart) {
+      if (next > qty) trackAnalytics('cart_add', { productId: product.id, meta: { quantity: next - qty } });
+      actions.setCartQty(product.id, next);
+    }
     else setQty(next);
   };
 
@@ -132,15 +144,19 @@ export function ProductDetails() {
       <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '140px' }}>
         <div style={{ position: 'relative' }}>
           <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10 }}>
-            <IconButton onClick={() => navigate(-1)} aria-label="Back">
+            <IconButton onClick={() => navigate(-1)} aria-label="Назад">
               <ChevronLeft size={22} />
             </IconButton>
           </div>
 
           <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}>
             <IconButton
-              onClick={() => product && actions.toggleFavoriteProduct(product.id)}
-              aria-label={isFavorite ? 'Remove from saved' : 'Save item'}
+              onClick={() => {
+                if (!product) return;
+                trackAnalytics(isFavorite ? 'favorite_remove' : 'favorite_add', { productId: product.id });
+                actions.toggleFavoriteProduct(product.id);
+              }}
+              aria-label={isFavorite ? 'Убрать из сохранённого' : 'Сохранить'}
               style={{
                 background: isFavorite ? 'var(--c-accent-10)' : undefined,
               }}
@@ -158,7 +174,7 @@ export function ProductDetails() {
         </div>
 
         <div style={{ marginTop: 'var(--sp-6)' }}>
-          {product ? <ProductInfo product={product} /> : <Text variant="body" muted>Loading...</Text>}
+          {product ? <ProductInfo product={product} /> : <Text variant="body" muted>Загрузка...</Text>}
         </div>
 
         {product ? <AlsoLikeSection productId={product.id} /> : null}

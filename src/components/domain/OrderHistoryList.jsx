@@ -1,26 +1,27 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { api } from '../../api';
 import { formatMoney } from '../../lib/money';
 import { Surface } from '../ui/Surface';
 import { Text } from '../ui/Text';
+import { useAppState } from '../../state/AppState';
 
 function statusLabel(order) {
   const st = String(order?.status || '').toUpperCase();
   const ps = String(order?.paymentStatus || '').toUpperCase();
-  if (st === 'DELIVERED' || st === 'COMPLETED') return 'Delivered';
-  if (st === 'IN_DELIVERY' || st === 'DELIVERY') return 'On the way';
-  if (st === 'ASSEMBLED') return 'Packed';
-  if (st === 'ACCEPTED' || (st === 'PAID' && ps === 'CONFIRMED')) return 'Accepted';
-  if (ps === 'PENDING') return 'Payment';
-  return 'In progress';
+  if (st === 'DELIVERED' || st === 'COMPLETED') return 'Доставлен';
+  if (st === 'IN_DELIVERY' || st === 'DELIVERY') return 'В пути';
+  if (st === 'ASSEMBLED') return 'Собран';
+  if (st === 'ACCEPTED' || (st === 'PAID' && ps === 'CONFIRMED')) return 'Принят';
+  if (ps === 'PENDING') return 'Оплата';
+  return 'В работе';
 }
 
 function statusTone(order) {
   const label = statusLabel(order);
-  if (label === 'Delivered') return 'success';
-  if (label === 'Payment') return 'accent';
+  if (label === 'Доставлен') return 'success';
+  if (label === 'Оплата') return 'accent';
   return 'default';
 }
 
@@ -28,16 +29,16 @@ function itemLabel(order) {
   const names = (order?.items || [])
     .map((it) => it?.product?.name || it?.product?.title || '')
     .filter(Boolean);
-  if (!names.length) return 'Wishlist gift';
+  if (!names.length) return 'Заказ цветов';
   if (names.length === 1) return names[0];
-  return `${names[0]} + ${names.length - 1} more`;
+  return `${names[0]} + ещё ${names.length - 1}`;
 }
 
 function orderDate(order) {
   const raw = order?.deliveredAt || order?.paidAt || order?.createdAt;
   const d = raw ? new Date(raw) : null;
   if (!d || !Number.isFinite(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('ru-RU', { month: 'short', day: 'numeric' });
 }
 
 function OrderRow({ order }) {
@@ -67,7 +68,7 @@ function OrderRow({ order }) {
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
             <Text variant="subtitle" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Gift for {order?.recipientName || 'recipient'}
+              Цветы для {order?.recipientName || 'получателя'}
             </Text>
             {orderDate(order) ? (
               <Text variant="caption" muted style={{ flexShrink: 0 }}>
@@ -98,7 +99,8 @@ function OrderRow({ order }) {
   );
 }
 
-export function OrderHistoryList({ recipientName = '', limit = 6, emptyText = 'No orders yet.' }) {
+export function OrderHistoryList({ recipientName = '', limit = 6, emptyText = 'Заказов пока нет.' }) {
+  const { state } = useAppState();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -115,7 +117,7 @@ export function OrderHistoryList({ recipientName = '', limit = 6, emptyText = 'N
       })
       .catch((e) => {
         if (!alive) return;
-        setError(e?.message || 'Could not load orders');
+        setError(e?.message || 'Не удалось загрузить заказы');
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -123,7 +125,7 @@ export function OrderHistoryList({ recipientName = '', limit = 6, emptyText = 'N
     return () => {
       alive = false;
     };
-  }, []);
+  }, [state.auth.me?.id]);
 
   const filtered = useMemo(() => {
     const name = String(recipientName || '').trim().toLowerCase();
@@ -136,7 +138,7 @@ export function OrderHistoryList({ recipientName = '', limit = 6, emptyText = 'N
   if (loading) {
     return (
       <Surface variant="soft" style={{ padding: 12, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
-        <Text variant="body" muted>Loading orders...</Text>
+        <Text variant="body" muted>Загружаем заказы...</Text>
       </Surface>
     );
   }

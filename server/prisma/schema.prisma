@@ -31,6 +31,8 @@ model User {
   name       String?
   username   String?
   phone      String?
+  verifiedPhone String? @unique
+  phoneVerifiedAt DateTime?
   createdAt  DateTime @default(now())
   consentPersonal Boolean @default(false)
   referralLinkId Int?
@@ -57,6 +59,44 @@ model User {
   AnalyticsEvent     AnalyticsEvent[]
   referralLinksCreated ReferralLink[] @relation("ReferralCreatedBy")
   referralOpens      ReferralOpen[] @relation("ReferralOpenUser")
+  authSessions       AuthSession[]
+  phoneOtpChallenges PhoneOtpChallenge[]
+}
+
+model AuthSession {
+  id            String    @id @default(cuid())
+  tokenHash     String    @unique
+  userId        Int
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  lastSeenAt    DateTime  @default(now())
+  ipHash        String?
+  userAgentHash String?
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([expiresAt])
+}
+
+model PhoneOtpChallenge {
+  id                String    @id @default(cuid())
+  phone             String
+  codeHash          String
+  userId            Int?
+  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ipHash            String
+  createdAt         DateTime  @default(now())
+  expiresAt         DateTime
+  resendAfter       DateTime
+  attempts          Int       @default(0)
+  maxAttempts       Int       @default(5)
+  consumedAt        DateTime?
+  providerMessageId String?
+
+  @@index([phone, createdAt])
+  @@index([ipHash, createdAt])
+  @@index([expiresAt])
 }
 
 model Address {
@@ -91,6 +131,7 @@ model Product {
   images          ProductImage[]
   composition     ProductCompositionItem[]
   collectionItems CollectionItem[]
+  embedding       ProductEmbedding?
 }
 
 model ProductImage {
@@ -143,6 +184,7 @@ model CollectionItem {
 
 model Order {
   id                 Int       @id @default(autoincrement())
+  checkoutKey        String?   @unique
   userId             Int
   user               User      @relation(fields: [userId], references: [id])
   status             String // "new", "paid", "delivery", "completed", "cancelled"
@@ -166,17 +208,23 @@ model Order {
 
   // Financials
   itemsTotal   Int
-  deliveryCost Int @default(0)
+  deliveryCost Int?
   totalPrice   Int
   referralLinkId Int?
   referralLink   ReferralLink? @relation(fields: [referralLinkId], references: [id], onDelete: SetNull)
 
   // Delivery Info
-  deliveryAddress String
+  deliveryAddress String?
   deliveryCoords  String?
   deliveryTime    String?
   recipientName   String?
   recipientPhone  String?
+  askRecipientAddress Boolean @default(false)
+  askRecipientTime    Boolean @default(false)
+  deliveryStatus      String  @default("DETAILS_PENDING")
+  deliveryQuoteKey    String? @unique @db.VarChar(64)
+  deliveryQuoteDigest String? @db.VarChar(64)
+  deliveryInvoice     DeliveryInvoice?
 
   createdAt DateTime    @default(now())
   items     OrderItem[]
@@ -188,6 +236,24 @@ model Order {
 
   @@index([courierId])
   @@index([referralLinkId, createdAt])
+}
+
+model DeliveryInvoice {
+  id               Int       @id @default(autoincrement())
+  orderId          Int       @unique
+  order            Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount           Int
+  currency         String    @default("643") @db.VarChar(3)
+  status           String    @default("PAYMENT_PENDING")
+  paymentChargeId  String?   @unique
+  paymentMeta      String?
+  paymentExpiresAt DateTime
+  paidAt           DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([status, paymentExpiresAt])
 }
 
 model OrderItem {
@@ -317,6 +383,7 @@ model WorkingHoursException {
 
 model AnalyticsEvent {
   id        Int      @id @default(autoincrement())
+  eventId   String?  @unique @db.VarChar(96)
   userId    Int?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   event     String
@@ -375,4 +442,39 @@ model AuditLog {
   @@index([actorId])
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+model ProductEmbedding {
+  id              Int      @id @default(autoincrement())
+  productId       Int      @unique
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  contentHash     String   @db.VarChar(64)
+  documentVersion String   @db.VarChar(40)
+  model           String   @db.VarChar(100)
+  dimensions      Int
+  vector          Float[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([model, dimensions, documentVersion])
+}
+
+model DeliveryZone {
+  id         Int      @id @default(autoincrement())
+  name       String   @db.VarChar(80)
+  price      Int?
+  conditions String   @default("") @db.VarChar(500)
+  priority   Int      @default(100)
+  active     Boolean  @default(false)
+  polygon    Json     @default("[]")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([active, priority])
+}
+
+model DeliverySettings {
+  id        Int      @id @default(1)
+  mode      String   @default("flat") @db.VarChar(10)
+  updatedAt DateTime @updatedAt
 }

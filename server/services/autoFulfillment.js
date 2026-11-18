@@ -98,7 +98,9 @@ async function runAutoFulfillmentTick(prisma) {
 }
 
 function startAutoFulfillment(prisma, opts = {}) {
-  const enabled = String(process.env.AUTO_FULFILLMENT_ENABLED || 'true').toLowerCase() !== 'false';
+  // Simulated delivery progress is only for explicitly enabled local demos.
+  const enabled = process.env.NODE_ENV !== 'production'
+    && String(process.env.AUTO_FULFILLMENT_ENABLED || 'false').toLowerCase() === 'true';
   if (!enabled) return null;
 
   const intervalMs = Number(opts.intervalMs || process.env.AUTO_FULFILLMENT_INTERVAL_MS || 60_000);
