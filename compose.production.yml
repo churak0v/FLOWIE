@@ -182,7 +182,7 @@ services:
       - /tmp
       - /var/cache/nginx
       - /var/run
-      - /etc/nginx/conf.d
+      - /etc/nginx/conf.d:uid=101,gid=101,mode=0755
 
 networks:
   backend:
