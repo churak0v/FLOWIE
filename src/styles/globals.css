@@ -8,7 +8,6 @@
 html {
   min-height: 100%;
   overflow-x: clip;
-  background: #17130f;
 }
 
 body {
@@ -16,8 +15,7 @@ body {
   margin: 0;
   padding: 0;
   font-family: var(--font-main);
-  /* Safari 26 derives its top/bottom browser tint from the page canvas, not theme-color. */
-  background: #17130f;
+  background: var(--c-bg);
   color: var(--c-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -77,7 +75,6 @@ a[href^='sms:'] {
   min-height: var(--app-vh);
   height: auto;
   overflow: visible;
-  background: var(--c-bg);
   touch-action: pan-y;
 }
 
