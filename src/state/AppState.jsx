@@ -606,6 +606,11 @@ export function AppStateProvider({ children }) {
         dispatch({ type: 'AUTH_ME_SET', me: res?.user || null });
         return res?.user || null;
       },
+      updateMyContact: async ({ name, phone }) => {
+        const res = await api.updateMe({ name, phone });
+        dispatch({ type: 'AUTH_ME_SET', me: res?.user || null });
+        return res?.user || null;
+      },
       setMyPhone: async (phone) => {
         try {
           const res = await api.updateMe({ phone });

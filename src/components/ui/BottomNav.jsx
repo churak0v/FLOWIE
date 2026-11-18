@@ -26,8 +26,8 @@ export function BottomNav() {
       <div className="ui-bottomNavInner">
         <Tab to="/" label="Главная" icon={House} />
         <Tab to="/favorites" label="Сохранено" icon={Heart} />
-        <Tab to="/recipients" label="Адреса" icon={MapPin} />
         <Tab to="/catalog" label="Каталог" icon={ShoppingBag} />
+        <Tab to="/recipients" label="Адреса" icon={MapPin} />
         <Tab to="/account" label="Профиль" icon={User} />
       </div>
     </nav>

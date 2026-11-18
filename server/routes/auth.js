@@ -130,6 +130,11 @@ router.patch('/me', requireAuth, async (req, res) => {
             // Contact-only field. Identity lookup and merges use verifiedPhone exclusively.
             patch.phone = contactPhone;
         }
+        if (req.body?.name != null) {
+            const name = String(req.body.name || '').trim().replace(/\s+/g, ' ');
+            if (name.length < 2 || name.length > 100) return res.status(400).json({ ok: false, error: 'BAD_NAME' });
+            patch.name = name;
+        }
         if (req.body?.consentPersonal != null) {
             patch.consentPersonal = Boolean(req.body.consentPersonal);
         }

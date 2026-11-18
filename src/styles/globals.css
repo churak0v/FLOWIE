@@ -5,13 +5,13 @@
   box-sizing: border-box;
 }
 
-html,
-body {
-  height: 100%;
-  overflow-x: hidden;
+html {
+  min-height: 100%;
+  overflow-x: clip;
 }
 
 body {
+  min-height: 100%;
   margin: 0;
   padding: 0;
   font-family: var(--font-main);
@@ -19,9 +19,10 @@ body {
   color: var(--c-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
-  /* The app uses its own scroll container. */
-  overflow-y: hidden;
+  overflow-x: clip;
+  /* Let Safari own the page scroll so its browser chrome can collapse naturally. */
+  overflow-y: visible;
+  overscroll-behavior-y: none;
 }
 
 button {
@@ -72,8 +73,8 @@ a[href^='sms:'] {
 
 #root {
   min-height: var(--app-vh);
-  height: var(--app-vh);
-  overflow-x: hidden;
+  height: auto;
+  overflow: visible;
   touch-action: pan-y;
 }
 
@@ -341,10 +342,9 @@ a[href^='sms:'] {
 
   width: min(100%, var(--app-max));
   margin: 0 auto;
-  height: var(--app-vh);
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
+  min-height: var(--app-vh);
+  height: auto;
+  overflow: visible;
   /* Compact edge-to-edge mobile layout. */
   padding-top: calc(var(--sp-2) + var(--app-inset-top));
   padding-right: calc(var(--sp-4) + var(--app-inset-right));

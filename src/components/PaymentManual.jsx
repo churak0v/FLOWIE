@@ -764,7 +764,7 @@ export function PaymentManual() {
   const payWithAlfa = async () => {
     if (!order?.id) return;
     if (!alfaPayment.enabled) {
-      setGatewayError('Эквайринг Альфа-Банка не настроен');
+      setGatewayError('Оплата по СБП через Альфа-Банк не настроена');
       return;
     }
     setGatewayBusy(true);
@@ -780,7 +780,7 @@ export function PaymentManual() {
       if (!res?.formUrl) throw new Error('ALFA_PAYMENT_URL_MISSING');
       window.location.assign(res.formUrl);
     } catch (e) {
-      setGatewayError(e?.data?.error || e?.message || 'Не удалось открыть оплату картой');
+      setGatewayError(e?.data?.error || e?.message || 'Не удалось открыть оплату по СБП');
     } finally {
       setGatewayBusy(false);
     }
@@ -819,7 +819,7 @@ export function PaymentManual() {
         <Row
           icon={<CreditCard size={20} />}
           label="Способ оплаты"
-          value="Банковская карта через Альфа-Банк"
+          value="СБП через Альфа-Банк"
           onCopy={async () => {
             const ok = await copyToClipboard('Альфа-Банк');
             if (ok) setCopied('alfa');
@@ -881,7 +881,7 @@ export function PaymentManual() {
               }}
             >
               <ExternalLink size={18} />
-              {gatewayBusy ? 'Открываем...' : 'Оплатить картой'}
+              {gatewayBusy ? 'Открываем СБП...' : 'Оплатить по СБП'}
             </button>
             <button
               type="button"

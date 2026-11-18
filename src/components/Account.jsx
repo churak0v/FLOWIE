@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../state/AppState';
 import { AppShell } from './layout/AppShell';
-import { BottomSheet } from './ui/BottomSheet';
 import { Surface } from './ui/Surface';
 import { Text } from './ui/Text';
 import { OrderHistoryList } from './domain/OrderHistoryList';
@@ -79,13 +78,44 @@ export function Account() {
 
   const me = state.auth.me;
   const displayName = useMemo(() => me?.name || 'Профиль', [me?.name]);
-  const tag = me?.phone || 'Гостевой профиль';
+  const tag = me?.phone || '';
   const photoUrl = '';
   const phoneBound = Boolean(me?.phoneVerified);
 
-  const [phoneOpen, setPhoneOpen] = useState(false);
   const [analyticsEnabled, setAnalyticsEnabled] = useState(() => isAnalyticsEnabled());
   const dntEnabled = isDoNotTrackEnabled();
+
+  if (state.auth.meLoading) {
+    return (
+      <AppShell>
+        <Surface variant="soft" style={{ padding: 18, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
+          <Text variant="subtitle">Загружаем профиль…</Text>
+        </Surface>
+      </AppShell>
+    );
+  }
+
+  if (!phoneBound) {
+    return (
+      <AppShell style={{ '--app-content-inset-bottom': '0px' }}>
+        <div style={{ paddingTop: 'calc(var(--sp-2) + var(--app-inset-top))' }}>
+          <Text variant="title">Вход в профиль</Text>
+          <Surface
+            variant="default"
+            style={{ marginTop: 'var(--sp-6)', padding: 18, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}
+          >
+            <PhoneLogin
+              initialPhone={me?.phone || '+7'}
+              onCancel={() => navigate('/')}
+              onSuccess={async () => {
+                await actions.loadMe();
+              }}
+            />
+          </Surface>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <>
@@ -141,7 +171,13 @@ export function Account() {
                   flexShrink: 0,
                 }}
               >
-                {photoUrl ? <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
+                {photoUrl ? (
+                  <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: 'var(--accent)' }}>
+                    <UserRound size={26} />
+                  </div>
+                )}
               </div>
               <div style={{ minWidth: 0 }}>
                 <Text variant="subtitle" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -158,31 +194,17 @@ export function Account() {
             <div style={{ flexShrink: 0, textAlign: 'right' }}>
               <Text variant="caption">Статус</Text>
               <div style={{ marginTop: 6, fontSize: 15, fontWeight: 1000, color: 'var(--accent)' }}>
-                Покупатель
+                Авторизован
               </div>
             </div>
           </Surface>
 
-          {state.auth.meLoading ? (
-            <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
-              <Text variant="subtitle">Загружаем профиль...</Text>
-            </Surface>
-          ) : !phoneBound ? (
-            <RowButton
-              title="Войти по телефону"
-              subtitle="Заказы гостя сохранятся, а профиль будет доступен на других устройствах."
-              onClick={() => setPhoneOpen(true)}
-            />
-          ) : (
-            <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
-              <Text variant="subtitle">Телефон</Text>
-              <div style={{ marginTop: 6 }}>
-                <Text variant="body" muted>
-                  {me.phone}
-                </Text>
-              </div>
-            </Surface>
-          )}
+          <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
+            <Text variant="subtitle">Номер телефона</Text>
+            <div style={{ marginTop: 6 }}>
+              <Text variant="body" muted>{me.phone}</Text>
+            </div>
+          </Surface>
 
           <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, cursor: dntEnabled ? 'default' : 'pointer' }}>
@@ -223,16 +245,6 @@ export function Account() {
         </div>
       </AppShell>
 
-      <BottomSheet open={phoneOpen} onClose={() => setPhoneOpen(false)}>
-        <PhoneLogin
-          initialPhone={me?.phone || ''}
-          onCancel={() => setPhoneOpen(false)}
-          onSuccess={async () => {
-            await actions.loadMe();
-            setPhoneOpen(false);
-          }}
-        />
-      </BottomSheet>
     </>
   );
 }

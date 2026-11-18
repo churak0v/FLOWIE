@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ShieldCheck, Sparkles } from 'lucide-react';
+import { ChevronLeft, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAppState } from '../state/AppState';
@@ -9,23 +9,12 @@ import { AppShell } from './layout/AppShell';
 import { IconButton } from './ui/IconButton';
 import { Text } from './ui/Text';
 import { Surface } from './ui/Surface';
-import { PaymentMethods } from './domain/PaymentMethods';
 import { PriceBreakdown } from './domain/PriceBreakdown';
 import { CheckoutFooterCTA } from './domain/CheckoutFooterCTA';
 import { AppImage } from './ui/AppImage';
 import { trackAnalytics } from '../lib/analytics';
 import { buildCheckoutDeliveryTime, calculateCheckoutPayment, isValidCheckoutPhone, normalizeCheckoutPhone } from '../lib/checkoutDelivery';
 import { YandexDeliveryMap } from './domain/YandexDeliveryMap';
-
-const DEFAULT_DELIVERY_CONTACT = {
-  name: 'Получатель',
-  label: 'Контакт для доставки',
-  image: 'https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=900&q=80',
-};
-
-function normalizeRecipientAccount(recipient) {
-  return recipient || DEFAULT_DELIVERY_CONTACT;
-}
 
 const PHONE_COUNTRIES = [
   { iso: 'RU', flag: '🇷🇺', name: 'Russia', dial: '+7', placeholder: '999 000-00-00', max: 10 },
@@ -200,96 +189,74 @@ function CheckoutItemsPreview({ items, productsById }) {
   );
 }
 
-function SafeDeliveryAccount({ recipient }) {
-  const account = normalizeRecipientAccount(recipient);
-  const image = account.image || account.avatar || DEFAULT_DELIVERY_CONTACT.image;
-
+function RecipientDetailsBlock({ receiveSelf, onModeChange, name, phone, onNameChange, onPhoneChange, selfName, selfPhone }) {
   return (
     <Surface
       variant="default"
       style={{
-        padding: 0,
-        borderRadius: 'var(--r-xl)',
+        padding: 14,
+        borderRadius: 'var(--r-lg)',
         border: '1px solid var(--border)',
-        overflow: 'hidden',
-        background: 'var(--surface)',
-        boxShadow: '0 18px 46px rgba(13,13,13,0.08)',
+        display: 'grid',
+        gap: 12,
       }}
     >
-      <div
-        style={{
-          padding: 14,
-          background: 'linear-gradient(135deg, rgba(198,83,109,0.14), rgba(255,255,255,0.88) 68%)',
-          borderBottom: '1px solid var(--border)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <Text variant="title">Детали доставки</Text>
-          <span
-            style={{
-              height: 30,
-              padding: '0 10px',
-              borderRadius: 999,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              background: 'var(--c-white)',
-              color: 'var(--accent)',
-              fontSize: 12,
-              fontWeight: 1000,
-              boxShadow: 'inset 0 0 0 1px var(--c-accent-border)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <ShieldCheck size={15} />
-            Флорист + курьер
-          </span>
-        </div>
-
-        <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '76px minmax(0, 1fr)', gap: 14, alignItems: 'center' }}>
-          <div style={{ position: 'relative', width: 76, height: 76 }}>
-            <AppImage
-              src={image}
-              alt={account.name}
+      <Text variant="title">Кто получит заказ?</Text>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: 4, borderRadius: 16, background: 'var(--surface-2)' }}>
+        {[
+          { value: false, label: 'Другой человек' },
+          { value: true, label: 'Получу сам' },
+        ].map((option) => {
+          const active = receiveSelf === option.value;
+          return (
+            <button
+              key={option.label}
+              type="button"
+              onClick={() => onModeChange(option.value)}
               style={{
-                width: 76,
-                height: 76,
-                borderRadius: 24,
-                objectFit: 'cover',
-                boxShadow: '0 14px 30px rgba(13,13,13,0.16)',
-              }}
-            />
-            <span
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                right: -3,
-                bottom: -3,
-                width: 26,
-                height: 26,
-                borderRadius: 999,
-                background: 'var(--accent)',
-                color: 'var(--c-accent-contrast)',
-                border: '3px solid var(--surface)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                minHeight: 44,
+                border: active ? '1px solid var(--c-accent-border)' : '1px solid transparent',
+                borderRadius: 13,
+                background: active ? 'var(--surface)' : 'transparent',
+                color: active ? 'var(--accent)' : 'var(--muted)',
+                fontWeight: 900,
+                cursor: 'pointer',
+                boxShadow: active ? 'var(--shadow-sm)' : 'none',
               }}
             >
-              <Sparkles size={13} />
-            </span>
-          </div>
-
-          <div style={{ minWidth: 0 }}>
-            <Text variant="title" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {account.name}
-            </Text>
-            <Text variant="body" muted style={{ marginTop: 8 }}>
-              Флорист собирает букет, а курьер уточняет финальные детали доставки.
-            </Text>
-          </div>
-        </div>
+              {option.label}
+            </button>
+          );
+        })}
       </div>
+
+      {receiveSelf ? (
+        <Surface variant="soft" style={{ padding: 12, borderRadius: 14, border: '1px solid var(--border)' }}>
+          <Text variant="subtitle">{selfName || 'Укажите имя покупателя ниже'}</Text>
+          <Text variant="caption" muted style={{ marginTop: 4 }}>{selfPhone || 'Телефон возьмём из контакта покупателя'}</Text>
+        </Surface>
+      ) : (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <input
+            value={name}
+            onChange={(event) => onNameChange(event.target.value)}
+            placeholder="Имя получателя"
+            autoComplete="name"
+            aria-label="Имя получателя"
+            style={{ height: 48, borderRadius: 14, border: '1px solid var(--border)', padding: '0 12px', background: 'var(--surface)' }}
+          />
+          <input
+            type="tel"
+            inputMode="tel"
+            value={phone}
+            onChange={(event) => onPhoneChange(normalizeCheckoutPhone(event.target.value))}
+            placeholder="+7 999 000-00-00"
+            autoComplete="tel"
+            aria-label="Телефон получателя"
+            style={{ height: 48, borderRadius: 14, border: '1px solid var(--border)', padding: '0 12px', background: 'var(--surface)' }}
+          />
+        </div>
+      )}
     </Surface>
   );
 }
@@ -297,10 +264,13 @@ function SafeDeliveryAccount({ recipient }) {
 export function Checkout() {
   const navigate = useNavigate();
   const { state, actions } = useAppState();
+  const isVerifiedBuyer = Boolean(state.auth.me?.phoneVerified);
   const initialPhoneCountry = React.useMemo(() => inferPhoneCountry(state.auth.me?.phone), [state.auth.me?.phone]);
   const [phoneCountryIso, setPhoneCountryIso] = React.useState(initialPhoneCountry.iso);
   const phoneCountry = PHONE_COUNTRIES.find((c) => c.iso === phoneCountryIso) || PHONE_COUNTRIES[0];
   const [phoneDigits, setPhoneDigits] = React.useState(() => stripDialCode(state.auth.me?.phone, initialPhoneCountry));
+  const [buyerName, setBuyerName] = React.useState(() => isVerifiedBuyer ? String(state.auth.me?.name || '') : '');
+  const [receiveSelf, setReceiveSelf] = React.useState(false);
   const [consentLocal, setConsentLocal] = React.useState(() => Boolean(state.auth.me?.consentPersonal));
   const [deliveryEstimate, setDeliveryEstimate] = useState(null);
   const [deliveryError, setDeliveryError] = useState('');
@@ -321,11 +291,17 @@ export function Checkout() {
     () => state.recipients.items.find((r) => r.id === recipientId) || null,
     [recipientId, state.recipients.items]
   );
+  const [recipientName, setRecipientName] = useState(() => String(selectedRecipient?.name || ''));
   const [recipientPhone, setRecipientPhone] = useState(() => normalizeCheckoutPhone(selectedRecipient?.phone || ''));
 
   useEffect(() => {
+    setRecipientName(String(selectedRecipient?.name || ''));
     setRecipientPhone(normalizeCheckoutPhone(selectedRecipient?.phone || ''));
-  }, [selectedRecipient?.id, selectedRecipient?.phone]);
+  }, [selectedRecipient?.id, selectedRecipient?.name, selectedRecipient?.phone]);
+
+  useEffect(() => {
+    if (isVerifiedBuyer && state.auth.me?.name) setBuyerName(String(state.auth.me.name));
+  }, [isVerifiedBuyer, state.auth.me?.name]);
 
   useEffect(() => {
     if (!state.checkout.address?.street && selectedRecipient?.address) {
@@ -426,7 +402,11 @@ export function Checkout() {
 
   const senderPhone = `${phoneCountry.dial}${digitsOnly(phoneDigits)}`;
   const hasSenderPhone = isValidCheckoutPhone(senderPhone);
-  const hasRecipientPhone = isValidCheckoutPhone(recipientPhone);
+  const effectiveRecipientName = receiveSelf ? buyerName.trim() : recipientName.trim();
+  const effectiveRecipientPhone = receiveSelf ? senderPhone : normalizeCheckoutPhone(recipientPhone);
+  const hasBuyerName = isVerifiedBuyer || buyerName.trim().length >= 2;
+  const hasRecipientName = effectiveRecipientName.length >= 2;
+  const hasRecipientPhone = isValidCheckoutPhone(effectiveRecipientPhone);
   const deliveryTime = buildCheckoutDeliveryTime({
     askRecipientTime: state.checkout.askRecipientTime,
     date: state.checkout.deliveryDate,
@@ -437,8 +417,9 @@ export function Checkout() {
   const consentChecked = Boolean(state.auth.me?.consentPersonal || consentLocal);
   const canPay =
     Boolean(state.cart.items.length) &&
-    Boolean(state.checkout.paymentMethod) &&
+    hasBuyerName &&
     hasSenderPhone &&
+    hasRecipientName &&
     hasRecipientPhone &&
     consentChecked &&
     hasDeliveryAddress &&
@@ -470,7 +451,16 @@ export function Checkout() {
         <div style={{ marginTop: 'var(--sp-6)', display: 'grid', gap: 16 }}>
           <CheckoutItemsPreview items={state.cart.items} productsById={productsById} />
 
-          <SafeDeliveryAccount recipient={selectedRecipient} />
+          <RecipientDetailsBlock
+            receiveSelf={receiveSelf}
+            onModeChange={setReceiveSelf}
+            name={recipientName}
+            phone={recipientPhone}
+            onNameChange={setRecipientName}
+            onPhoneChange={setRecipientPhone}
+            selfName={buyerName}
+            selfPhone={hasSenderPhone ? `${phoneCountry.dial} ${formatPhoneDigits(phoneDigits, phoneCountry)}` : ''}
+          />
 
           <Surface variant="default" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', display: 'grid', gap: 12 }}>
             <Text variant="title">Детали доставки</Text>
@@ -507,20 +497,6 @@ export function Checkout() {
               />
             </label>
 
-            <div style={{ height: 1, background: 'var(--border)' }} />
-
-            <Text variant="subtitle">Телефон получателя</Text>
-            <input
-              type="tel"
-              inputMode="tel"
-              value={recipientPhone}
-              onChange={(event) => setRecipientPhone(normalizeCheckoutPhone(event.target.value))}
-              placeholder="+7 999 000-00-00"
-              autoComplete="tel"
-              aria-label="Телефон получателя"
-              style={{ height: 48, borderRadius: 14, border: hasRecipientPhone || !recipientPhone ? '1px solid var(--border)' : '1px solid var(--accent)', padding: '0 12px', fontSize: 16, background: 'var(--surface)' }}
-            />
-            {!hasRecipientPhone ? <Text variant="caption" style={{ color: 'var(--accent)' }}>Укажите телефон получателя — он обязателен для доставки.</Text> : null}
           </Surface>
 
           {state.checkout.askRecipientAddress ? (
@@ -595,26 +571,31 @@ export function Checkout() {
             </Surface>
           )}
 
-          <Surface variant="default" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', overflow: 'hidden' }}>
-            <PaymentMethods value={state.checkout.paymentMethod} onChange={actions.setPaymentMethod} totalUsd={total} />
-          </Surface>
-
           <Surface variant="default" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', display: 'grid', gap: 10, overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <Text variant="title">Контакт покупателя</Text>
               <ShieldCheck size={18} color="var(--accent)" />
             </div>
-            {state.auth.me?.phone ? (
+            {isVerifiedBuyer ? (
               <Surface variant="soft" style={{ padding: 12, borderRadius: 16, border: '1px solid var(--border)', overflow: 'hidden' }}>
-                <Text variant="subtitle">{state.auth.me.phone}</Text>
+                <Text variant="subtitle">{state.auth.me?.name || 'Покупатель'}</Text>
+                <Text variant="body" muted style={{ marginTop: 3 }}>{state.auth.me?.phone}</Text>
                 <Text variant="caption" muted>Сохранено в профиле</Text>
               </Surface>
             ) : (
               <>
+                <input
+                  value={buyerName}
+                  onChange={(event) => setBuyerName(event.target.value.slice(0, 100))}
+                  placeholder="Ваше имя"
+                  autoComplete="name"
+                  aria-label="Имя покупателя"
+                  style={{ width: '100%', height: 52, borderRadius: 16, border: hasBuyerName || !buyerName ? '1px solid var(--border)' : '1px solid var(--accent)', padding: '0 12px', background: 'var(--surface)' }}
+                />
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '148px minmax(0, 1fr)',
+                    gridTemplateColumns: '96px minmax(0, 1fr)',
                     alignItems: 'center',
                     width: '100%',
                     borderRadius: 16,
@@ -646,30 +627,37 @@ export function Checkout() {
                   >
                     {PHONE_COUNTRIES.map((country) => (
                       <option key={country.iso} value={country.iso}>
-                        {country.flag} {country.iso} {country.dial}
+                        {country.flag} {country.iso}
                       </option>
                     ))}
                   </select>
 
-                  <input
-                    value={formatPhoneDigits(phoneDigits, phoneCountry)}
-                    onChange={(e) => setPhoneDigits(digitsOnly(e.target.value).slice(0, phoneCountry.max))}
-                    onBlur={async () => { if (hasSenderPhone) await actions.updateMyPhone(senderPhone); }}
-                    placeholder={phoneCountry.placeholder}
-                    inputMode="tel"
-                    aria-label="Номер телефона"
+                  <div
                     style={{
                       width: '100%',
                       height: 52,
-                      border: 0,
-                      padding: '0 12px',
-                      fontSize: 16,
-                      outline: 'none',
                       minWidth: 0,
                       background: 'var(--surface)',
+                      display: 'flex',
+                      alignItems: 'center',
                     }}
-                  />
+                  >
+                    <span style={{ paddingLeft: 12, fontWeight: 900, whiteSpace: 'nowrap' }}>{phoneCountry.dial}</span>
+                    <input
+                      value={formatPhoneDigits(phoneDigits, phoneCountry)}
+                      onChange={(e) => setPhoneDigits(digitsOnly(e.target.value).slice(0, phoneCountry.max))}
+                      placeholder={phoneCountry.placeholder}
+                      inputMode="tel"
+                      aria-label="Номер телефона"
+                      style={{ width: '100%', height: 52, border: 0, padding: '0 10px', fontSize: 16, outline: 'none', minWidth: 0, background: 'transparent' }}
+                    />
+                  </div>
                 </div>
+                {!hasBuyerName ? (
+                  <Text variant="caption" style={{ color: 'var(--c-accent)' }}>
+                    Укажите имя покупателя.
+                  </Text>
+                ) : null}
                 {!hasSenderPhone ? (
                   <Text variant="caption" style={{ color: 'var(--c-accent)' }}>
                     Номер для связи по заказу обязателен.
@@ -716,11 +704,15 @@ export function Checkout() {
       <CheckoutFooterCTA
         total={total}
         disabled={!canPay}
+        loading={submitting}
         onClick={async () => {
           if (!canPay) return;
           setSubmitting(true);
           setSubmitError('');
           try {
+            if (!isVerifiedBuyer) {
+              await actions.updateMyContact({ name: buyerName.trim(), phone: senderPhone });
+            }
             const items = [];
 
             for (const it of state.cart.items) {
@@ -752,9 +744,9 @@ export function Checkout() {
                 : null,
               askRecipientAddress: Boolean(state.checkout.askRecipientAddress),
               askRecipientTime: Boolean(state.checkout.askRecipientTime),
-              recipientName: selectedRecipient?.name || DEFAULT_DELIVERY_CONTACT.name,
-              recipientPhone: normalizeCheckoutPhone(recipientPhone),
-              paymentMethod: state.checkout.paymentMethod,
+              recipientName: effectiveRecipientName,
+              recipientPhone: effectiveRecipientPhone,
+              paymentMethod: 'alfa',
               floristComment: state.cart.floristComment || '',
               senderPhone,
               consentPersonal: consentChecked,
@@ -764,9 +756,18 @@ export function Checkout() {
             const order = await api.createOrder({ ...payload, checkoutKey });
 
             if (order?.id != null) actions.setActiveOrder(order.id, order?.paymentExpiresAt || null, buildActiveOrderPreview(order));
+            trackAnalytics('payment_start', { orderId: order?.id });
+            const payment = await api.createAlfaPayment(order?.id);
+            if (payment?.alreadyPaid) {
+              clearCheckoutKey(checkoutKey);
+              actions.clearCart();
+              navigate(`/pay/${encodeURIComponent(String(order?.id || ''))}?payment=success`);
+              return;
+            }
+            if (!payment?.formUrl) throw new Error('ALFA_PAYMENT_URL_MISSING');
             clearCheckoutKey(checkoutKey);
             actions.clearCart();
-            navigate(`/pay/${encodeURIComponent(String(order?.id || ''))}`);
+            window.location.assign(payment.formUrl);
           } catch (e) {
             const code = String(e?.data?.error || e?.message || '').trim();
             trackAnalytics('checkout_error', { meta: { errorCode: code || 'ORDER_CREATE_FAILED' } });
