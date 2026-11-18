@@ -1,8 +1,8 @@
 const fs = require('fs/promises');
 const path = require('path');
 
-const DEFAULT_TITLE = 'FLOWIE — доставка цветов в Самаре';
-const DEFAULT_DESCRIPTION = 'Свежие букеты FLOWIE с доставкой по Самаре. Выберите цветы, укажите адрес и следите за заказом в приложении.';
+const DEFAULT_TITLE = 'FLOWIE — доставка цветов в Ижевске';
+const DEFAULT_DESCRIPTION = 'Свежие букеты FLOWIE с доставкой по Ижевску. Выберите цветы, укажите адрес и следите за заказом в приложении.';
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -178,7 +178,7 @@ function homePage({ products, collections, baseUrl }) {
 function catalogPage({ products, collection, collections, baseUrl }) {
   const canonical = collection ? canonicalCollectionUrl(baseUrl, collection) : `${baseUrl}/catalog`;
   const title = collection ? `${collection.title} — цветы с доставкой | FLOWIE` : 'Каталог цветов с доставкой | FLOWIE';
-  const description = plainText(collection?.description, 220) || (collection ? `Букеты из подборки «${collection.title}» с доставкой по Самаре.` : 'Каталог свежих букетов FLOWIE с доставкой по Самаре.');
+  const description = plainText(collection?.description, 220) || (collection ? `Букеты из подборки «${collection.title}» с доставкой по Ижевску.` : 'Каталог свежих букетов FLOWIE с доставкой по Ижевску.');
   const crumbs = [{ name: 'Главная', href: '/' }, { name: 'Каталог', href: '/catalog' }, ...(collection ? [{ name: collection.title }] : [])];
   const collectionLinks = collections.map((item) => `<li><a href="${escapeHtml(canonicalCollectionUrl(baseUrl, item).replace(baseUrl, ''))}">${escapeHtml(item.title)}</a></li>`).join('');
   return {
@@ -200,7 +200,7 @@ function productPage({ product, collection, baseUrl }) {
   const canonical = `${baseUrl}/product/${product.id}`;
   const price = productPrice(product);
   const images = productImages(product, baseUrl);
-  const description = plainText(product.description, 260) || `${product.name} — свежий букет FLOWIE с доставкой по Самаре.`;
+  const description = plainText(product.description, 260) || `${product.name} — свежий букет FLOWIE с доставкой по Ижевску.`;
   const collectionPath = collection ? canonicalCollectionUrl(baseUrl, collection).replace(baseUrl, '') : '';
   const crumbs = [{ name: 'Главная', href: '/' }, { name: 'Каталог', href: '/catalog' }, ...(collection ? [{ name: collection.title, href: collectionPath }] : []), { name: product.name }];
   const productData = {
