@@ -3,6 +3,21 @@ map $http_upgrade $connection_upgrade {
   '' close;
 }
 
+gzip on;
+gzip_vary on;
+gzip_min_length 1024;
+gzip_comp_level 5;
+gzip_proxied any;
+gzip_types
+  application/javascript
+  application/json
+  application/manifest+json
+  application/xml
+  image/svg+xml
+  text/css
+  text/plain
+  text/xml;
+
 limit_req_zone $binary_remote_addr zone=api_per_ip:10m rate=20r/s;
 
 # Address queries contain customer data; omit them from access logs.

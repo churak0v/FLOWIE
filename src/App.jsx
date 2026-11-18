@@ -1,18 +1,7 @@
-import { useEffect, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Home } from './components/Home';
-import { ProductDetails } from './components/ProductDetails';
-import { Cart } from './components/Cart';
-import { Checkout } from './components/Checkout';
-import { Catalog } from './components/Catalog';
-import { Favorites } from './components/Favorites';
-import { Recipients } from './components/Recipients';
-import { Account } from './components/Account';
-import { RecipientProfile } from './components/RecipientProfile';
-import { PaymentManual } from './components/PaymentManual';
-import { DataProcessingConsent, PrivacyPolicy, PublicOffer } from './components/Legal';
 import { BottomNav } from './components/ui/BottomNav';
-import { WebmasterDashboard } from './components/webmaster/WebmasterDashboard';
 import { MiniCartBar } from './components/domain/MiniCartBar';
 import { ActiveOrderFab } from './components/domain/ActiveOrderFab';
 import { InsetsDebug } from './components/dev/InsetsDebug';
@@ -20,6 +9,21 @@ import { api } from './api';
 import { getTelegramInitData, getTelegramStartParam, getTelegramUserSafe, isTelegramWebApp, requestWriteAccess } from './telegram';
 import { AppStateProvider, useAppState } from './state/AppState';
 import { extractAnalyticsAttribution, markAnalyticsReady, trackAnalytics } from './lib/analytics';
+
+const lazyNamed = (loader, name) => lazy(() => loader().then((module) => ({ default: module[name] })));
+const ProductDetails = lazyNamed(() => import('./components/ProductDetails'), 'ProductDetails');
+const Cart = lazyNamed(() => import('./components/Cart'), 'Cart');
+const Checkout = lazyNamed(() => import('./components/Checkout'), 'Checkout');
+const Catalog = lazyNamed(() => import('./components/Catalog'), 'Catalog');
+const Favorites = lazyNamed(() => import('./components/Favorites'), 'Favorites');
+const Recipients = lazyNamed(() => import('./components/Recipients'), 'Recipients');
+const Account = lazyNamed(() => import('./components/Account'), 'Account');
+const RecipientProfile = lazyNamed(() => import('./components/RecipientProfile'), 'RecipientProfile');
+const PaymentManual = lazyNamed(() => import('./components/PaymentManual'), 'PaymentManual');
+const PrivacyPolicy = lazyNamed(() => import('./components/Legal'), 'PrivacyPolicy');
+const DataProcessingConsent = lazyNamed(() => import('./components/Legal'), 'DataProcessingConsent');
+const PublicOffer = lazyNamed(() => import('./components/Legal'), 'PublicOffer');
+const WebmasterDashboard = lazyNamed(() => import('./components/webmaster/WebmasterDashboard'), 'WebmasterDashboard');
 
 const REFERRAL_PROFILES = {
     vivienne: {
@@ -159,6 +163,7 @@ function AppRoutes() {
     return (
         <>
             {/* No animated route stack: Telegram WebView + fixed UI behaves more predictably without transforms. */}
+            <Suspense fallback={<div style={{ minHeight: '100dvh', background: 'var(--bg)' }} />}>
             <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/product/:id" element={<ProductDetails />} />
@@ -188,6 +193,7 @@ function AppRoutes() {
 
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </Suspense>
 
             {showBottomNav ? <BottomNav /> : null}
 

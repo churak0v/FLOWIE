@@ -65,8 +65,8 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
         <AppImage
           src={gallery[0] || image}
           alt={title}
-          loading="eager"
-          fetchPriority="high"
+          loading="lazy"
+          fetchPriority="auto"
           style={{
             position: isList ? 'absolute' : undefined,
             inset: isList ? 0 : undefined,

@@ -40,6 +40,8 @@ function PickTile({ title, subtitle, image, href, onClick, accent = false }) {
         <img
           src={image}
           alt=""
+          loading="lazy"
+          decoding="async"
           style={{
             position: 'absolute',
             inset: 0,
