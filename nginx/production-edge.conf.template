@@ -50,8 +50,8 @@ server {
 
   ssl_certificate /etc/nginx/certs/fullchain.pem;
   ssl_certificate_key /etc/nginx/certs/privkey.pem;
-  # Temporary compatibility mode for selective TLS 1.3 blocking in Russian networks.
-  ssl_protocols TLSv1.2;
+  # Keep TLS 1.2 compatibility while allowing modern VPN and proxy paths to use TLS 1.3.
+  ssl_protocols TLSv1.2 TLSv1.3;
   ssl_session_cache shared:SSL:10m;
   ssl_session_timeout 1d;
   ssl_session_tickets off;
@@ -162,8 +162,8 @@ server {
 
   ssl_certificate /etc/nginx/certs/fullchain.pem;
   ssl_certificate_key /etc/nginx/certs/privkey.pem;
-  # Temporary compatibility mode for selective TLS 1.3 blocking in Russian networks.
-  ssl_protocols TLSv1.2;
+  # Keep TLS 1.2 compatibility while allowing modern VPN and proxy paths to use TLS 1.3.
+  ssl_protocols TLSv1.2 TLSv1.3;
   ssl_session_cache shared:SSL:10m;
   ssl_session_timeout 1d;
   ssl_session_tickets off;

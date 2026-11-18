@@ -3,7 +3,7 @@ import { ShoppingBag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatMoney } from '../../lib/money';
 
-export function MiniCartBar({ count, sum, bottom = 'calc(72px + var(--app-nav-inset-bottom))', floating = false }) {
+export function MiniCartBar({ count, sum, bottom = 'calc(108px + var(--app-nav-inset-bottom))', floating = false }) {
   const navigate = useNavigate();
   if (!count) return null;
 

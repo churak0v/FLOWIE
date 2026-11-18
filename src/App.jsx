@@ -137,7 +137,7 @@ function AppRoutes() {
     const showMiniCart = pathname === '/' || pathname === '/catalog' || pathname === '/shop' || /^\/recipients\/\d+/.test(pathname);
     const miniCartBottom = /^\/recipients\/\d+/.test(pathname)
         ? 'calc(16px + var(--app-nav-inset-bottom))'
-        : 'calc(72px + var(--app-nav-inset-bottom))';
+        : 'calc(108px + var(--app-nav-inset-bottom))';
 
     const showBottomNav = !pathname.startsWith('/admin') && !pathname.startsWith('/webmaster') && (
         pathname === '/' ||

@@ -201,7 +201,7 @@ export function Catalog() {
         </div>
       </AppShell>
 
-      <div style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%) translateY(var(--app-keyboard-offset))', bottom: `calc(${hasCartItems ? 140 : 96}px + var(--app-nav-inset-bottom))`, width: 'min(100%, var(--app-max))', padding: '0 16px', zIndex: 69, pointerEvents: 'none', boxSizing: 'border-box', display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%) translateY(var(--app-keyboard-offset))', bottom: `calc(${hasCartItems ? 178 : 108}px + var(--app-nav-inset-bottom))`, width: 'min(100%, var(--app-max))', padding: '0 16px', zIndex: 69, pointerEvents: 'none', boxSizing: 'border-box', display: 'flex', justifyContent: 'flex-end' }}>
         <button type="button" onClick={openFilters} aria-label={`Открыть фильтры${activeFilterCount ? `, активно ${activeFilterCount}` : ''}`} style={{ minWidth: 126, height: 52, padding: '0 17px', border: '1px solid var(--c-accent-border)', borderRadius: 999, background: 'var(--surface)', color: 'var(--text)', boxShadow: '0 16px 38px rgba(13,13,13,0.16)', fontWeight: 1000, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, cursor: 'pointer', pointerEvents: 'auto' }}>
           <ListFilter size={19} color="var(--accent)" />
           Фильтры
