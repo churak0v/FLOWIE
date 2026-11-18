@@ -637,7 +637,7 @@ export function AppStateProvider({ children }) {
         const cachedItems = Array.isArray(cached?.data) ? cached.data : null;
         if (cachedItems?.length) {
           dispatch({ type: 'PRODUCTS_SET', items: cachedItems });
-          prefetchImages(cachedItems.flatMap((p) => p?.images?.length ? p.images : [p?.image]).filter(Boolean), { max: 320 });
+          prefetchImages(cachedItems.map((p) => p?.image).filter(Boolean), { max: 6 });
         }
 
         if (cachedItems?.length && isCacheFresh(cached, 60_000)) return;
@@ -651,12 +651,12 @@ export function AppStateProvider({ children }) {
           const normalized = items.filter((x) => Number.isFinite(x.id));
           dispatch({ type: 'PRODUCTS_SET', items: normalized });
           writeCacheEntry(cacheKey, normalized);
-          prefetchImages(normalized.flatMap((p) => p?.images?.length ? p.images : [p?.image]).filter(Boolean), { max: 320 });
+          prefetchImages(normalized.map((p) => p?.image).filter(Boolean), { max: 6 });
         } catch (e) {
           if (import.meta.env.PROD) dispatch({ type: 'PRODUCTS_ERROR', error: 'CATALOG_UNAVAILABLE' });
           else {
             dispatch({ type: 'PRODUCTS_SET', items: PRODUCTS });
-            prefetchImages(PRODUCTS.flatMap((p) => p?.images?.length ? p.images : [p?.image]).filter(Boolean), { max: 120 });
+            prefetchImages(PRODUCTS.map((p) => p?.image).filter(Boolean), { max: 6 });
           }
         }
       },

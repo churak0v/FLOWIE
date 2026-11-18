@@ -1,6 +1,7 @@
 const PREFETCHED = new Set();
 const MEMORY_CACHE = new Map(); // url -> Image
-const MAX_MEMORY = 360;
+const MAX_MEMORY = 24;
+const MAX_PREFETCH_PER_CALL = 8;
 
 function shouldPrefetch() {
   try {
@@ -22,11 +23,14 @@ function normalizeUrl(raw) {
   return `/${s}`;
 }
 
-export function prefetchImages(urls, { max = 300 } = {}) {
+export function prefetchImages(urls, { max = 6 } = {}) {
   try {
     if (typeof window === 'undefined') return;
     if (!Array.isArray(urls) || urls.length === 0) return;
     if (!shouldPrefetch()) return;
+
+    const limit = Math.min(MAX_PREFETCH_PER_CALL, Math.max(0, Number(max) || 0));
+    if (!limit) return;
 
     const unique = [];
     for (const raw of urls) {
@@ -36,7 +40,7 @@ export function prefetchImages(urls, { max = 300 } = {}) {
       if (PREFETCHED.has(url)) continue;
       PREFETCHED.add(url);
       unique.push(url);
-      if (unique.length >= max) break;
+      if (unique.length >= limit) break;
     }
 
     if (!unique.length) return;
