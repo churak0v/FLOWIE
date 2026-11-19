@@ -68,5 +68,6 @@ test('sends a Telegram message with a direct admin order button', async () => {
   assert.match(request.url, /\/botsecret-token\/sendMessage$/);
   const payload = JSON.parse(request.options.body);
   assert.equal(payload.chat_id, '100');
+  assert.match(payload.text, /примите заказ и запустите в работу/);
   assert.equal(payload.reply_markup.inline_keyboard[0][0].url, 'https://admin.flowie.art/orders/42');
 });

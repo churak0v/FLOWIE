@@ -54,6 +54,7 @@ function formatOrderMessage(order, event) {
     '',
     `<b>Сумма:</b> ${escapeHtml(rubles(order.totalPrice))}`,
     `<b>Оплата:</b> ${paid ? 'подтверждена' : 'ожидается'}`,
+    paid ? '<b>Действие:</b> примите заказ и запустите в работу' : null,
     '',
     '<b>Состав:</b>',
     ...(items.length ? items : ['• состав не указан']),
