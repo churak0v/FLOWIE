@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Copy, CreditCard, ChevronLeft, Clock } from 'lucide-react';
+import { ChevronLeft, Clock } from 'lucide-react';
 import { api } from '../api';
 import { useAppState } from '../state/AppState';
 import { buildActiveOrderPreview } from '../lib/orderPreview';
@@ -23,73 +23,21 @@ function fmtMmSs(ms) {
   return `${mm}:${ss}`;
 }
 
-async function copyToClipboard(value) {
-  const v = String(value || '');
-  if (!v) return false;
-  try {
-    await navigator.clipboard.writeText(v);
-    return true;
-  } catch {
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = v;
-      ta.style.position = 'fixed';
-      ta.style.left = '-9999px';
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      const ok = document.execCommand('copy');
-      document.body.removeChild(ta);
-      return Boolean(ok);
-    } catch {
-      return false;
-    }
-  }
-}
-
-function Row({ icon, label, value, onCopy }) {
+function DetailLine({ label, value, strong = false }) {
   return (
-    <Surface
-      variant="soft"
+    <div
       style={{
-        padding: 14,
-        borderRadius: 'var(--r-lg)',
-        border: '1px solid var(--border)',
-        background: 'var(--bg)',
         display: 'grid',
-        gridTemplateColumns: '28px 1fr 34px',
-        alignItems: 'center',
-        gap: 12,
+        gridTemplateColumns: 'minmax(0, 0.8fr) minmax(0, 1.2fr)',
+        gap: 14,
+        alignItems: 'start',
+        padding: '11px 0',
+        borderBottom: '1px solid var(--c-ink-08)',
       }}
     >
-      <div style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>{icon}</div>
-      <div style={{ minWidth: 0 }}>
-        <Text variant="caption">{label}</Text>
-        <div style={{ marginTop: 4 }}>
-          <Text variant="subtitle" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {value}
-          </Text>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onCopy}
-        aria-label="Скопировать"
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: 12,
-          border: '1px solid var(--border)',
-          background: 'transparent',
-          cursor: 'pointer',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Copy size={18} />
-      </button>
-    </Surface>
+      <Text variant="body" muted>{label}</Text>
+      <Text variant={strong ? 'subtitle' : 'body'} style={{ textAlign: 'right', overflowWrap: 'anywhere' }}>{value}</Text>
+    </div>
   );
 }
 
@@ -274,7 +222,7 @@ function OrderItemCard({ item }) {
   );
 }
 
-function DeliveryPaymentCard({ info, loading, error, busy, message, onPay, onRefresh }) {
+function DeliveryPaymentCard({ info, loading, error, busy, message, onPay }) {
   const invoice = info?.invoice || null;
   const order = info?.order || {};
   const delivery = info?.delivery || order;
@@ -308,14 +256,9 @@ function DeliveryPaymentCard({ info, loading, error, busy, message, onPay, onRef
           type="button"
           disabled={busy}
           onClick={onPay}
-          style={{ height: 48, border: 0, borderRadius: 14, background: '#ef3124', color: '#fff', fontWeight: 1000, cursor: busy ? 'default' : 'pointer' }}
+          style={{ height: 52, border: 0, borderRadius: 14, background: '#1d1346', color: '#fff', fontWeight: 1000, cursor: busy ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
         >
-          {busy ? 'Открываем...' : `Оплатить доставку ${formatMoney(invoice.amount)}`}
-        </button>
-      ) : null}
-      {['PAYMENT_PENDING', 'EXPIRED'].includes(invoiceStatus) ? (
-        <button type="button" disabled={busy} onClick={onRefresh} style={{ height: 42, borderRadius: 14, border: '1px solid var(--border)', background: 'transparent', fontWeight: 900 }}>
-          Проверить оплату доставки
+          {busy ? 'Открываем...' : <><span>Оплатить по</span><SbpLogo compact /><span>· {formatMoney(invoice.amount)}</span></>}
         </button>
       ) : null}
       {message ? <Text variant="caption" style={{ color: 'var(--c-success)' }}>{message}</Text> : null}
@@ -334,7 +277,6 @@ export function PaymentManual() {
   const [error, setError] = useState('');
   const [order, setOrder] = useState(null);
   const [payment, setPayment] = useState(null); // { cardNumber, receiverName, bankName }
-  const [copied, setCopied] = useState(''); // field name
   const [gatewayBusy, setGatewayBusy] = useState(false);
   const [gatewayError, setGatewayError] = useState('');
   const [gatewayInfo, setGatewayInfo] = useState('');
@@ -526,12 +468,6 @@ export function PaymentManual() {
     });
   }, [order?.totalPrice, orderId, paymentStatus]);
 
-  useEffect(() => {
-    if (!copied) return undefined;
-    const t = setTimeout(() => setCopied(''), 900);
-    return () => clearTimeout(t);
-  }, [copied]);
-
   // Auto-clear active order when expired.
   useEffect(() => {
     if (!order?.paymentExpiresAt) return;
@@ -681,7 +617,6 @@ export function PaymentManual() {
               busy={deliveryPaymentBusy}
               message={deliveryPaymentInfo}
               onPay={payDelivery}
-              onRefresh={() => syncDeliveryPayment({ quiet: false })}
             />
           </div>
         ) : null}
@@ -774,7 +709,7 @@ export function PaymentManual() {
   const payWithAlfa = async () => {
     if (!order?.id) return;
     if (!alfaPayment.enabled) {
-      setGatewayError('Интернет-эквайринг Альфа-Банка не настроен');
+      setGatewayError('Оплата по СБП временно недоступна');
       return;
     }
     setGatewayBusy(true);
@@ -787,10 +722,10 @@ export function PaymentManual() {
         setOrder((prev) => ({ ...(prev || {}), paymentStatus: 'CONFIRMED' }));
         return;
       }
-      if (!res?.formUrl) throw new Error('ALFA_PAYMENT_URL_MISSING');
+      if (!res?.formUrl) throw new Error('SBP_PAYMENT_URL_MISSING');
       window.location.assign(res.formUrl);
     } catch (e) {
-      setGatewayError(e?.data?.error || e?.message || 'Не удалось открыть оплату Альфа-Банка');
+      setGatewayError(e?.data?.error || e?.message || 'Не удалось открыть оплату по СБП');
     } finally {
       setGatewayBusy(false);
     }
@@ -803,48 +738,43 @@ export function PaymentManual() {
         <IconButton onClick={() => navigate(-1)} aria-label="Назад">
           <ChevronLeft size={22} />
         </IconButton>
-        <Text variant="title">Оплата</Text>
+        <Text variant="title">Заказ #{order?.id}</Text>
       </div>
 
-      <div style={{ marginTop: 'var(--sp-6)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <Text variant="title" style={{ fontSize: 24 }}>
-          К оплате {formatMoney(amount)}
-        </Text>
+      <div style={{ marginTop: 'var(--sp-5)' }}>
+        <Text variant="title" style={{ fontSize: 25 }}>Проверьте заказ</Text>
+        <Text variant="body" muted style={{ marginTop: 5 }}>После перехода выберите приложение банка и подтвердите оплату.</Text>
+        <span className="ui-chip" style={{ marginTop: 12 }}>
+          <Clock size={14} />
+          {remainingMs > 0 ? `На оплату ${fmtMmSs(remainingMs)}` : 'Время вышло'}
+        </span>
+      </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span className="ui-chip">
-            <Clock size={14} />
-            {remainingMs > 0 ? `Осталось ${fmtMmSs(remainingMs)}` : 'Время вышло'}
-          </span>
-          {paymentStatus === 'CONFIRMED' ? (
-            <span className="ui-chip ui-chip--success">Оплата подтверждена</span>
-          ) : (
-            <span className="ui-chip ui-chip--accent">Ждём подтверждение</span>
-          )}
-          {copied ? <span className="ui-chip">Скопировано</span> : null}
+      <div style={{ marginTop: 'var(--sp-6)' }}>
+        <Text variant="subtitle">Состав заказа</Text>
+        <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
+          {(order?.items || []).map((item) => <OrderItemCard key={item.id} item={item} />)}
         </div>
       </div>
 
-      <div style={{ marginTop: 'var(--sp-6)', display: 'grid', gap: 12 }}>
-        <Row
-          icon={<CreditCard size={20} />}
-          label="Способ оплаты"
-          value="Онлайн через Альфа-Банк"
-          onCopy={async () => {
-            const ok = await copyToClipboard('Альфа-Банк');
-            if (ok) setCopied('alfa');
-          }}
+      <Surface variant="soft" style={{ marginTop: 16, padding: '4px 14px', borderRadius: 'var(--r-xl)', border: '1px solid var(--border)' }}>
+        <DetailLine label="Получатель" value={order?.recipientName || 'Не указан'} />
+        {order?.recipientPhone ? <DetailLine label="Телефон" value={order.recipientPhone} /> : null}
+        <DetailLine
+          label="Адрес"
+          value={order?.deliveryAddress || (order?.askRecipientAddress ? 'Уточним у получателя' : 'Не указан')}
         />
-        <Row
-          icon={<div style={{ fontWeight: 1000 }}>₽</div>}
-          label="Сумма заказа"
-          value={formatMoney(amount)}
-          onCopy={async () => {
-            const ok = await copyToClipboard(String(amount || ''));
-            if (ok) setCopied('amount');
-          }}
+        <DetailLine
+          label="Время"
+          value={order?.deliveryTime || (order?.askRecipientTime ? 'Уточним у получателя' : 'Не указано')}
         />
-      </div>
+        {order?.floristComment ? <DetailLine label="Комментарий" value={order.floristComment} /> : null}
+        <DetailLine
+          label="Доставка"
+          value={Number(order?.deliveryCost) > 0 ? formatMoney(order.deliveryCost) : (order?.askRecipientAddress ? 'Уточним после адреса' : 'Бесплатно')}
+        />
+        <DetailLine label="К оплате" value={formatMoney(amount)} strong />
+      </Surface>
 
       <div style={{ marginTop: 'var(--sp-8)', display: 'grid', gap: 10 }}>
         {paymentStatus === 'CONFIRMED' ? (
@@ -879,7 +809,7 @@ export function PaymentManual() {
                 height: 54,
                 borderRadius: 'var(--r-lg)',
                 border: 0,
-                background: '#20134f',
+                background: '#1d1346',
                 color: '#fff',
                 fontWeight: 1000,
                 cursor: gatewayBusy ? 'default' : 'pointer',
@@ -890,22 +820,7 @@ export function PaymentManual() {
                 gap: 8,
               }}
             >
-              {gatewayBusy ? 'Открываем оплату...' : <><span>Оплатить</span><SbpLogo compact /><span>· {formatMoney(amount)}</span></>}
-            </button>
-            <button
-              type="button"
-              disabled={gatewayBusy}
-              onClick={() => syncAlfaPayment({ quiet: false })}
-              style={{
-                height: 48,
-                borderRadius: 'var(--r-lg)',
-                border: '1px solid var(--border)',
-                background: 'transparent',
-                fontWeight: 900,
-                cursor: gatewayBusy ? 'default' : 'pointer',
-              }}
-            >
-              Проверить оплату
+              {gatewayBusy ? 'Открываем оплату...' : <><span>Оплатить по</span><SbpLogo compact /><span>· {formatMoney(amount)}</span></>}
             </button>
             <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
               <Text variant="body" muted>

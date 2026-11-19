@@ -26,7 +26,7 @@ export function CheckoutFooterCTA({ total, disabled, loading = false, onClick })
           height: 56,
           border: 0,
           borderRadius: 'var(--r-lg)',
-          background: disabled ? 'var(--c-ink-14)' : '#20134f',
+          background: disabled ? 'var(--c-ink-14)' : '#1d1346',
           color: '#fff',
           cursor: disabled ? 'default' : 'pointer',
           fontWeight: 900,
@@ -38,7 +38,7 @@ export function CheckoutFooterCTA({ total, disabled, loading = false, onClick })
           boxShadow: disabled ? 'none' : '0 12px 28px rgba(32,19,79,0.22)',
         }}
       >
-        {loading ? 'Открываем оплату…' : <><span>Оплатить</span><SbpLogo compact /><span>· {formatMoney(total)}</span></>}
+        {loading ? 'Открываем оплату…' : <><span>Оплатить по</span><SbpLogo compact /><span>· {formatMoney(total)}</span></>}
       </button>
     </div>
   );
