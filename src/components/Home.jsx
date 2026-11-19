@@ -225,7 +225,7 @@ export function Home() {
             left: '50%',
             transform: 'translateX(-50%)',
             width: 'min(100%, var(--app-max))',
-            height: 'calc(55vh + 48px)',
+            height: 'calc(55dvh + 48px)',
             zIndex: 0,
           }}
         >
@@ -233,7 +233,7 @@ export function Home() {
         </div>
 
         {/* Scrollable content panel */}
-        <div style={{ position: 'relative', zIndex: 10, marginTop: '54vh' }}>
+        <div style={{ position: 'relative', zIndex: 10, marginTop: '54dvh' }}>
           <Surface
             variant="default"
             style={{
