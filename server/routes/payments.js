@@ -364,6 +364,76 @@ async function markOrderPaid(order, paymentMeta = {}, bankOrderId) {
   return updated;
 }
 
+async function reconcilePendingMainPayments() {
+  if (!isAlfaConfigured()) return 0;
+  const orders = await prisma.order.findMany({
+    where: {
+      paymentStatus: { not: 'CONFIRMED' },
+      status: { not: 'CANCELLED' },
+      paymentChargeId: { not: null },
+      createdAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+    },
+    orderBy: { createdAt: 'asc' },
+    take: 25,
+  });
+  let confirmed = 0;
+  for (const order of orders) {
+    const bankOrderId = String(order.paymentChargeId || '');
+    if (!bankOrderId || bankOrderId.startsWith('registering:')) continue;
+    try {
+      const result = await alfaRequest('getOrderStatusExtended', { orderId: bankOrderId });
+      const bankStatus = Number(result?.orderStatus);
+      const meta = parsePaymentMeta(order.paymentMeta);
+      const nextMeta = {
+        ...meta,
+        alfa: {
+          ...(meta.alfa || {}),
+          lastStatus: Number.isFinite(bankStatus) ? bankStatus : result?.orderStatus,
+          lastStatusAt: new Date().toISOString(),
+          actionCode: result?.actionCode,
+          actionCodeDescription: result?.actionCodeDescription,
+          confirmedAmount: result?.amount,
+          confirmedCurrency: result?.currency,
+        },
+      };
+      if (bankStatus === 2) {
+        validateCapturedPayment(order, result);
+        await markOrderPaid(order, nextMeta, bankOrderId);
+        confirmed += 1;
+      } else {
+        await prisma.order.updateMany({
+          where: { id: order.id, paymentStatus: { not: 'CONFIRMED' }, paymentChargeId: bankOrderId },
+          data: { paymentMeta: JSON.stringify(nextMeta) },
+        });
+      }
+    } catch (error) {
+      console.warn('[payment-reconciliation] order check failed', { orderId: order.id, error: error?.message || error });
+    }
+  }
+  return confirmed;
+}
+
+function startPaymentReconciliation() {
+  if (process.env.NODE_ENV !== 'production' || !isAlfaConfigured()) return null;
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const confirmed = await reconcilePendingMainPayments();
+      if (confirmed) console.log(`[payment-reconciliation] confirmed ${confirmed} order(s)`);
+    } catch (error) {
+      console.warn('[payment-reconciliation] tick failed:', error?.message || error);
+    } finally {
+      running = false;
+    }
+  };
+  setTimeout(tick, 3_000).unref?.();
+  const timer = setInterval(tick, 15_000);
+  timer.unref?.();
+  return () => clearInterval(timer);
+}
+
 function deliveryInvoiceExpired(invoice) {
   const expiresAt = invoice?.paymentExpiresAt ? new Date(invoice.paymentExpiresAt).getTime() : NaN;
   return Number.isFinite(expiresAt) && expiresAt <= Date.now();
@@ -1093,6 +1163,9 @@ router._test = {
   validateAlfaFormUrl,
   validateSbpPaymentUrl,
   buildOrderBundle,
+  reconcilePendingMainPayments,
 };
+
+startPaymentReconciliation();
 
 module.exports = router;
