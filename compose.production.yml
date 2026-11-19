@@ -78,6 +78,9 @@ services:
       SMS_AUTH_ENABLED: ${SMS_AUTH_ENABLED:-false}
       SMS_RU_API_ID: ${SMS_RU_API_ID:-}
       SMS_RU_SENDER: ${SMS_RU_SENDER:-}
+      TELEGRAM_ORDER_BOT_TOKEN: ${TELEGRAM_ORDER_BOT_TOKEN:-}
+      TELEGRAM_ORDER_CHAT_IDS: ${TELEGRAM_ORDER_CHAT_IDS:-}
+      TELEGRAM_ORDER_ADMIN_URL: ${TELEGRAM_ORDER_ADMIN_URL:-https://admin.flowie.art}
     command: ["node", "./node_modules/prisma/build/index.js", "migrate", "deploy"]
     depends_on:
       db:

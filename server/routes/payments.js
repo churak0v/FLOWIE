@@ -4,6 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 const { requireAuth } = require('../middleware/auth');
 const crypto = require('crypto');
 const { recordServerEventSafe } = require('../services/analytics');
+const { enqueueOrderNotificationSafe } = require('../services/telegramOrders');
 const {
   invoiceTtlMs,
   publicDeliveryInvoice,
@@ -302,6 +303,7 @@ async function markOrderPaid(order, paymentMeta = {}, bankOrderId) {
       userId: order.userId,
       orderId: order.id,
     });
+    await enqueueOrderNotificationSafe(prisma, order.id, 'ORDER_PAID');
   }
   return updated;
 }

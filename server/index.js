@@ -9,11 +9,13 @@ const { PrismaClient } = require('@prisma/client');
 const { SESSION_COOKIE, resolveSession } = require('./services/authSession');
 const { startAutoFulfillment } = require('./services/autoFulfillment');
 const { createCorsOriginCallback } = require('./services/corsOrigins');
+const { startTelegramOrderNotifications } = require('./services/telegramOrders');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const prisma = new PrismaClient();
 startAutoFulfillment(prisma);
+startTelegramOrderNotifications(prisma);
 
 app.set('trust proxy', 1);
 const corsOrigin = createCorsOriginCallback();

@@ -26,40 +26,40 @@ enum ChatSenderRole {
 }
 
 model User {
-  id         Int      @id @default(autoincrement())
-  name       String?
-  username   String?
-  phone      String?
-  verifiedPhone String? @unique
+  id              Int           @id @default(autoincrement())
+  name            String?
+  username        String?
+  phone           String?
+  verifiedPhone   String?       @unique
   phoneVerifiedAt DateTime?
-  createdAt  DateTime @default(now())
-  consentPersonal Boolean @default(false)
-  referralLinkId Int?
-  referralLink   ReferralLink? @relation("UserReferral", fields: [referralLinkId], references: [id], onDelete: SetNull)
-  referralSource String?
-  referralAt     DateTime?
+  createdAt       DateTime      @default(now())
+  consentPersonal Boolean       @default(false)
+  referralLinkId  Int?
+  referralLink    ReferralLink? @relation("UserReferral", fields: [referralLinkId], references: [id], onDelete: SetNull)
+  referralSource  String?
+  referralAt      DateTime?
 
   // Staff access (admin panel)
   staffRole   StaffRole?
   staffActive Boolean    @default(false)
 
-  orders     Order[]
-  courierOrders Order[] @relation("OrderCourier")
-  recipients Recipient[]
-  addresses  Address[]
-  auditLogs  AuditLog[]
+  orders        Order[]
+  courierOrders Order[]     @relation("OrderCourier")
+  recipients    Recipient[]
+  addresses     Address[]
+  auditLogs     AuditLog[]
 
   // Client chats + promo codes
-  chats              Chat[]
-  promoCodes         PromoCode[]          @relation("PromoCode_User")
-  promoCodesCreated  PromoCode[]          @relation("PromoCode_CreatedBy")
-  OrderStatusHistory OrderStatusHistory[]
-  OrderPhoto         OrderPhoto[]
-  AnalyticsEvent     AnalyticsEvent[]
-  referralLinksCreated ReferralLink[] @relation("ReferralCreatedBy")
-  referralOpens      ReferralOpen[] @relation("ReferralOpenUser")
-  authSessions       AuthSession[]
-  phoneOtpChallenges PhoneOtpChallenge[]
+  chats                Chat[]
+  promoCodes           PromoCode[]          @relation("PromoCode_User")
+  promoCodesCreated    PromoCode[]          @relation("PromoCode_CreatedBy")
+  OrderStatusHistory   OrderStatusHistory[]
+  OrderPhoto           OrderPhoto[]
+  AnalyticsEvent       AnalyticsEvent[]
+  referralLinksCreated ReferralLink[]       @relation("ReferralCreatedBy")
+  referralOpens        ReferralOpen[]       @relation("ReferralOpenUser")
+  authSessions         AuthSession[]
+  phoneOtpChallenges   PhoneOtpChallenge[]
 }
 
 model AuthSession {
@@ -182,59 +182,78 @@ model CollectionItem {
 }
 
 model Order {
-  id                 Int       @id @default(autoincrement())
-  checkoutKey        String?   @unique
-  userId             Int
-  user               User      @relation(fields: [userId], references: [id])
-  status             String // "new", "paid", "delivery", "completed", "cancelled"
-  cancelReason       String?
-  floristComment     String?
-  senderPhone        String?
-  consentPersonal    Boolean  @default(false)
-  paymentMethod      String?
-  paymentStatus      String    @default("PENDING")
-  paymentClientConfirmed Boolean @default(false)
-  paymentPayload     String?
-  paymentChargeId    String?
-  paymentMeta        String?
-  paymentExpiresAt   DateTime?
-  paidAt             DateTime?
-  preDeliveryRating  String?
-  preDeliveryRatedAt DateTime?
-  courierId          Int?
-  courier            User?     @relation("OrderCourier", fields: [courierId], references: [id])
-  deliveredAt        DateTime?
+  id                     Int       @id @default(autoincrement())
+  checkoutKey            String?   @unique
+  userId                 Int
+  user                   User      @relation(fields: [userId], references: [id])
+  status                 String // "new", "paid", "delivery", "completed", "cancelled"
+  cancelReason           String?
+  floristComment         String?
+  senderPhone            String?
+  consentPersonal        Boolean   @default(false)
+  paymentMethod          String?
+  paymentStatus          String    @default("PENDING")
+  paymentClientConfirmed Boolean   @default(false)
+  paymentPayload         String?
+  paymentChargeId        String?
+  paymentMeta            String?
+  paymentExpiresAt       DateTime?
+  paidAt                 DateTime?
+  preDeliveryRating      String?
+  preDeliveryRatedAt     DateTime?
+  courierId              Int?
+  courier                User?     @relation("OrderCourier", fields: [courierId], references: [id])
+  deliveredAt            DateTime?
 
   // Financials
-  itemsTotal   Int
-  deliveryCost Int?
-  totalPrice   Int
+  itemsTotal     Int
+  deliveryCost   Int?
+  totalPrice     Int
   referralLinkId Int?
   referralLink   ReferralLink? @relation(fields: [referralLinkId], references: [id], onDelete: SetNull)
 
   // Delivery Info
-  deliveryAddress String?
-  deliveryCoords  String?
-  deliveryTime    String?
-  recipientName   String?
-  recipientPhone  String?
-  askRecipientAddress Boolean @default(false)
-  askRecipientTime    Boolean @default(false)
-  deliveryStatus      String  @default("DETAILS_PENDING")
-  deliveryQuoteKey    String? @unique @db.VarChar(64)
-  deliveryQuoteDigest String? @db.VarChar(64)
+  deliveryAddress     String?
+  deliveryCoords      String?
+  deliveryTime        String?
+  recipientName       String?
+  recipientPhone      String?
+  askRecipientAddress Boolean          @default(false)
+  askRecipientTime    Boolean          @default(false)
+  deliveryStatus      String           @default("DETAILS_PENDING")
+  deliveryQuoteKey    String?          @unique @db.VarChar(64)
+  deliveryQuoteDigest String?          @db.VarChar(64)
   deliveryInvoice     DeliveryInvoice?
 
   createdAt DateTime    @default(now())
   items     OrderItem[]
 
-  statusHistory OrderStatusHistory[]
-  photos        OrderPhoto[]
-  chats         Chat[]
-  promoCodes    PromoCode[]
+  statusHistory         OrderStatusHistory[]
+  photos                OrderPhoto[]
+  chats                 Chat[]
+  promoCodes            PromoCode[]
+  telegramNotifications TelegramOrderNotification[]
 
   @@index([courierId])
   @@index([referralLinkId, createdAt])
+}
+
+model TelegramOrderNotification {
+  id            Int       @id @default(autoincrement())
+  orderId       Int
+  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  event         String    @db.VarChar(40)
+  chatId        String    @db.VarChar(32)
+  status        String    @default("PENDING") @db.VarChar(20)
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  sentAt        DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([orderId, event, chatId])
+  @@index([status, nextAttemptAt])
 }
 
 model DeliveryInvoice {
@@ -396,20 +415,20 @@ model AnalyticsEvent {
 }
 
 model ReferralLink {
-  id          Int       @id @default(autoincrement())
-  tag         String    @unique
+  id          Int      @id @default(autoincrement())
+  tag         String   @unique
   title       String?
   note        String?
-  isActive    Boolean   @default(true)
-  autoCreated Boolean   @default(false)
+  isActive    Boolean  @default(true)
+  autoCreated Boolean  @default(false)
   createdById Int?
-  createdBy   User?     @relation("ReferralCreatedBy", fields: [createdById], references: [id])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdBy   User?    @relation("ReferralCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   opens  ReferralOpen[]
   orders Order[]
-  users  User[] @relation("UserReferral")
+  users  User[]         @relation("UserReferral")
 
   @@index([createdAt])
 }
