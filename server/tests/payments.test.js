@@ -151,6 +151,9 @@ test('register sends exact RUB amount and reuses the registered bank order', asy
   const nativeFetch = global.fetch;
   global.fetch = async (url, options) => {
     calls.push({ url: String(url), params: new URLSearchParams(String(options.body)) });
+    if (String(url).endsWith('/sbp/c2b/qr/dynamic/get.do')) {
+      return jsonResponse({ qrStatus: 'STARTED', payload: 'https://qr.nspk.ru/AS1812TEST41' });
+    }
     return jsonResponse({ orderId: 'bank-41', formUrl: 'https://bank.test/form/41' });
   };
   try {
@@ -169,8 +172,9 @@ test('register sends exact RUB amount and reuses the registered bank order', asy
       assert.equal(first.status, 200);
       assert.deepEqual(second.body, first.body);
       assert.equal(calls.filter(call => call.url.endsWith('/register.do')).length, 1);
-      assert.equal(first.body.paymentMethod, 'alfa');
-      assert.equal(first.body.formUrl, 'https://bank.test/form/41');
+      assert.equal(calls.filter(call => call.url.endsWith('/sbp/c2b/qr/dynamic/get.do')).length, 2);
+      assert.equal(first.body.paymentMethod, 'sbp');
+      assert.equal(first.body.formUrl, 'https://qr.nspk.ru/AS1812TEST41');
       assert.equal(calls[0].params.get('taxSystem'), '1');
       const orderBundle = JSON.parse(calls[0].params.get('orderBundle'));
       assert.equal(orderBundle.cartItems.items.length, 1);
@@ -198,9 +202,12 @@ test('register sends exact RUB amount and reuses the registered bank order', asy
 test('concurrent registration creates only one bank order', async () => {
   const { client } = createPrisma();
   const nativeFetch = global.fetch;
-  let bankCalls = 0;
+  let registerCalls = 0;
   global.fetch = async (url) => {
-    bankCalls += 1;
+    if (String(url).endsWith('/sbp/c2b/qr/dynamic/get.do')) {
+      return jsonResponse({ qrStatus: 'STARTED', payload: 'https://qr.nspk.ru/AS1812RACE' });
+    }
+    registerCalls += 1;
     await new Promise((resolve) => setTimeout(resolve, 20));
     return jsonResponse({ orderId: 'bank-race', formUrl: 'https://bank.test/form/race' });
   };
@@ -212,7 +219,7 @@ test('concurrent registration creates only one bank order', async () => {
         body: JSON.stringify({ orderId: 41 }),
       });
       const results = await Promise.all([send(), send()]);
-      assert.equal(bankCalls, 1);
+      assert.equal(registerCalls, 1);
       assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
       assert.equal(results.find((result) => result.status === 409).body.error, 'PAYMENT_REGISTRATION_IN_PROGRESS');
     });
@@ -325,6 +332,9 @@ test('declined bank order is released and can be registered again', async () => 
     if (String(url).endsWith('/getOrderStatusExtended.do')) {
       return jsonResponse({ orderStatus: 6, amount: 250000, currency: '643' });
     }
+    if (String(url).endsWith('/sbp/c2b/qr/dynamic/get.do')) {
+      return jsonResponse({ qrStatus: 'STARTED', payload: 'https://qr.nspk.ru/AS1812RETRY' });
+    }
     registerCalls += 1;
     return jsonResponse({ orderId: 'bank-retry', formUrl: 'https://bank.test/form/retry' });
   };
@@ -370,19 +380,29 @@ function registerRequest(base) {
   return request(base, '/api/payments/alfa-register', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({orderId:41})});
 }
 
-test('existing Alfa internet-acquiring URL is reused without creating a duplicate order',async()=>{
+test('existing Alfa order gets a fresh direct SBP link without duplicate registration',async()=>{
   const {client}=createPrisma({paymentChargeId:'legacy',paymentMeta:JSON.stringify({alfa:{orderId:'legacy',formUrl:'https://bank.test/cards'}})});
   const nativeFetch=global.fetch;const calls=[];
-  global.fetch=async url=>{calls.push(String(url));return jsonResponse({});};
-  try {await withServer(client,async base=>{const result=await registerRequest(base);assert.equal(result.body.formUrl,'https://bank.test/cards');assert.equal(result.body.paymentMethod,'alfa');});assert.equal(calls.length,0);}
+  global.fetch=async url=>{calls.push(String(url));return jsonResponse({qrStatus:'STARTED',payload:'https://qr.nspk.ru/AS1812EXISTING'});};
+  try {await withServer(client,async base=>{const result=await registerRequest(base);assert.equal(result.body.formUrl,'https://qr.nspk.ru/AS1812EXISTING');assert.equal(result.body.paymentMethod,'sbp');});assert.equal(calls.filter(url=>url.endsWith('/register.do')).length,0);assert.equal(calls.length,1);}
   finally{global.fetch=nativeFetch;}
 });
 
-test('invalid internet-acquiring URL is rejected before it reaches the client',async()=>{
+test('invalid direct SBP URL is rejected before it reaches the client',async()=>{
   const {client,state}=createPrisma();const nativeFetch=global.fetch;
-  global.fetch=async()=>jsonResponse({orderId:'bad-form',formUrl:'http://evil.test/phish'});
-  try {await withServer(client,async base=>{const result=await registerRequest(base);assert.equal(result.status,502);assert.equal(result.body.error,'ALFA_PAYMENT_URL_INVALID');assert.equal(result.body.formUrl,undefined);});assert.equal(state.order.paymentChargeId,'bad-form');assert.equal(JSON.parse(state.order.paymentMeta).alfa.formUrl,undefined);}
+  global.fetch=async url=>String(url).endsWith('/register.do')
+    ? jsonResponse({orderId:'bad-sbp',formUrl:'https://bank.test/form'})
+    : jsonResponse({qrStatus:'STARTED',payload:'https://evil.test/phish'});
+  try {await withServer(client,async base=>{const result=await registerRequest(base);assert.equal(result.status,502);assert.equal(result.body.error,'ALFA_SBP_URL_INVALID');assert.equal(result.body.formUrl,undefined);});assert.equal(state.order.paymentChargeId,'bad-sbp');}
   finally{global.fetch=nativeFetch;}
+});
+
+test('direct SBP URL validator permits only qr.nspk.ru payment links',()=>{
+  assert.equal(paymentsRouter._test.validateSbpPaymentUrl({qrStatus:'STARTED',payload:'https://qr.nspk.ru/AS1812TEST'}),'https://qr.nspk.ru/AS1812TEST');
+  for(const payload of ['http://qr.nspk.ru/AS1','https://evil.test/AS1','https://user@qr.nspk.ru/AS1','https://qr.nspk.ru/']) {
+    assert.throws(()=>paymentsRouter._test.validateSbpPaymentUrl({qrStatus:'STARTED',payload}),/ALFA_SBP_URL_INVALID/);
+  }
+  assert.throws(()=>paymentsRouter._test.validateSbpPaymentUrl({qrStatus:'ACCEPTED',payload:'https://qr.nspk.ru/AS1'}),/ALFA_SBP_QR_UNAVAILABLE/);
 });
 
 test('internet-acquiring URL validator and tax system permit only configured values',()=>{

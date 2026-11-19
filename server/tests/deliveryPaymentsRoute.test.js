@@ -125,6 +125,9 @@ test('delivery registration uses its exact isolated amount and callback URL', as
   const calls = [];
   global.fetch = async (url, options) => {
     calls.push({ url: String(url), params: new URLSearchParams(String(options.body)) });
+    if (String(url).endsWith('/sbp/c2b/qr/dynamic/get.do')) {
+      return jsonResponse({ qrStatus: 'STARTED', payload: 'https://qr.nspk.ru/AS1812DELIVERY41' });
+    }
     return jsonResponse({ orderId: 'delivery-bank-41', formUrl: 'https://bank.test/delivery/41' });
   };
   try {
@@ -135,10 +138,10 @@ test('delivery registration uses its exact isolated amount and callback URL', as
         body: JSON.stringify({ orderId: 41 }),
       });
       assert.equal(result.status, 200);
-      assert.equal(result.body.formUrl, 'https://bank.test/delivery/41');
-      assert.equal(result.body.paymentMethod, 'alfa');
+      assert.equal(result.body.formUrl, 'https://qr.nspk.ru/AS1812DELIVERY41');
+      assert.equal(result.body.paymentMethod, 'sbp');
     });
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 2);
     assert.equal(calls[0].params.get('taxSystem'), '1');
     const orderBundle = JSON.parse(calls[0].params.get('orderBundle'));
     assert.equal(orderBundle.cartItems.items[0].name, 'Доставка заказа #41');
@@ -219,7 +222,9 @@ test('delivery amount or currency mismatch cannot confirm either payment', async
 test('expired unregistered invoice is safely extended and retryable', async () => {
   const { client, state } = createPrisma({ invoice: { paymentExpiresAt: new Date(Date.now() - 1_000) } });
   const nativeFetch = global.fetch;
-  global.fetch = async () => jsonResponse({ orderId: 'delivery-bank-retry', formUrl: 'https://bank.test/retry' });
+  global.fetch = async (url) => String(url).endsWith('/sbp/c2b/qr/dynamic/get.do')
+    ? jsonResponse({ qrStatus: 'STARTED', payload: 'https://qr.nspk.ru/AS1812DELIVERYRETRY' })
+    : jsonResponse({ orderId: 'delivery-bank-retry', formUrl: 'https://bank.test/retry' });
   try {
     await withServer(client, async (base) => {
       const result = await request(base, '/api/payments/delivery/alfa-register', {
@@ -283,12 +288,12 @@ test('cancellation during bank registration preserves bank id for late-payment r
 function deliveryRegister(base) {
   return request(base,'/api/payments/delivery/alfa-register',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({orderId:41})});
 }
-test('delivery reuses the Alfa internet-acquiring URL without duplicate registration',async()=>{
+test('delivery gets a fresh direct SBP link without duplicate registration',async()=>{
   const {client,state}=createPrisma({invoice:{paymentChargeId:'existing-delivery',paymentMeta:JSON.stringify({alfa:{orderId:'existing-delivery',formUrl:'https://bank.test/cards'}})}});
   const nativeFetch=global.fetch;const calls=[];
-  global.fetch=async url=>{calls.push(String(url));return jsonResponse({});};
+  global.fetch=async url=>{calls.push(String(url));return jsonResponse({qrStatus:'STARTED',payload:'https://qr.nspk.ru/AS1812DELIVERYEXISTING'});};
   try{await withServer(client,async base=>{
-    const result=await deliveryRegister(base);assert.equal(result.status,200);assert.equal(result.body.formUrl,'https://bank.test/cards');assert.equal(result.body.paymentMethod,'alfa');
-  });assert.equal(calls.length,0);assert.equal(state.invoice.paymentChargeId,'existing-delivery');}
+    const result=await deliveryRegister(base);assert.equal(result.status,200);assert.equal(result.body.formUrl,'https://qr.nspk.ru/AS1812DELIVERYEXISTING');assert.equal(result.body.paymentMethod,'sbp');
+  });assert.equal(calls.filter(url=>url.endsWith('/register.do')).length,0);assert.equal(calls.length,1);assert.equal(state.invoice.paymentChargeId,'existing-delivery');}
   finally{global.fetch=nativeFetch;}
 });

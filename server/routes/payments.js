@@ -207,6 +207,49 @@ function hostedPaymentResponse(formUrl) {
   return { ok: true, paymentMethod: 'alfa', formUrl: validateAlfaFormUrl(formUrl) };
 }
 
+function sbpError(code, httpStatus = 502) {
+  return Object.assign(new Error(code), { httpStatus });
+}
+
+function validateSbpPaymentUrl(result) {
+  if (result?.qrStatus !== 'STARTED') throw sbpError('ALFA_SBP_QR_UNAVAILABLE');
+  const payload = String(result?.payload || '');
+  if (!payload || payload.length > 4096) throw sbpError('ALFA_SBP_URL_INVALID');
+  let paymentUrl;
+  try {
+    paymentUrl = new URL(payload);
+  } catch {
+    throw sbpError('ALFA_SBP_URL_INVALID');
+  }
+  if (
+    paymentUrl.protocol !== 'https:' ||
+    paymentUrl.hostname !== 'qr.nspk.ru' ||
+    paymentUrl.port ||
+    paymentUrl.username ||
+    paymentUrl.password ||
+    paymentUrl.hash ||
+    paymentUrl.pathname === '/'
+  ) {
+    throw sbpError('ALFA_SBP_URL_INVALID');
+  }
+  return paymentUrl.href;
+}
+
+async function directSbpPaymentResponse(bankOrderId, redirectUrl) {
+  const result = await alfaRequest('sbp/c2b/qr/dynamic/get', {
+    mdOrder: bankOrderId,
+    qrFormat: 'image',
+    qrWidth: 300,
+    qrHeight: 300,
+    redirectUrl,
+  });
+  return {
+    ok: true,
+    paymentMethod: 'sbp',
+    formUrl: validateSbpPaymentUrl(result),
+  };
+}
+
 function alfaOrderNumber(orderId) {
   const random = crypto.randomBytes(3).toString('hex');
   return `flowie-${orderId}-${Date.now().toString(36)}-${random}`.slice(0, 36);
@@ -461,10 +504,16 @@ router.post('/alfa-register', requireAuth, async (req, res) => {
 
     const existingMeta = parsePaymentMeta(order.paymentMeta);
     if (order.paymentChargeId && !String(order.paymentChargeId).startsWith('registering:')) {
-      if (!existingMeta?.alfa?.formUrl) {
-        return res.status(409).json({ ok: false, error: 'ALFA_PAYMENT_URL_MISSING' });
+      const bankOrderId = String(order.paymentChargeId);
+      const response = await directSbpPaymentResponse(
+        bankOrderId,
+        buildPublicUrl(`/pay/${encodeURIComponent(String(order.id))}?payment=success`)
+      );
+      const current = await prisma.order.findUnique({ where: { id: order.id } });
+      if (!current || isCancelled(current) || isExpired(current) || current.paymentChargeId !== bankOrderId) {
+        return res.status(409).json({ ok: false, error: 'PAYMENT_NOT_PAYABLE' });
       }
-      return res.json(hostedPaymentResponse(existingMeta.alfa.formUrl));
+      return res.json(response);
     }
     if (isFreshRegistrationLock(order.paymentChargeId)) {
       return res.status(409).json({ ok: false, error: 'PAYMENT_REGISTRATION_IN_PROGRESS' });
@@ -516,12 +565,9 @@ router.post('/alfa-register', requireAuth, async (req, res) => {
     }
 
     let formUrl = null;
-    let formUrlError = null;
     try {
       formUrl = validateAlfaFormUrl(result.formUrl);
-    } catch (error) {
-      formUrlError = error;
-    }
+    } catch {}
     const alfaMeta = {
       alfa: {
         orderNumber,
@@ -546,12 +592,16 @@ router.post('/alfa-register', requireAuth, async (req, res) => {
     }
 
     acquiredLock = null;
-    if (formUrlError) throw formUrlError;
     const current = await prisma.order.findUnique({ where: { id: order.id } });
-    if (!current || isCancelled(current) || current.paymentChargeId !== result.orderId) {
+    if (!current || isCancelled(current) || isExpired(current) || current.paymentChargeId !== result.orderId) {
       return res.status(409).json({ ok: false, error: 'PAYMENT_REGISTRATION_CONFLICT' });
     }
-    return res.json(hostedPaymentResponse(formUrl));
+    const response = await directSbpPaymentResponse(result.orderId, returnUrl);
+    const payable = await prisma.order.findUnique({ where: { id: order.id } });
+    if (!payable || isCancelled(payable) || isExpired(payable) || payable.paymentChargeId !== result.orderId) {
+      return res.status(409).json({ ok: false, error: 'PAYMENT_NOT_PAYABLE' });
+    }
+    return res.json(response);
   } catch (e) {
     const orderId = Number(req.body?.orderId);
     if (Number.isFinite(orderId) && acquiredLock) {
@@ -781,10 +831,25 @@ router.post('/delivery/alfa-register', requireAuth, async (req, res) => {
 
     const existingMeta = parsePaymentMeta(invoice.paymentMeta);
     if (invoice.paymentChargeId && !String(invoice.paymentChargeId).startsWith('registering:')) {
-      if (!existingMeta?.alfa?.formUrl) {
-        return res.status(409).json({ ok: false, error: 'ALFA_PAYMENT_URL_MISSING' });
+      const bankOrderId = String(invoice.paymentChargeId);
+      const response = await directSbpPaymentResponse(
+        bankOrderId,
+        buildPublicUrl(`/pay/${encodeURIComponent(String(order.id))}?deliveryPayment=success`)
+      );
+      const [currentInvoice, currentOrder] = await Promise.all([
+        prisma.deliveryInvoice.findUnique({ where: { id: invoice.id } }),
+        prisma.order.findUnique({ where: { id: order.id } }),
+      ]);
+      if (
+        !currentInvoice ||
+        currentInvoice.paymentChargeId !== bankOrderId ||
+        currentInvoice.status !== 'PAYMENT_PENDING' ||
+        deliveryInvoiceExpired(currentInvoice) ||
+        isCancelled(currentOrder)
+      ) {
+        return res.status(409).json({ ok: false, error: 'DELIVERY_PAYMENT_NOT_PAYABLE' });
       }
-      return res.json(hostedPaymentResponse(existingMeta.alfa.formUrl));
+      return res.json(response);
     }
     if (isFreshRegistrationLock(invoice.paymentChargeId)) {
       return res.status(409).json({ ok: false, error: 'PAYMENT_REGISTRATION_IN_PROGRESS' });
@@ -824,12 +889,9 @@ router.post('/delivery/alfa-register', requireAuth, async (req, res) => {
     }
     registeredBankOrderId = result.orderId;
     let formUrl = null;
-    let formUrlError = null;
     try {
       formUrl = validateAlfaFormUrl(result.formUrl);
-    } catch (error) {
-      formUrlError = error;
-    }
+    } catch {}
 
     const nextMeta = {
       ...existingMeta,
@@ -857,8 +919,24 @@ router.post('/delivery/alfa-register', requireAuth, async (req, res) => {
       return res.status(409).json({ ok: false, error: 'DELIVERY_CANCELLED_AFTER_REGISTRATION' });
     }
     acquiredLock = null;
-    if (formUrlError) throw formUrlError;
-    return res.json(hostedPaymentResponse(formUrl));
+    const response = await directSbpPaymentResponse(
+      result.orderId,
+      buildPublicUrl(`/pay/${encodeURIComponent(String(order.id))}?deliveryPayment=success`)
+    );
+    const [payableInvoice, payableOrder] = await Promise.all([
+      prisma.deliveryInvoice.findUnique({ where: { id: invoice.id } }),
+      prisma.order.findUnique({ where: { id: order.id } }),
+    ]);
+    if (
+      !payableInvoice ||
+      payableInvoice.paymentChargeId !== result.orderId ||
+      payableInvoice.status !== 'PAYMENT_PENDING' ||
+      deliveryInvoiceExpired(payableInvoice) ||
+      isCancelled(payableOrder)
+    ) {
+      return res.status(409).json({ ok: false, error: 'DELIVERY_PAYMENT_NOT_PAYABLE' });
+    }
+    return res.json(response);
   } catch (error) {
     if (acquiredLock && !registeredBankOrderId) {
       await prisma.deliveryInvoice.updateMany({
@@ -1001,6 +1079,14 @@ router.post('/confirm-client', requireAuth, async (req, res) => {
 router.__setPrismaForTests = (client) => {
   prisma = client;
 };
-router._test = { markDeliveryInvoicePaid, getAlfaConfig, isAlfaConfigured, alfaRequest, validateAlfaFormUrl, buildOrderBundle };
+router._test = {
+  markDeliveryInvoicePaid,
+  getAlfaConfig,
+  isAlfaConfigured,
+  alfaRequest,
+  validateAlfaFormUrl,
+  validateSbpPaymentUrl,
+  buildOrderBundle,
+};
 
 module.exports = router;
