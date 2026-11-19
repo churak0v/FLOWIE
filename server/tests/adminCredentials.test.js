@@ -5,6 +5,7 @@ const {
   createAdminLoginLimiter,
   passwordHash,
   verifyAdminCredentials,
+  verifyStoredAdminCredentials,
 } = require('../services/adminCredentials');
 
 test('admin password hashes are salted and verify login plus password', () => {
@@ -33,4 +34,22 @@ test('admin login limiter blocks repeated attempts and can reset after success',
   assert.equal(limiter.consume('ip:admin').allowed, true);
   now = 2000;
   assert.equal(limiter.consume('ip:admin').allowed, true);
+});
+
+test('stored admin credentials resolve only their active staff user', async () => {
+  const hash = passwordHash('unique wife admin password');
+  const activeUser = { id: 9, name: 'Аделина', staffRole: 'admin', staffActive: true };
+  const prisma = {
+    staffCredential: {
+      findUnique: async ({ where }) => where.login === 'adel0903'
+        ? { login: 'adel0903', passwordHash: hash, user: activeUser }
+        : null,
+    },
+  };
+  assert.equal((await verifyStoredAdminCredentials({ prisma, login: 'Adel0903', password: 'unique wife admin password' })).id, 9);
+  assert.equal(await verifyStoredAdminCredentials({ prisma, login: 'adel0903', password: 'wrong password value' }), null);
+  assert.equal(await verifyStoredAdminCredentials({ prisma, login: 'missing', password: 'unique wife admin password' }), null);
+
+  activeUser.staffActive = false;
+  assert.equal(await verifyStoredAdminCredentials({ prisma, login: 'adel0903', password: 'unique wife admin password' }), null);
 });

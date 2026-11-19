@@ -8,7 +8,10 @@ const {
   adminCredentialsConfigured,
   createAdminLoginLimiter,
   normalizedLogin,
+  passwordHash,
+  validLogin,
   verifyAdminCredentials,
+  verifyStoredAdminCredentials,
 } = require('../services/adminCredentials');
 const { loadAnalyticsReport } = require('../services/reportAnalytics');
 const {
@@ -84,30 +87,32 @@ router.post('/login', requireSameOrigin, async (req, res) => {
     res.setHeader('Retry-After', String(limit.retryAfter));
     return res.status(429).json({ ok: false, error: 'ADMIN_LOGIN_RATE_LIMITED', retryAfter: limit.retryAfter });
   }
-  if (!adminCredentialsConfigured()) {
-    return res.status(503).json({ ok: false, error: 'ADMIN_LOGIN_NOT_CONFIGURED' });
-  }
-  const valid = verifyAdminCredentials({
-    login,
-    password: req.body?.password,
-    expectedLogin: process.env.ADMIN_LOGIN,
-    encodedPasswordHash: process.env.ADMIN_PASSWORD_HASH,
-  });
-  if (!valid) return res.status(401).json({ ok: false, error: 'INVALID_ADMIN_CREDENTIALS' });
-
   try {
-    let user = await prisma.user.findFirst({
-      where: { staffRole: 'admin', staffActive: true },
-      orderBy: { id: 'asc' },
-    });
+    let user = await verifyStoredAdminCredentials({ prisma, login, password: req.body?.password });
     if (!user) {
-      user = await prisma.user.create({
-        data: {
-          name: String(process.env.ADMIN_DISPLAY_NAME || 'Администратор').trim().slice(0, 100) || 'Администратор',
-          staffRole: 'admin',
-          staffActive: true,
-        },
+      const legacyValid = verifyAdminCredentials({
+        login,
+        password: req.body?.password,
+        expectedLogin: process.env.ADMIN_LOGIN,
+        encodedPasswordHash: process.env.ADMIN_PASSWORD_HASH,
       });
+      if (!legacyValid) {
+        const error = adminCredentialsConfigured() ? 'INVALID_ADMIN_CREDENTIALS' : 'ADMIN_LOGIN_NOT_CONFIGURED';
+        return res.status(error === 'ADMIN_LOGIN_NOT_CONFIGURED' ? 503 : 401).json({ ok: false, error });
+      }
+      user = await prisma.user.findFirst({
+        where: { staffRole: 'admin', staffActive: true },
+        orderBy: { id: 'asc' },
+      });
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            name: String(process.env.ADMIN_DISPLAY_NAME || 'Администратор').trim().slice(0, 100) || 'Администратор',
+            staffRole: 'admin',
+            staffActive: true,
+          },
+        });
+      }
     }
     if (req.authSession?.id) await revokeSession(prisma, req.authSession.id);
     const { token } = await createSession(prisma, user.id, req);
@@ -1993,6 +1998,39 @@ router.patch('/staff/:id', requireAdmin, requireRoles(['admin']), async (req, re
     return res.json({ ok: true, user });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e?.message || 'STAFF_UPDATE_FAILED' });
+  }
+});
+
+router.put('/staff/:id/credential', requireAdmin, requireRoles(['admin']), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const login = normalizedLogin(req.body?.login);
+    const password = req.body?.password;
+    if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ ok: false, error: 'BAD_ID' });
+    if (!validLogin(login)) return res.status(400).json({ ok: false, error: 'BAD_ADMIN_LOGIN' });
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user?.staffRole || !user.staffActive) return res.status(409).json({ ok: false, error: 'STAFF_ACCESS_DISABLED' });
+    const encodedPasswordHash = passwordHash(password);
+
+    const credential = await prisma.staffCredential.upsert({
+      where: { userId: id },
+      update: { login, passwordHash: encodedPasswordHash },
+      create: { userId: id, login, passwordHash: encodedPasswordHash },
+      select: { id: true, userId: true, login: true, updatedAt: true },
+    });
+    await writeAudit({
+      actorId: req.admin.id,
+      action: 'STAFF_CREDENTIAL_CHANGED',
+      entity: 'user',
+      entityId: id,
+      payload: { login },
+    });
+    return res.json({ ok: true, credential });
+  } catch (e) {
+    if (e?.code === 'P2002') return res.status(409).json({ ok: false, error: 'ADMIN_LOGIN_TAKEN' });
+    if (e?.message === 'BAD_ADMIN_PASSWORD') return res.status(400).json({ ok: false, error: 'BAD_ADMIN_PASSWORD' });
+    return res.status(500).json({ ok: false, error: 'STAFF_CREDENTIAL_UPDATE_FAILED' });
   }
 });
 

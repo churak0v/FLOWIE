@@ -6,6 +6,10 @@ function normalizedLogin(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function validLogin(value) {
+  return /^[a-z0-9._-]{3,64}$/.test(normalizedLogin(value));
+}
+
 function validPassword(value) {
   return typeof value === 'string' && value.length >= 12 && value.length <= 256;
 }
@@ -75,6 +79,23 @@ function adminCredentialsConfigured(env = process.env) {
   return Boolean(normalizedLogin(env.ADMIN_LOGIN) && parsePasswordHash(env.ADMIN_PASSWORD_HASH));
 }
 
+async function verifyStoredAdminCredentials({ prisma, login, password }) {
+  const normalized = normalizedLogin(login);
+  if (!validLogin(normalized)) return null;
+  const credential = await prisma.staffCredential.findUnique({
+    where: { login: normalized },
+    include: { user: true },
+  });
+  if (!credential?.user?.staffRole || !credential.user.staffActive) return null;
+  const valid = verifyAdminCredentials({
+    login: normalized,
+    password,
+    expectedLogin: credential.login,
+    encodedPasswordHash: credential.passwordHash,
+  });
+  return valid ? credential.user : null;
+}
+
 function createAdminLoginLimiter({ max = 5, windowMs = 15 * 60_000, now = () => Date.now() } = {}) {
   const attempts = new Map();
   return {
@@ -104,5 +125,7 @@ module.exports = {
   createAdminLoginLimiter,
   normalizedLogin,
   passwordHash,
+  validLogin,
   verifyAdminCredentials,
+  verifyStoredAdminCredentials,
 };

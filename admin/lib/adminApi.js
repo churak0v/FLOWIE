@@ -175,6 +175,11 @@ export const adminApi = {
       body: JSON.stringify(payload || {}),
     }),
   getCouriers: async () => fetchJson('/admin/couriers', { cache: 'no-store', cacheTtlMs: 5_000 }),
+  setStaffCredential: async (id, payload) => fetchJson(`/admin/staff/${encodeURIComponent(id)}/credential`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  }),
 
   // Collections
   getCollections: async (opts = {}) => fetchJson('/admin/collections', { cache: 'no-store', cacheTtlMs: 10_000, ...(opts || {}) }),
