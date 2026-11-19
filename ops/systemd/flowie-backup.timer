@@ -1,0 +1,11 @@
+[Unit]
+Description=Run FLOWIE backup every day
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Europe/Samara
+Persistent=true
+RandomizedDelaySec=10m
+Unit=flowie-backup.service
+
+[Install]
+WantedBy=timers.target

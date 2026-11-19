@@ -11,6 +11,7 @@ import { Surface } from './ui/Surface';
 import { Text } from './ui/Text';
 import { AppImage } from './ui/AppImage';
 import { trackAnalytics } from '../lib/analytics';
+import { sendYandexMetricaEvent } from '../lib/yandexMetrica';
 
 const FALLBACK_RECIPIENT_IMAGE = 'https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=900&q=80';
 
@@ -515,6 +516,14 @@ export function PaymentManual() {
   }, [orderId, paymentStatus]);
 
   // Do not clear active order on confirmed so card remains visible on home.
+
+  useEffect(() => {
+    if (paymentStatus !== 'CONFIRMED' || !Number.isFinite(orderId)) return;
+    sendYandexMetricaEvent('purchase', {
+      orderId,
+      revenue: Number(order?.totalPrice || 0),
+    });
+  }, [order?.totalPrice, orderId, paymentStatus]);
 
   useEffect(() => {
     if (!copied) return undefined;

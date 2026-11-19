@@ -55,12 +55,10 @@ async function fetchJson(path, options = {}) {
 
 export const adminApi = {
   me: async (opts = {}) => fetchJson('/admin/me', { cache: 'no-store', cacheTtlMs: 10_000, ...(opts || {}) }),
-  requestPhoneOtp: async (phone) => fetchJson('/auth/phone/request', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }),
+  login: async ({ login, password }) => fetchJson('/admin/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login, password }),
   }),
-  verifyPhoneOtp: async ({ challengeId, code }) => fetchJson('/auth/phone/verify', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ challengeId, code }),
-  }),
+  logout: async () => fetchJson('/admin/logout', { method: 'POST' }),
 
   // Uploads (shared endpoint)
   uploadFile: async (file) => {

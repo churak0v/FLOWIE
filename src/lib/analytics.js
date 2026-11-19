@@ -1,3 +1,5 @@
+import { sendYandexMetricaEvent } from './yandexMetrica';
+
 const API_BASE = import.meta.env?.VITE_API_URL || '/api';
 
 export const ANALYTICS_OPT_OUT_KEY = 'flowie_analytics_opt_out';
@@ -240,6 +242,7 @@ export function trackAnalytics(event, input = {}, options = {}) {
 
   if (queue.length >= MAX_QUEUE_SIZE) queue.shift();
   queue.push({ payload, attempts: 0 });
+  sendYandexMetricaEvent(event, payload);
   scheduleFlush();
   return true;
 }

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Shield } from 'lucide-react';
+import { ChevronRight, LogOut, Shield, UserRound } from 'lucide-react';
 import { Surface } from '../../src/components/ui/Surface';
 import { Text } from '../../src/components/ui/Text';
 
@@ -34,7 +34,7 @@ function MenuItem({ title, caption, onClick, disabled = false }) {
   );
 }
 
-export function ProfilePage({ user }) {
+export function ProfilePage({ user, onLogout }) {
   const navigate = useNavigate();
 
   const meLabel = useMemo(() => {
@@ -66,6 +66,9 @@ export function ProfilePage({ user }) {
                   flexShrink: 0,
                 }}
               >
+                <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: 'var(--accent)' }}>
+                  <UserRound size={27} />
+                </div>
               </div>
               <div style={{ minWidth: 0 }}>
                 <Text variant="subtitle" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -106,6 +109,15 @@ export function ProfilePage({ user }) {
           disabled={!isAdmin}
           onClick={() => navigate('/profile/staff')}
         />
+
+        <button
+          type="button"
+          onClick={onLogout}
+          style={{ height: 50, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--accent)', fontWeight: 900, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+        >
+          <LogOut size={18} />
+          Выйти из кабинета
+        </button>
       </div>
     </div>
   );

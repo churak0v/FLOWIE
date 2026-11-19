@@ -38,7 +38,9 @@ services:
       PORT: "3001"
       APP_JWT_SECRET: ${APP_JWT_SECRET:?Set APP_JWT_SECRET in .env.production}
       APP_COOKIE_DOMAIN: ${APP_COOKIE_DOMAIN:-}
-      ADMIN_PHONE: ${ADMIN_PHONE:?Set ADMIN_PHONE in .env.production}
+      ADMIN_LOGIN: ${ADMIN_LOGIN:?Set ADMIN_LOGIN in .env.production}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?Set ADMIN_PASSWORD_HASH in .env.production}
+      ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-Администратор}
       DEV_ADMIN_ENABLED: "false"
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:?Set PUBLIC_SITE_URL in .env.production}
       AUTH_ALLOWED_ORIGINS: ${AUTH_ALLOWED_ORIGINS:?Set AUTH_ALLOWED_ORIGINS in .env.production}
@@ -118,6 +120,7 @@ services:
         VITE_API_URL: /api
         VITE_HERO_IMAGE: ${VITE_HERO_IMAGE:-}
         VITE_RECIPIENT_IMAGE: ${VITE_RECIPIENT_IMAGE:-}
+        VITE_YANDEX_METRICA_ID: ${VITE_YANDEX_METRICA_ID:-}
     expose:
       - "8080"
     healthcheck:

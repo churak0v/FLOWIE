@@ -1,6 +1,15 @@
 const express = require('express');
+const cookie = require('cookie');
 const { PrismaClient } = require('@prisma/client');
+const { requireSameOrigin } = require('../middleware/auth');
 const { normalizePhone } = require('../services/phoneOtp');
+const { SESSION_COOKIE, createSession, revokeSession, sessionTtlMs } = require('../services/authSession');
+const {
+  adminCredentialsConfigured,
+  createAdminLoginLimiter,
+  normalizedLogin,
+  verifyAdminCredentials,
+} = require('../services/adminCredentials');
 const { loadAnalyticsReport } = require('../services/reportAnalytics');
 const {
   DeliveryPaymentError,
@@ -10,6 +19,27 @@ const {
 
 const router = express.Router();
 const prisma = new PrismaClient();
+const adminLoginLimiter = createAdminLoginLimiter();
+
+function adminCookieOptions() {
+  const domain = process.env.APP_COOKIE_DOMAIN;
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: Math.floor(sessionTtlMs() / 1000),
+    ...(domain ? { domain } : {}),
+  };
+}
+
+function setAdminSessionCookie(res, token) {
+  res.setHeader('Set-Cookie', cookie.serialize(SESSION_COOKIE, token, adminCookieOptions()));
+}
+
+function clearAdminSessionCookie(res) {
+  res.setHeader('Set-Cookie', cookie.serialize(SESSION_COOKIE, '', { ...adminCookieOptions(), maxAge: 0 }));
+}
 
 function orderWithPublicDelivery(order) {
   const safe = { ...order };
@@ -46,6 +76,66 @@ async function writeAudit({ actorId, action, entity, entityId, payload }) {
   }
 }
 
+router.post('/login', requireSameOrigin, async (req, res) => {
+  const login = normalizedLogin(req.body?.login);
+  const attemptKey = `${req.ip || req.socket?.remoteAddress || 'unknown'}:${login}`;
+  const limit = adminLoginLimiter.consume(attemptKey);
+  if (!limit.allowed) {
+    res.setHeader('Retry-After', String(limit.retryAfter));
+    return res.status(429).json({ ok: false, error: 'ADMIN_LOGIN_RATE_LIMITED', retryAfter: limit.retryAfter });
+  }
+  if (!adminCredentialsConfigured()) {
+    return res.status(503).json({ ok: false, error: 'ADMIN_LOGIN_NOT_CONFIGURED' });
+  }
+  const valid = verifyAdminCredentials({
+    login,
+    password: req.body?.password,
+    expectedLogin: process.env.ADMIN_LOGIN,
+    encodedPasswordHash: process.env.ADMIN_PASSWORD_HASH,
+  });
+  if (!valid) return res.status(401).json({ ok: false, error: 'INVALID_ADMIN_CREDENTIALS' });
+
+  try {
+    let user = await prisma.user.findFirst({
+      where: { staffRole: 'admin', staffActive: true },
+      orderBy: { id: 'asc' },
+    });
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          name: String(process.env.ADMIN_DISPLAY_NAME || 'Администратор').trim().slice(0, 100) || 'Администратор',
+          staffRole: 'admin',
+          staffActive: true,
+        },
+      });
+    }
+    if (req.authSession?.id) await revokeSession(prisma, req.authSession.id);
+    const { token } = await createSession(prisma, user.id, req);
+    setAdminSessionCookie(res, token);
+    adminLoginLimiter.reset(attemptKey);
+    await writeAudit({
+      actorId: user.id,
+      action: 'ADMIN_PASSWORD_LOGIN',
+      entity: 'user',
+      entityId: user.id,
+      payload: null,
+    });
+    return res.json({
+      ok: true,
+      user: { id: user.id, phone: user.verifiedPhone || user.phone || null, name: user.name, role: user.staffRole },
+    });
+  } catch (error) {
+    console.error('[admin] password login failed', { ip: req.ip, error: error?.message });
+    return res.status(500).json({ ok: false, error: 'ADMIN_LOGIN_FAILED' });
+  }
+});
+
+router.post('/logout', requireSameOrigin, async (req, res) => {
+  if (req.authSession?.id) await revokeSession(prisma, req.authSession.id);
+  clearAdminSessionCookie(res);
+  return res.json({ ok: true });
+});
+
 async function requireAdmin(req, res, next) {
   try {
     const hasCookieUser = Boolean(req.user?.id);
@@ -68,26 +158,6 @@ async function requireAdmin(req, res, next) {
     }
 
     if (!user) return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
-
-    // Grant admin only after ownership of the configured phone was verified by SMS.
-    const bootstrapPhone = normalizePhone(process.env.ADMIN_PHONE);
-    const canBootstrap =
-      (!user.staffRole || !user.staffActive) &&
-      bootstrapPhone &&
-      user.verifiedPhone === bootstrapPhone;
-    if (canBootstrap) {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { staffRole: 'admin', staffActive: true },
-      });
-      await writeAudit({
-        actorId: user.id,
-        action: 'STAFF_BOOTSTRAPPED',
-        entity: 'user',
-        entityId: user.id,
-        payload: { staffRole: 'admin' },
-      });
-    }
 
     if (!user.staffRole || !user.staffActive) {
       console.warn('[admin] forbidden (no staff role)', { userId: user.id, role: user.staffRole, active: user.staffActive });
