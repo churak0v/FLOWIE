@@ -20,10 +20,6 @@ import { AppImage } from './ui/AppImage';
 import { ProductCard } from './domain/ProductCard';
 import { OrderHistoryList } from './domain/OrderHistoryList';
 
-const FALLBACK_IMAGE =
-  'https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=900&q=80';
-const DELIVERY_IMAGE =
-  'https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=900&q=80';
 const DELIVERY_HANDLE = '@flowie.delivery';
 const MOMENT_VIDEO = '/videos/vivienne-reaction.mp4';
 const RAIL_CARD_WIDTH = 188;
@@ -42,7 +38,7 @@ function normalizePublicRecipient(recipient, id) {
     id: recipient.id ?? id,
     name: 'Получатель',
     handle: DELIVERY_HANDLE,
-    image: DELIVERY_IMAGE,
+    image: null,
   };
 }
 
@@ -489,19 +485,17 @@ export function RecipientProfile() {
 
       <section style={{ marginTop: 20, textAlign: 'center' }}>
         <div style={{ display: 'inline-flex', position: 'relative' }}>
-          <AppImage
-            src={recipient.image}
-            alt={recipient.name}
-            fallback={FALLBACK_IMAGE}
-            style={{
-              width: 118,
-              height: 118,
-              borderRadius: 999,
-              objectFit: 'cover',
-              border: '5px solid var(--surface)',
-              boxShadow: '0 18px 48px rgba(13,13,13,0.17)',
-            }}
-          />
+          {recipient.image ? (
+            <AppImage
+              src={recipient.image}
+              alt={recipient.name}
+              style={{ width: 118, height: 118, borderRadius: 999, objectFit: 'cover', border: '5px solid var(--surface)', boxShadow: '0 18px 48px rgba(13,13,13,0.17)' }}
+            />
+          ) : (
+            <div style={{ width: 118, height: 118, borderRadius: 999, display: 'grid', placeItems: 'center', background: 'var(--c-accent-10)', color: 'var(--accent)', border: '5px solid var(--surface)', boxShadow: '0 18px 48px rgba(13,13,13,0.12)', fontSize: 44, fontWeight: 1000 }}>
+              {String(recipient.name || 'П').trim().slice(0, 1).toUpperCase()}
+            </div>
+          )}
         </div>
 
         <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 7 }}>

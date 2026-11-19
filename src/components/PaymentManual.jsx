@@ -14,8 +14,6 @@ import { SbpLogo } from './ui/SbpLogo';
 import { trackAnalytics } from '../lib/analytics';
 import { sendYandexMetricaEvent } from '../lib/yandexMetrica';
 
-const FALLBACK_RECIPIENT_IMAGE = 'https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=900&q=80';
-
 function fmtMmSs(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   const mm = String(Math.floor(s / 60)).padStart(2, '0');
@@ -143,7 +141,7 @@ function OrderStatusTimeline({ current }) {
 }
 
 function RecipientOrderCard({ recipient }) {
-  const image = recipient?.image || FALLBACK_RECIPIENT_IMAGE;
+  const image = recipient?.image || '';
   const name = recipient?.name || 'Получатель';
 
   return (
@@ -160,18 +158,17 @@ function RecipientOrderCard({ recipient }) {
         boxShadow: '0 14px 36px rgba(13,13,13,0.07)',
       }}
     >
-      <AppImage
-        src={image}
-        alt={name}
-        fallback={FALLBACK_RECIPIENT_IMAGE}
-        style={{
-          width: 64,
-          height: 64,
-          borderRadius: 20,
-          objectFit: 'cover',
-          boxShadow: '0 12px 28px rgba(13,13,13,0.14)',
-        }}
-      />
+      {image ? (
+        <AppImage
+          src={image}
+          alt={name}
+          style={{ width: 64, height: 64, borderRadius: 20, objectFit: 'cover', boxShadow: '0 12px 28px rgba(13,13,13,0.14)' }}
+        />
+      ) : (
+        <div style={{ width: 64, height: 64, borderRadius: 20, display: 'grid', placeItems: 'center', background: 'var(--c-accent-10)', color: 'var(--accent)', fontSize: 25, fontWeight: 1000 }}>
+          {name.trim().slice(0, 1).toUpperCase() || 'П'}
+        </div>
+      )}
       <div style={{ minWidth: 0 }}>
         <Text variant="caption" muted>
           Получатель
@@ -669,7 +666,7 @@ export function PaymentManual() {
     const sentPhotos = (order?.photos || []).filter((photo) => Boolean(photo?.sentToClientAt));
     const orderRecipient = (state.recipients.items || []).find(
       (r) => String(r?.name || '').trim().toLowerCase() === String(order?.recipientName || '').trim().toLowerCase()
-    ) || { name: order?.recipientName || 'Получатель', image: FALLBACK_RECIPIENT_IMAGE };
+    ) || { name: order?.recipientName || 'Получатель', image: null };
 
     return (
       <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '0px', '--app-content-inset-bottom': '0px' }}>

@@ -588,6 +588,12 @@ export function OrderDetailsPage({ user }) {
                   return (
                     <div
                       key={it.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/products/${it.productId}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') navigate(`/products/${it.productId}`);
+                      }}
                       style={{
                         display: 'flex',
                         gap: 12,
@@ -601,6 +607,7 @@ export function OrderDetailsPage({ user }) {
                         borderRadius: 18,
                         border: '1px solid var(--c-ink-06)',
                         background: 'var(--surface)',
+                        cursor: 'pointer',
                       }}
                     >
                       <div
@@ -621,7 +628,7 @@ export function OrderDetailsPage({ user }) {
                           {p?.name || `Товар #${it.productId}`}
                         </Text>
                         <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
-                          <Text variant="caption">{qty} шт</Text>
+                          <Text variant="caption">{qty} шт · Открыть карточку</Text>
                           <div style={{ fontWeight: 1000, color: 'var(--text)', whiteSpace: 'nowrap' }}>{line} ₽</div>
                         </div>
                       </div>

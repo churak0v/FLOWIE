@@ -3,12 +3,10 @@ import { Surface } from '../ui/Surface';
 import { Text } from '../ui/Text';
 import { AppImage } from '../ui/AppImage';
 
-const DEFAULT_ADDRESS_IMAGE = 'https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=900&q=80';
-
 export function RecipientSquareTile({ variant = 'recipient', recipient, title, subtitle, onClick }) {
   const clickable = typeof onClick === 'function';
   const name = title || recipient?.name || 'Адрес';
-  const image = recipient?.image || recipient?.avatar || DEFAULT_ADDRESS_IMAGE;
+  const image = recipient?.image || recipient?.avatar || '';
 
   return (
     <Surface
@@ -27,16 +25,13 @@ export function RecipientSquareTile({ variant = 'recipient', recipient, title, s
         position: 'relative',
       }}
     >
-      <AppImage
-        src={image}
-        alt={name}
-        fallback="https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=900&q=80"
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-        }}
-      />
+      {image ? (
+        <AppImage src={image} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : (
+        <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', background: 'var(--c-accent-10)', color: 'var(--accent)', fontSize: 42, fontWeight: 1000 }}>
+          {name.trim().slice(0, 1).toUpperCase() || 'П'}
+        </div>
+      )}
 
       <div
         style={{
