@@ -134,27 +134,24 @@ function renderDocument(shell, page) {
 }
 
 function createShellLoader() {
-  let cached = null;
-  let expiresAt = 0;
   return async function loadShell() {
-    if (cached && Date.now() < expiresAt) return cached;
     const shellUrl = String(process.env.SEO_APP_SHELL_URL || '').trim();
+    let shell;
     if (shellUrl) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 3000);
       try {
-        const response = await fetch(shellUrl, { signal: controller.signal });
+        const response = await fetch(shellUrl, { signal: controller.signal, cache: 'no-store' });
         if (!response.ok) throw new Error(`SEO_APP_SHELL_HTTP_${response.status}`);
-        cached = await response.text();
+        shell = await response.text();
       } finally {
         clearTimeout(timer);
       }
     } else {
       const shellPath = process.env.SEO_APP_SHELL_PATH || path.join(__dirname, '..', '..', 'index.html');
-      cached = await fs.readFile(shellPath, 'utf8');
+      shell = await fs.readFile(shellPath, 'utf8');
     }
-    expiresAt = Date.now() + 5 * 60_000;
-    return cached;
+    return shell;
   };
 }
 

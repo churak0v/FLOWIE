@@ -56,7 +56,11 @@ function createSeoRouter({ prisma = new PrismaClient(), loadShell = createShellL
     const shell = await loadShell();
     res.status(status);
     res.type('html');
-    res.set('Cache-Control', status === 200 ? 'public, max-age=0, s-maxage=300, stale-while-revalidate=600' : 'no-store');
+    // The document contains the current hashed app entrypoint. Never let Safari or an
+    // intermediary reuse an older shell after a deploy; immutable assets remain cached.
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     if (page.robots?.includes('noindex')) res.set('X-Robots-Tag', page.robots);
     return res.send(renderDocument(shell, page));
   }
