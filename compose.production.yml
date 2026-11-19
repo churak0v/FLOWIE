@@ -83,6 +83,7 @@ services:
       TELEGRAM_ORDER_BOT_TOKEN: ${TELEGRAM_ORDER_BOT_TOKEN:-}
       TELEGRAM_ORDER_CHAT_IDS: ${TELEGRAM_ORDER_CHAT_IDS:-}
       TELEGRAM_ORDER_ADMIN_URL: ${TELEGRAM_ORDER_ADMIN_URL:-https://admin.flowie.art}
+      TELEGRAM_ORDER_API_BASE: ${TELEGRAM_ORDER_API_BASE:-https://api.telegram.org}
     command: ["node", "./node_modules/prisma/build/index.js", "migrate", "deploy"]
     depends_on:
       db:

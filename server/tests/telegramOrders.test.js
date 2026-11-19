@@ -71,3 +71,16 @@ test('sends a Telegram message with a direct admin order button', async () => {
   assert.match(payload.text, /Новый заказ №42/);
   assert.equal(payload.reply_markup.inline_keyboard[0][0].url, 'https://admin.flowie.art/orders/42');
 });
+
+test('uses a configured Telegram relay base URL', async () => {
+  let requestUrl;
+  await sendTelegramMessage({ orderId: 7, chatId: '100', event: 'ORDER_PAID', order: { id: 7, totalPrice: 1, items: [] } }, {
+    TELEGRAM_ORDER_BOT_TOKEN: 'secret-token',
+    TELEGRAM_ORDER_CHAT_IDS: '100',
+    TELEGRAM_ORDER_API_BASE: 'https://speka.tech/flowie-telegram/',
+  }, async (url) => {
+    requestUrl = url;
+    return { ok: true, json: async () => ({ ok: true, result: { message_id: 1 } }) };
+  });
+  assert.equal(requestUrl, 'https://speka.tech/flowie-telegram/botsecret-token/sendMessage');
+});

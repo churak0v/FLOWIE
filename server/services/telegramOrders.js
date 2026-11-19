@@ -13,6 +13,7 @@ function getConfig(env = process.env) {
     token: String(env.TELEGRAM_ORDER_BOT_TOKEN || '').trim(),
     chatIds: parseChatIds(env.TELEGRAM_ORDER_CHAT_IDS),
     adminUrl: String(env.TELEGRAM_ORDER_ADMIN_URL || 'https://admin.flowie.art').trim().replace(/\/$/, ''),
+    apiBase: String(env.TELEGRAM_ORDER_API_BASE || TELEGRAM_API_BASE).trim().replace(/\/$/, ''),
   };
 }
 
@@ -84,9 +85,9 @@ function retryDelayMs(attempt) {
 }
 
 async function sendTelegramMessage(notification, env = process.env, fetchImpl = fetch) {
-  const { token, adminUrl } = getConfig(env);
+  const { token, adminUrl, apiBase } = getConfig(env);
   if (!token) throw new Error('TELEGRAM_ORDER_BOT_TOKEN_MISSING');
-  const response = await fetchImpl(`${TELEGRAM_API_BASE}/bot${token}/sendMessage`, {
+  const response = await fetchImpl(`${apiBase}/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
