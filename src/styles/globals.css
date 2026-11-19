@@ -101,15 +101,13 @@ body::before {
   --app-env-safe-area-inset-right: env(safe-area-inset-right, 0px);
   --app-env-safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
   --app-env-safe-area-inset-left: env(safe-area-inset-left, 0px);
-  --app-browser-inset-top: var(--app-browser-inset-top-js, 0px);
-  --app-browser-inset-bottom: var(--app-browser-inset-bottom-js, 0px);
   /* Keyboard offset (px), calculated with VisualViewport. */
   --app-keyboard-offset: var(--app-keyboard-offset-js, 0px);
-  --app-inset-top: max(var(--app-env-safe-area-inset-top), var(--app-browser-inset-top));
+  --app-inset-top: var(--app-env-safe-area-inset-top);
   --app-inset-right: var(--app-env-safe-area-inset-right);
   --app-inset-bottom: var(--app-env-safe-area-inset-bottom);
   --app-inset-left: var(--app-env-safe-area-inset-left);
-  --app-nav-inset-bottom: max(var(--app-env-safe-area-inset-bottom), var(--app-browser-inset-bottom));
+  --app-nav-inset-bottom: var(--app-env-safe-area-inset-bottom);
   /* Fixed controls own the bottom inset; scroll content must not add it a second time. */
   --app-content-inset-bottom: 0px;
 
@@ -469,19 +467,6 @@ body::before {
   /* The page canvas must remain visible through the browser-owned safe area. */
   background: transparent;
   z-index: 90;
-}
-
-/* Home paints only the browser/safe-area strip; the floating navigation stays unchanged. */
-.flowie-homeEdgeBottom {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--app-nav-inset-bottom);
-  min-height: var(--app-env-safe-area-inset-bottom);
-  background: #17130f;
-  pointer-events: none;
-  z-index: 80;
 }
 
 .ui-bottomNavInner {

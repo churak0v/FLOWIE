@@ -231,7 +231,6 @@ export function Home() {
 
   return (
     <>
-      <div className="flowie-homeEdgeBottom" aria-hidden="true" />
       <AppShell style={{ padding: 0, '--app-content-inset-bottom': '0px' }}>
         {/* Fixed HERO underlay */}
         <div
