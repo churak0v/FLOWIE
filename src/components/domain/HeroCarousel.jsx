@@ -34,7 +34,7 @@ export function HeroCarousel({ slides, className }) {
       className={cx(className)}
       style={{
         position: 'relative',
-        height: `calc(55vh + ${UNDERLAY_EXTRA_PX}px)`,
+        height: `calc(55dvh + ${UNDERLAY_EXTRA_PX}px)`,
         minHeight: 360 + UNDERLAY_EXTRA_PX,
         overflow: 'hidden',
         borderRadius: 0,

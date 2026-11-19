@@ -121,9 +121,9 @@ export function ProductsPage() {
 
   return (
     <div style={{ paddingBottom: 0 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
         <Text variant="title">{kind === 'upsell' ? 'Апсейлы' : 'Товары'}</Text>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'baseline' }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap', minWidth: 0 }}>
           <button
             type="button"
             onClick={() => navigate('/collections')}
@@ -214,12 +214,16 @@ export function ProductsPage() {
               variant="soft"
               onClick={() => navigate(`/products/${p.id}`)}
               style={{
+                width: '100%',
+                maxWidth: '100%',
+                minWidth: 0,
                 padding: 12,
                 borderRadius: 'var(--r-lg)',
                 cursor: 'pointer',
+                overflow: 'hidden',
               }}
             >
-              <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 12, minWidth: 0, maxWidth: '100%' }}>
                 <div
                   style={{
                     width: 86,
@@ -238,9 +242,9 @@ export function ProductsPage() {
                   <Text variant="subtitle" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {p.name}
                   </Text>
-                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <div style={{ fontWeight: 1000, color: 'var(--text)', whiteSpace: 'nowrap' }}>{p.price} ₽</div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+                    <div style={{ fontWeight: 1000, color: 'var(--text)', whiteSpace: 'nowrap', flex: '1 1 auto' }}>{p.price} ₽</div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto', maxWidth: '100%' }}>
                       <button
                         type="button"
                         aria-label="Переместить вверх"
@@ -321,7 +325,7 @@ export function ProductsPage() {
         style={{
           position: 'fixed',
           right: 'calc(var(--sp-4) + var(--app-inset-right))',
-          bottom: 'calc(var(--app-bottom-nav-space) + var(--app-nav-inset-bottom) - var(--app-keyboard-offset))',
+          bottom: 'calc(var(--app-bottom-nav-space) - var(--app-keyboard-offset))',
           height: 54,
           padding: '0 18px',
           borderRadius: 'var(--r-pill)',

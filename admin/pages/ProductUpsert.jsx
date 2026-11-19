@@ -1356,7 +1356,7 @@ function ProductForm({ mode, id }) {
             style={{
 	              position: 'fixed',
 	              right: 'calc(var(--sp-4) + var(--app-inset-right))',
-	              bottom: 'calc(var(--app-bottom-nav-space) + var(--app-nav-inset-bottom) - var(--app-keyboard-offset))',
+	              bottom: 'calc(var(--app-bottom-nav-space) - var(--app-keyboard-offset))',
 	              height: 54,
 	              padding: '0 18px',
 	              borderRadius: 'var(--r-pill)',
@@ -1392,7 +1392,7 @@ function ProductForm({ mode, id }) {
 	              style={{
 	                position: 'fixed',
 	                left: 'calc(var(--sp-4) + var(--app-inset-left))',
-	                bottom: 'calc(var(--app-bottom-nav-space) + var(--app-nav-inset-bottom) - var(--app-keyboard-offset))',
+	                bottom: 'calc(var(--app-bottom-nav-space) - var(--app-keyboard-offset))',
 	                height: 40,
 	                padding: '0 14px',
 	                borderRadius: 'var(--r-pill)',

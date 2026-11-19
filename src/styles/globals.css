@@ -464,8 +464,8 @@ body::before {
   padding-left: calc(10px + var(--app-inset-left));
   padding-right: calc(10px + var(--app-inset-right));
   pointer-events: auto;
-  /* Paint the inset instead of leaving Safari's default white canvas visible below the pill. */
-  background: linear-gradient(to bottom, transparent 0 8px, var(--c-bg) 8px 100%);
+  /* The page canvas must remain visible through the browser-owned safe area. */
+  background: transparent;
   z-index: 90;
 }
 

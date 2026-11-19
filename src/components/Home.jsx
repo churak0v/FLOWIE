@@ -222,9 +222,8 @@ export function Home() {
           style={{
             position: 'fixed',
             top: 0,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 'min(100%, var(--app-max))',
+            left: 0,
+            width: '100vw',
             height: 'calc(55dvh + 48px)',
             zIndex: 0,
           }}
