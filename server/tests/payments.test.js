@@ -388,6 +388,7 @@ test('invalid internet-acquiring URL is rejected before it reaches the client',a
 test('internet-acquiring URL validator and tax system permit only configured values',()=>{
   assert.equal(paymentsRouter._test.validateAlfaFormUrl('https://bank.test/payment/form?id=1'),'https://bank.test/payment/form?id=1');
   assert.equal(paymentsRouter._test.validateAlfaFormUrl('https://ecom.alfabank.ru/payment/form?id=1'),'https://ecom.alfabank.ru/payment/form?id=1');
+  assert.equal(paymentsRouter._test.validateAlfaFormUrl('https://securepayecom.com/payment/form?id=1'),'https://securepayecom.com/payment/form?id=1');
   for(const value of ['http://bank.test/form','https://evil.test/form','https://user@bank.test/form','javascript:alert(1)','https://bank.test:444/form']) {
     assert.throws(()=>paymentsRouter._test.validateAlfaFormUrl(value),/ALFA_PAYMENT_URL_INVALID/);
   }

@@ -56,8 +56,9 @@ function validateAlfaFormUrl(value) {
     throw Object.assign(new Error('ALFA_PAYMENT_URL_INVALID'), { httpStatus: 502 });
   }
   const productionHost = formUrl.hostname === 'alfabank.ru' || formUrl.hostname.endsWith('.alfabank.ru');
+  const alfaHostedPaymentHost = formUrl.hostname === 'securepayecom.com';
   const configuredHost = formUrl.hostname === gatewayUrl.hostname;
-  if (formUrl.protocol !== 'https:' || (!productionHost && !configuredHost) || formUrl.port ||
+  if (formUrl.protocol !== 'https:' || (!productionHost && !alfaHostedPaymentHost && !configuredHost) || formUrl.port ||
       formUrl.username || formUrl.password || formUrl.hash) {
     console.warn(`[payments] Rejected Alfa form URL: protocol=${formUrl.protocol} host=${formUrl.hostname} port=${formUrl.port || 'default'}`);
     throw Object.assign(new Error('ALFA_PAYMENT_URL_INVALID'), { httpStatus: 502 });
