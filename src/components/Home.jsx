@@ -117,7 +117,22 @@ function QuickPicks({ products }) {
         <Text variant="subtitle">Выбрать по настроению</Text>
         <Text variant="caption" muted>без долгих поисков</Text>
       </div>
-      <div className="hide-scrollbar" style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '2px 2px 8px' }}>
+      <div
+        className="hide-scrollbar"
+        style={{
+          display: 'flex',
+          gap: 10,
+          overflowX: 'auto',
+          marginLeft: 'calc(0px - var(--sp-4) - var(--app-inset-left))',
+          marginRight: 'calc(0px - var(--sp-4) - var(--app-inset-right))',
+          paddingTop: 2,
+          paddingRight: 'calc(var(--sp-4) + var(--app-inset-right))',
+          paddingBottom: 8,
+          paddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))',
+          scrollPaddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))',
+          scrollPaddingRight: 'calc(var(--sp-4) + var(--app-inset-right))',
+        }}
+      >
         {cards.map((card) => (
           <PickTile key={card.title} {...card} />
         ))}
