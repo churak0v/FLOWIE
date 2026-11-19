@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Clock } from 'lucide-react';
+import { ChevronLeft, Clock, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { api } from '../api';
 import { useAppState } from '../state/AppState';
 import { buildActiveOrderPreview } from '../lib/orderPreview';
@@ -222,6 +222,82 @@ function OrderItemCard({ item }) {
   );
 }
 
+function PreDeliveryPhotoReview({ photos, rating, busy, error, onRate }) {
+  const ratedUp = rating === 'UP';
+  const ratedDown = rating === 'DOWN';
+
+  return (
+    <Surface
+      variant="soft"
+      style={{
+        padding: 14,
+        borderRadius: 'var(--r-xl)',
+        border: ratedDown ? '1px solid rgba(217,45,32,0.35)' : '1px solid var(--border)',
+        background: 'var(--bg)',
+      }}
+    >
+      <Text variant="title" style={{ fontSize: 21 }}>Букет собран</Text>
+      <Text variant="body" muted style={{ marginTop: 5 }}>
+        Флорист прислал фото перед доставкой. Оцените, соответствует ли букет вашим ожиданиям.
+      </Text>
+
+      <div className="hide-scrollbar" style={{ display: 'flex', gap: 10, overflowX: 'auto', marginTop: 12, scrollSnapType: 'x mandatory' }}>
+        {photos.map((photo) => (
+          <AppImage
+            key={photo.id}
+            src={photo.url}
+            alt="Собранный букет перед доставкой"
+            style={{ width: photos.length > 1 ? '88%' : '100%', minWidth: photos.length > 1 ? '88%' : '100%', aspectRatio: '1 / 1', borderRadius: 22, objectFit: 'cover', scrollSnapAlign: 'start', background: 'var(--surface-2)' }}
+          />
+        ))}
+      </div>
+
+      {rating ? (
+        <div
+          style={{
+            marginTop: 12,
+            minHeight: 48,
+            padding: '11px 13px',
+            borderRadius: 15,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 9,
+            background: ratedUp ? 'rgba(3,170,82,0.09)' : 'rgba(217,45,32,0.08)',
+            color: ratedUp ? 'var(--c-success)' : '#b42318',
+            fontWeight: 900,
+          }}
+        >
+          {ratedUp ? <ThumbsUp size={19} /> : <ThumbsDown size={19} />}
+          {ratedUp ? 'Вы подтвердили соответствие' : 'Вы отметили несоответствие — менеджер это увидит'}
+        </div>
+      ) : (
+        <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9 }}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onRate('UP')}
+            style={{ minHeight: 52, border: 0, borderRadius: 15, background: 'var(--c-success)', color: 'var(--c-white)', fontWeight: 900, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '8px 10px' }}
+          >
+            <ThumbsUp size={18} />
+            Соответствует
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onRate('DOWN')}
+            style={{ minHeight: 52, border: '1px solid rgba(217,45,32,0.3)', borderRadius: 15, background: 'rgba(217,45,32,0.06)', color: '#b42318', fontWeight: 900, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '8px 10px' }}
+          >
+            <ThumbsDown size={18} />
+            Не соответствует
+          </button>
+        </div>
+      )}
+      {busy ? <Text variant="caption" muted style={{ marginTop: 8 }}>Сохраняем оценку…</Text> : null}
+      {error ? <Text variant="caption" style={{ marginTop: 8, color: '#b42318' }}>{error}</Text> : null}
+    </Surface>
+  );
+}
+
 function DeliveryPaymentCard({ info, loading, error, busy, message, onPay }) {
   const invoice = info?.invoice || null;
   const order = info?.order || {};
@@ -285,6 +361,8 @@ export function PaymentManual() {
   const [deliveryPaymentBusy, setDeliveryPaymentBusy] = useState(false);
   const [deliveryPaymentError, setDeliveryPaymentError] = useState('');
   const [deliveryPaymentInfo, setDeliveryPaymentInfo] = useState('');
+  const [photoRatingBusy, setPhotoRatingBusy] = useState(false);
+  const [photoRatingError, setPhotoRatingError] = useState('');
 
   const expiresAt = useMemo(() => {
     const v = order?.paymentExpiresAt;
@@ -385,6 +463,20 @@ export function PaymentManual() {
       setDeliveryPaymentBusy(false);
     }
   }, [loadDeliveryPayment, orderId]);
+
+  const ratePreDeliveryPhoto = useCallback(async (rating) => {
+    if (!order?.id || photoRatingBusy) return;
+    setPhotoRatingBusy(true);
+    setPhotoRatingError('');
+    try {
+      const result = await api.rateOrderPhoto(order.id, rating);
+      setOrder((current) => ({ ...(current || {}), ...(result?.order || {}) }));
+    } catch (e) {
+      setPhotoRatingError(e?.data?.error || e?.message || 'Не удалось сохранить оценку');
+    } finally {
+      setPhotoRatingBusy(false);
+    }
+  }, [order?.id, photoRatingBusy]);
 
   const deliveryInvoiceId = deliveryPayment?.invoice?.id;
   const deliveryInvoiceStatus = String(deliveryPayment?.invoice?.status || '').toUpperCase();
@@ -568,6 +660,7 @@ export function PaymentManual() {
     const deliveredAt = order?.deliveredAt ? new Date(order.deliveredAt) : null;
     const deliveredStr = deliveredAt ? deliveredAt.toLocaleString('ru-RU', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'long' }) : null;
     const canCancel = !['DELIVERED', 'CANCELLED'].includes(current);
+    const sentPhotos = (order?.photos || []).filter((photo) => Boolean(photo?.sentToClientAt));
     const orderRecipient = (state.recipients.items || []).find(
       (r) => String(r?.name || '').trim().toLowerCase() === String(order?.recipientName || '').trim().toLowerCase()
     ) || { name: order?.recipientName || 'Получатель', image: FALLBACK_RECIPIENT_IMAGE };
@@ -588,6 +681,18 @@ export function PaymentManual() {
         <div style={{ marginTop: 16 }}>
           <RecipientOrderCard recipient={orderRecipient} />
         </div>
+
+        {current === 'ASSEMBLED' && sentPhotos.length ? (
+          <div style={{ marginTop: 16 }}>
+            <PreDeliveryPhotoReview
+              photos={sentPhotos}
+              rating={String(order?.preDeliveryRating || '').toUpperCase()}
+              busy={photoRatingBusy}
+              error={photoRatingError}
+              onRate={ratePreDeliveryPhoto}
+            />
+          </div>
+        ) : null}
 
         {order?.floristComment ? (
           <div style={{ marginTop: 16 }}>
@@ -762,11 +867,15 @@ export function PaymentManual() {
         {order?.recipientPhone ? <DetailLine label="Телефон" value={order.recipientPhone} /> : null}
         <DetailLine
           label="Адрес"
-          value={order?.deliveryAddress || (order?.askRecipientAddress ? 'Уточним у получателя' : 'Не указан')}
+          value={order?.askRecipientAddress
+            ? (order?.recipientDetailsReceived ? 'Данные получены' : 'Уточним у получателя')
+            : (order?.deliveryAddress || 'Не указан')}
         />
         <DetailLine
           label="Время"
-          value={order?.deliveryTime || (order?.askRecipientTime ? 'Уточним у получателя' : 'Не указано')}
+          value={order?.askRecipientTime
+            ? (order?.recipientDetailsReceived ? 'Данные получены' : 'Уточним у получателя')
+            : (order?.deliveryTime || 'Не указано')}
         />
         {order?.floristComment ? <DetailLine label="Комментарий" value={order.floristComment} /> : null}
         <DetailLine

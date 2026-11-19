@@ -850,6 +850,32 @@ export function OrderDetailsPage({ user }) {
                 </Text>
               )}
 
+              {(order.photos || []).some((photo) => photo.sentToClientAt) ? (
+                <div
+                  style={{
+                    padding: '11px 12px',
+                    borderRadius: 14,
+                    background: order.preDeliveryRating === 'UP'
+                      ? 'rgba(3,170,82,0.09)'
+                      : order.preDeliveryRating === 'DOWN'
+                        ? 'rgba(217,45,32,0.08)'
+                        : 'var(--c-ink-04)',
+                    color: order.preDeliveryRating === 'UP'
+                      ? 'var(--success)'
+                      : order.preDeliveryRating === 'DOWN'
+                        ? '#b42318'
+                        : 'var(--muted)',
+                    fontWeight: 900,
+                  }}
+                >
+                  {order.preDeliveryRating === 'UP'
+                    ? 'Клиент подтвердил соответствие фото'
+                    : order.preDeliveryRating === 'DOWN'
+                      ? 'Клиент отметил несоответствие — свяжитесь с ним до доставки'
+                      : 'Фото отправлено — ожидаем оценку клиента'}
+                </div>
+              ) : null}
+
               <SecondaryButton label="Загрузить фото" onClick={() => fileRef.current?.click?.()} style={{ width: 'fit-content' }} />
               <input
                 ref={fileRef}

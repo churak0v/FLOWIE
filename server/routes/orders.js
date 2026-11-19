@@ -16,6 +16,15 @@ function publicOrder(order) {
     // field through customer order endpoints.
     delete safe.paymentChargeId;
     delete safe.paymentMeta;
+    const recipientDetailsRequested = Boolean(order.askRecipientAddress || order.askRecipientTime);
+    safe.recipientDetailsReceived = recipientDetailsRequested &&
+        (!order.askRecipientAddress || Boolean(String(order.deliveryAddress || '').trim())) &&
+        (!order.askRecipientTime || Boolean(String(order.deliveryTime || '').trim()));
+    if (order.askRecipientAddress) safe.deliveryAddress = null;
+    if (order.askRecipientTime) safe.deliveryTime = null;
+    if (Array.isArray(order.photos)) {
+        safe.photos = order.photos.filter((photo) => Boolean(photo?.sentToClientAt));
+    }
     safe.deliveryInvoice = publicDeliveryInvoice(order.deliveryInvoice);
     return safe;
 }
@@ -105,12 +114,28 @@ router.post('/:id/photo-rating', requireAuth, async (req, res) => {
         const order = await prisma.order.findFirst({ where: { id, userId: req.user.id } });
         if (!order) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
 
-        const updated = await prisma.order.update({
-            where: { id },
-            data: { preDeliveryRating: rating, preDeliveryRatedAt: new Date() },
+        if (String(order.status || '').toUpperCase() !== 'ASSEMBLED') {
+            return res.status(409).json({ ok: false, error: 'ORDER_NOT_ASSEMBLED' });
+        }
+        if (order.preDeliveryRating) {
+            return res.status(409).json({ ok: false, error: 'PHOTO_ALREADY_RATED' });
+        }
+        const sentPhoto = await prisma.orderPhoto.findFirst({
+            where: { orderId: id, sentToClientAt: { not: null } },
+            select: { id: true },
         });
+        if (!sentPhoto) return res.status(409).json({ ok: false, error: 'PHOTO_NOT_SENT' });
 
-        return res.json({ ok: true, order: { id: updated.id, preDeliveryRating: updated.preDeliveryRating, preDeliveryRatedAt: updated.preDeliveryRatedAt } });
+        const ratedAt = new Date();
+        const claimed = await prisma.order.updateMany({
+            where: { id, userId: req.user.id, status: 'ASSEMBLED', preDeliveryRating: null },
+            data: { preDeliveryRating: rating, preDeliveryRatedAt: ratedAt },
+        });
+        if (claimed.count !== 1) {
+            return res.status(409).json({ ok: false, error: 'PHOTO_ALREADY_RATED' });
+        }
+
+        return res.json({ ok: true, order: { id, preDeliveryRating: rating, preDeliveryRatedAt: ratedAt } });
     } catch (e) {
         return res.status(500).json({ ok: false, error: e?.message || 'PHOTO_RATE_FAILED' });
     }

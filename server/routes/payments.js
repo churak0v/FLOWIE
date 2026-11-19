@@ -453,8 +453,11 @@ router.get('/manual', requireAuth, async (req, res) => {
         paymentMethod: order.paymentMethod,
         paymentExpiresAt: order.paymentExpiresAt,
         status: order.status,
-        deliveryAddress: order.deliveryAddress,
-        deliveryTime: order.deliveryTime,
+        deliveryAddress: order.askRecipientAddress ? null : order.deliveryAddress,
+        deliveryTime: order.askRecipientTime ? null : order.deliveryTime,
+        recipientDetailsReceived: Boolean(order.askRecipientAddress || order.askRecipientTime) &&
+          (!order.askRecipientAddress || Boolean(String(order.deliveryAddress || '').trim())) &&
+          (!order.askRecipientTime || Boolean(String(order.deliveryTime || '').trim())),
         deliveryCost: order.deliveryCost,
         deliveryStatus: order.deliveryStatus,
         askRecipientAddress: order.askRecipientAddress,
@@ -463,7 +466,7 @@ router.get('/manual', requireAuth, async (req, res) => {
         recipientPhone: order.recipientPhone,
         floristComment: order.floristComment,
         items: order.items,
-        photos: order.photos,
+        photos: (order.photos || []).filter((photo) => Boolean(photo.sentToClientAt)),
         preDeliveryRating: order.preDeliveryRating,
         preDeliveryRatedAt: order.preDeliveryRatedAt,
         deliveredAt: order.deliveredAt,
@@ -781,8 +784,11 @@ router.get('/delivery', requireAuth, async (req, res) => {
       delivery: {
         status: order.deliveryStatus,
         cost: order.deliveryCost,
-        address: order.deliveryAddress,
-        time: order.deliveryTime,
+        address: order.askRecipientAddress ? null : order.deliveryAddress,
+        time: order.askRecipientTime ? null : order.deliveryTime,
+        recipientDetailsReceived: Boolean(order.askRecipientAddress || order.askRecipientTime) &&
+          (!order.askRecipientAddress || Boolean(String(order.deliveryAddress || '').trim())) &&
+          (!order.askRecipientTime || Boolean(String(order.deliveryTime || '').trim())),
         askRecipientAddress: order.askRecipientAddress,
         askRecipientTime: order.askRecipientTime,
       },
