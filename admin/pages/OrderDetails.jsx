@@ -218,17 +218,14 @@ export function OrderDetailsPage({ user }) {
   const navigate = useNavigate();
   const params = useParams();
   const role = String(user?.role || '');
-  const canConfirmPayment = role === 'admin' || role === 'moderator';
-  const canPrepare = canConfirmPayment || role === 'florist';
-  const canComplete = canConfirmPayment || role === 'courier';
-  const canManageOrder = canConfirmPayment;
+  const canManageOrder = role === 'admin' || role === 'moderator';
+  const canPrepare = canManageOrder || role === 'florist';
+  const canComplete = canManageOrder || role === 'courier';
   const orderId = Number(params.id);
 
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const [order, setOrder] = useState(null);
-  const [confirming, setConfirming] = useState(false);
-  const [confirmError, setConfirmError] = useState('');
 
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [deliveryForm, setDeliveryForm] = useState({ quoteKey: '', deliveryAddress: '', deliveryTime: '', amount: '' });
@@ -303,20 +300,6 @@ export function OrderDetailsPage({ user }) {
     if (status === 'IN_DELIVERY' && canComplete) return { type: 'complete' };
     return { type: 'none' };
   }, [order, status, canPrepare, canComplete]);
-
-  async function confirmPayment() {
-    if (!orderId) return;
-    setConfirming(true);
-    setConfirmError('');
-    try {
-      await adminApi.confirmOrderPayment(orderId);
-      await load();
-    } catch (e) {
-      setConfirmError(e?.data?.error || e?.message || 'Не удалось подтвердить оплату');
-    } finally {
-      setConfirming(false);
-    }
-  }
 
   function openDeliveryForm() {
     setDeliveryError('');
@@ -426,22 +409,7 @@ export function OrderDetailsPage({ user }) {
             <span className="ui-chip" style={{ background: 'var(--surface-2)', color: paymentMetaInfo.color }}>
               Основной счёт: {paymentMetaInfo.label.toLowerCase()}
             </span>
-            <span className="ui-chip">Клиент отметил: {order.paymentClientConfirmed ? 'да' : 'нет'}</span>
-            {canConfirmPayment && String(order.paymentStatus || '').toUpperCase() === 'PENDING' ? (
-              <>
-                <PrimaryButton
-                  label={confirming ? 'Подтверждаем…' : 'Подтвердить оплату'}
-                  disabled={confirming}
-                  onClick={confirmPayment}
-                  style={{ height: 34 }}
-                />
-              </>
-            ) : null}
-            {confirmError ? (
-              <Text variant="caption" style={{ color: '#d92d20' }}>
-                {confirmError}
-              </Text>
-            ) : null}
+            <span className="ui-chip">Подтверждено банком</span>
           </div>
 
           {topAction?.type === 'accept' ? (
@@ -666,7 +634,7 @@ export function OrderDetailsPage({ user }) {
 
           <Divider />
 
-          <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
+          <Surface variant="soft" style={{ width: '100%', maxWidth: '100%', minWidth: 0, overflow: 'hidden', padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
             <Text variant="subtitle">Состав заказа</Text>
             <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
               {(order.items || []).length ? (
@@ -684,6 +652,11 @@ export function OrderDetailsPage({ user }) {
                         gap: 12,
                         alignItems: 'center',
                         padding: 10,
+                        width: '100%',
+                        maxWidth: '100%',
+                        minWidth: 0,
+                        boxSizing: 'border-box',
+                        overflow: 'hidden',
                         borderRadius: 18,
                         border: '1px solid var(--c-ink-06)',
                         background: 'var(--surface)',
@@ -723,9 +696,9 @@ export function OrderDetailsPage({ user }) {
 
             <div style={{ marginTop: 14, borderTop: '1px solid var(--c-ink-06)', paddingTop: 12, display: 'grid', gap: 8 }}>
               {order.recipientName || order.recipientPhone ? (
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontWeight: 900 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)', gap: 12, fontWeight: 900, alignItems: 'start' }}>
                   <span style={{ color: 'var(--muted)' }}>Получатель</span>
-                  <span style={{ whiteSpace: 'nowrap' }}>
+                  <span style={{ minWidth: 0, textAlign: 'right', overflowWrap: 'anywhere' }}>
                     {order.recipientName || '—'}
                     {order.recipientPhone ? ` · ${order.recipientPhone}` : ''}
                   </span>
@@ -741,13 +714,13 @@ export function OrderDetailsPage({ user }) {
                 </div>
               ) : null}
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontWeight: 900 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)', gap: 12, fontWeight: 900, alignItems: 'start' }}>
                 <span style={{ color: 'var(--muted)' }}>Товары</span>
-                <span style={{ whiteSpace: 'nowrap' }}>{order.itemsTotal ?? 0} ₽</span>
+                <span style={{ minWidth: 0, textAlign: 'right', overflowWrap: 'anywhere' }}>{order.itemsTotal ?? 0} ₽</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontWeight: 900 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)', gap: 12, fontWeight: 900, alignItems: 'start' }}>
                 <span style={{ color: 'var(--muted)' }}>Доставка</span>
-                <span style={{ whiteSpace: 'nowrap' }}>
+                <span style={{ minWidth: 0, textAlign: 'right', overflowWrap: 'anywhere' }}>
                   {order.deliveryCost == null
                     ? 'ожидает расчёта'
                     : addressWasUnknown
@@ -755,9 +728,9 @@ export function OrderDetailsPage({ user }) {
                       : `${money(order.deliveryCost)} · включена`}
                 </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontWeight: 1000 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 2fr)', gap: 12, fontWeight: 1000, alignItems: 'start' }}>
                 <span style={{ color: 'var(--muted)' }}>Основной счёт</span>
-                <span style={{ whiteSpace: 'nowrap', color: 'var(--accent)' }}>{money(order.totalPrice)}</span>
+                <span style={{ minWidth: 0, textAlign: 'right', overflowWrap: 'anywhere', color: 'var(--accent)' }}>{money(order.totalPrice)}</span>
               </div>
               {order.deliveryInvoice ? (
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontWeight: 1000 }}>

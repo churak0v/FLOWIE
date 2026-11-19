@@ -52,6 +52,10 @@ function orderWithPublicDelivery(order) {
   return safe;
 }
 
+function isMerchantConfirmedOrder(order) {
+  return String(order?.paymentStatus || '').toUpperCase() === 'CONFIRMED' && Boolean(order?.paidAt);
+}
+
 function isDevAdminEnabled() {
   return process.env.NODE_ENV === 'development' && process.env.DEV_ADMIN_ENABLED === 'true';
 }
@@ -896,8 +900,9 @@ router.get('/orders', requireAdmin, requireRoles(['admin', 'moderator', 'florist
     const orders = await prisma.order.findMany({
       where: {
         ...where,
-        // hide expired unpaid orders from the list
-        NOT: [{ paymentStatus: 'EXPIRED' }, { status: 'CANCELLED', paymentStatus: 'EXPIRED' }],
+        // The operational queue starts only after the acquiring bank confirms capture.
+        paymentStatus: 'CONFIRMED',
+        paidAt: { not: null },
       },
       include: { items: { include: { product: true } }, user: true, deliveryInvoice: true },
       orderBy: { createdAt: 'desc' },
@@ -929,7 +934,7 @@ router.get('/orders/:id', requireAdmin, requireRoles(['admin', 'moderator', 'flo
         deliveryInvoice: true,
       },
     });
-    if (!order) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+    if (!order || !isMerchantConfirmedOrder(order)) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
     if (!canAccessOrder(req.admin, order)) return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
 
     return res.json({ ok: true, order: orderWithPublicDelivery(order) });
@@ -966,49 +971,8 @@ router.post('/orders/:id/delivery-quote', requireAdmin, requireRoles(['admin', '
   }
 });
 
-// Confirm payment manually from admin UI
 router.post('/orders/:id/confirm-payment', requireAdmin, requireRoles(['admin', 'moderator']), async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'BAD_ID' });
-
-    const current = await prisma.order.findUnique({ where: { id } });
-    if (!current) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
-    if (String(current.status || '').toUpperCase() === 'CANCELLED') {
-      return res.status(409).json({ ok: false, error: 'ORDER_CANCELLED' });
-    }
-    if (String(current.paymentStatus || '').toUpperCase() === 'CONFIRMED') {
-      return res.json({ ok: true, order: current, unchanged: true });
-    }
-    if (!['PAYMENT_PENDING', 'NEW', 'PAID'].includes(String(current.status || '').toUpperCase())) {
-      return res.status(409).json({ ok: false, error: 'INVALID_STATUS_TRANSITION' });
-    }
-
-    const now = new Date();
-    const order = await prisma.$transaction(async (tx) => {
-      const changed = await tx.order.updateMany({
-        where: { id, paymentStatus: { not: 'CONFIRMED' }, status: { not: 'CANCELLED' } },
-        data: {
-          paymentStatus: 'CONFIRMED',
-          paymentClientConfirmed: true,
-          status: 'PAID',
-          paidAt: now,
-        },
-      });
-      const updated = await tx.order.findUnique({ where: { id } });
-      if (!updated) throw new Error('NOT_FOUND');
-      if (changed.count > 0) {
-        await tx.orderStatusHistory.create({
-          data: { orderId: id, status: 'PAID', actorId: req.admin.id },
-        });
-      }
-      return updated;
-    });
-
-    return res.json({ ok: true, order });
-  } catch (e) {
-    return res.status(500).json({ ok: false, error: e?.message || 'CONFIRM_PAYMENT_FAILED' });
-  }
+  return res.status(410).json({ ok: false, error: 'MANUAL_PAYMENT_CONFIRMATION_DISABLED' });
 });
 
 async function setOrderStatus(req, res, nextStatus) {
@@ -2042,4 +2006,5 @@ module.exports._test = {
   isAllowedTransition,
   canAccessOrder,
   deliveryDispatchError,
+  isMerchantConfirmedOrder,
 };

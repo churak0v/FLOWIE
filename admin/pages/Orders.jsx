@@ -41,7 +41,6 @@ function statusChip(order) {
   const s = normalizeStatus(order?.status);
   const rawStatus = String(order?.status || '').toUpperCase();
   const ps = String(order?.paymentStatus || '').toUpperCase();
-  if (ps === 'PENDING') return { label: 'Ожидает оплаты', color: '#D92D20', bg: 'rgba(217,45,32,0.12)' };
   if (rawStatus === 'PAID' || (s === 'NEW' && ps === 'CONFIRMED')) return { label: 'Оплачен', color: '#16A34A', bg: 'rgba(22,163,74,0.12)' };
   if (s === 'NEW') return { label: 'Новый', color: '#D92D20', bg: 'rgba(217,45,32,0.12)' };
   if (s === 'ACCEPTED') return { label: 'Принят', color: '#D97706', bg: 'rgba(217,119,6,0.12)' };
@@ -55,7 +54,6 @@ function statusChip(order) {
 function actionFor(order) {
   const s = normalizeStatus(order?.status);
   const ps = String(order?.paymentStatus || '').toUpperCase();
-  if (ps === 'PENDING') return 'confirmPay';
   if (s === 'NEW') return 'accept';
   if (s === 'ACCEPTED') return 'uploadPhoto';
   if (s === 'ASSEMBLED') return 'dispatch';
@@ -66,15 +64,14 @@ function actionFor(order) {
 export function OrdersPage({ user }) {
   const navigate = useNavigate();
   const role = String(user?.role || '');
-  const canConfirmPayment = role === 'admin' || role === 'moderator';
-  const canPrepare = canConfirmPayment || role === 'florist';
-  const canComplete = canConfirmPayment || role === 'courier';
+  const canManageOrder = role === 'admin' || role === 'moderator';
+  const canPrepare = canManageOrder || role === 'florist';
+  const canComplete = canManageOrder || role === 'courier';
   const [dateTab, setDateTab] = useState('today');
   const [status, setStatus] = useState('all');
   const [items, setItems] = useState(() => ORDERS_CACHE.get('today') || []);
   const [busy, setBusy] = useState(() => !(ORDERS_CACHE.get('today') || []).length);
   const [error, setError] = useState('');
-  const [confirmingId, setConfirmingId] = useState(null);
 
   async function load(opts = {}) {
     const { silent = false, ...apiOpts } = opts || {};
@@ -108,19 +105,6 @@ export function OrdersPage({ user }) {
     if (status === 'all') return items;
     return items.filter((o) => normalizeStatus(o.status) === status);
   }, [items, status]);
-
-  async function confirmPayment(orderId) {
-    if (!orderId) return;
-    setConfirmingId(orderId);
-    try {
-      await adminApi.confirmOrderPayment(orderId);
-      await load({ force: true, silent: false });
-    } catch (e) {
-      alert(e?.data?.error || e?.message || 'Не удалось подтвердить оплату');
-    } finally {
-      setConfirmingId(null);
-    }
-  }
 
   return (
     <div style={{ paddingBottom: 0 }}>
@@ -269,21 +253,6 @@ export function OrdersPage({ user }) {
                     {(() => {
                       const action = actionFor(o);
                       if (!action) return null;
-                      if (action === 'confirmPay') {
-                        if (!canConfirmPayment) return null;
-                        return (
-                          <div style={{ marginTop: 10 }}>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); confirmPayment(o.id); }}
-                              disabled={confirmingId === o.id}
-                              style={{ height: 36, borderRadius: 10, border: 0, padding: '0 12px', fontWeight: 900, background: '#D92D20', color: 'white' }}
-                            >
-                              {confirmingId === o.id ? '...' : 'Подтвердить оплату'}
-                            </button>
-                          </div>
-                        );
-                      }
                       if (action === 'uploadPhoto') {
                         if (!canPrepare) return null;
                         return (

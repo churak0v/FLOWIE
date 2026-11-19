@@ -6,7 +6,6 @@ const { requireAuth } = require('../middleware/auth');
 const { OrderCreationError, createOrder } = require('../services/orderCreation');
 const { recordServerEventSafe } = require('../services/analytics');
 const { publicDeliveryInvoice } = require('../services/deliveryPayment');
-const { enqueueOrderNotificationSafe } = require('../services/telegramOrders');
 
 function publicOrder(order) {
     const safe = { ...order };
@@ -127,7 +126,6 @@ router.post('/', requireAuth, async (req, res) => {
             userId: req.user.id,
             orderId: result.order.id,
         });
-        await enqueueOrderNotificationSafe(prisma, result.order.id, 'ORDER_CREATED');
         return res.status(result.replayed ? 200 : 201).json(publicOrder(result.order));
     } catch (error) {
         if (error instanceof OrderCreationError) {
