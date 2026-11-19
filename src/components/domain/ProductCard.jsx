@@ -110,7 +110,7 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
         </button> : null}
       </div>
 
-      <div style={{ padding: isList ? 12 : 12, display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, background: 'var(--surface)' }}>
+      <div style={{ padding: isList ? 14 : 14, display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, background: 'var(--surface)' }}>
 
         <div
           style={{
