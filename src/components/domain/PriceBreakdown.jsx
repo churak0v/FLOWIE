@@ -25,7 +25,7 @@ export function PriceBreakdown({ itemsTotal, upsellsTotal, deliveryCost, bonuses
         {showDelivery ? (
           <Row
             label="Доставка"
-            value={deliverySeparate ? 'Отдельным счётом после уточнения' : formatMoney(deliveryCost)}
+            value={deliverySeparate ? 'Уточним адрес' : formatMoney(deliveryCost)}
           />
         ) : null}
         {bonusesApplied ? <Row label="Скидка" value={`- ${formatMoney(bonusesApplied)}`} /> : null}

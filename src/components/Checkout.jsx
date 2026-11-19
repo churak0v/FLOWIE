@@ -501,9 +501,9 @@ export function Checkout() {
 
           {state.checkout.askRecipientAddress ? (
             <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--c-accent-border)', background: 'var(--c-accent-10)' }}>
-              <Text variant="subtitle">Адрес уточним после оплаты букета</Text>
+              <Text variant="subtitle">Адрес уточним</Text>
               <Text variant="body" muted style={{ marginTop: 6 }}>
-                Стоимость доставки сейчас не равна нулю: после согласования адреса появится отдельный счёт.
+                Если адрес будет вне зоны бесплатной доставки, вышлем счёт на доплату.
               </Text>
             </Surface>
           ) : (
