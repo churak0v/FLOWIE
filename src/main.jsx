@@ -7,6 +7,13 @@ import { initYandexMetrica } from './lib/yandexMetrica'
 
 let KEYBOARD_BASELINE_PX = 0;
 
+function hasEditableFocus() {
+    const active = document.activeElement;
+    if (!active) return false;
+    const tag = String(active.tagName || '').toLowerCase();
+    return tag === 'input' || tag === 'textarea' || tag === 'select' || active.isContentEditable === true;
+}
+
 function updateKeyboardOffsetVar() {
     try {
         const vv = window.visualViewport;
@@ -22,10 +29,12 @@ function updateKeyboardOffsetVar() {
             return;
         }
 
-        // Keep fixed UI behind the on-screen keyboard on iOS/Android WebViews.
-        // Use VisualViewport bottom edge vs stable baseline. Works even when innerHeight also shrinks.
+        // Safari's address/tab bars also shrink VisualViewport while the user scrolls.
+        // Treat the missing area as a keyboard only while an editable control is focused;
+        // otherwise fixed purchase/navigation controls get pushed underneath browser chrome.
         const visibleBottom = Number(vv.offsetTop || 0) + Number(vv.height || 0);
-        const offset = Math.max(0, KEYBOARD_BASELINE_PX - visibleBottom);
+        const occluded = Math.max(0, KEYBOARD_BASELINE_PX - visibleBottom);
+        const offset = hasEditableFocus() && occluded >= 120 ? occluded : 0;
         document.documentElement.style.setProperty('--app-keyboard-offset-js', `${Math.round(offset)}px`);
     } catch {
         // ignore
@@ -37,6 +46,8 @@ if (typeof window !== 'undefined') {
     updateKeyboardOffsetVar();
     window.addEventListener('resize', updateKeyboardOffsetVar);
     window.addEventListener('orientationchange', updateKeyboardOffsetVar);
+    window.addEventListener('focusin', updateKeyboardOffsetVar);
+    window.addEventListener('focusout', updateKeyboardOffsetVar);
     if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', updateKeyboardOffsetVar);
         window.visualViewport.addEventListener('scroll', updateKeyboardOffsetVar);
