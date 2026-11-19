@@ -39,7 +39,7 @@ export function CheckoutFooterCTA({ total, disabled, loading = false, onClick })
         }}
       >
         <QrCode size={20} strokeWidth={2.6} />
-        {loading ? 'Открываем СБП…' : `Оплатить по СБП · ${formatMoney(total)}`}
+        {loading ? 'Открываем оплату…' : `Оплатить онлайн · ${formatMoney(total)}`}
       </button>
     </div>
   );

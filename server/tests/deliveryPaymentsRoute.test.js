@@ -12,10 +12,6 @@ process.env.PUBLIC_SITE_URL = 'https://flowie.test';
 process.env.DELIVERY_INVOICE_TTL_HOURS = '24';
 
 const paymentsRouter = require('../routes/payments');
-const QR_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX9sAAAAASUVORK5CYII=';
-const QR_LINK = 'https://qr.nspk.ru/test-payment?type=02&sum=250000&cur=RUB';
-function qrResult() { return {qrStatus: 'STARTED', payload: QR_LINK, renderedQr: QR_PNG}; }
-function isQrUrl(url) { return String(url).endsWith('/sbp/c2b/qr/dynamic/get.do'); }
 process.env.ALFA_TAX_SYSTEM = '1';
 
 function matches(row, where = {}) {
@@ -129,7 +125,6 @@ test('delivery registration uses its exact isolated amount and callback URL', as
   const calls = [];
   global.fetch = async (url, options) => {
     calls.push({ url: String(url), params: new URLSearchParams(String(options.body)) });
-    if (isQrUrl(url)) return jsonResponse(qrResult());
     return jsonResponse({ orderId: 'delivery-bank-41', formUrl: 'https://bank.test/delivery/41' });
   };
   try {
@@ -140,14 +135,18 @@ test('delivery registration uses its exact isolated amount and callback URL', as
         body: JSON.stringify({ orderId: 41 }),
       });
       assert.equal(result.status, 200);
-      assert.equal(result.body.formUrl, QR_LINK);
-      assert.equal(result.body.paymentMethod, 'sbp');
-      assert.equal(result.body.qrImage, `data:image/png;base64,${QR_PNG}`);
+      assert.equal(result.body.formUrl, 'https://bank.test/delivery/41');
+      assert.equal(result.body.paymentMethod, 'alfa');
     });
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 1);
     assert.equal(calls[0].params.get('taxSystem'), '1');
-    assert.equal(calls[1].params.get('mdOrder'), 'delivery-bank-41');
-    assert.equal(calls[1].params.get('redirectUrl'), 'https://flowie.test/pay/41?deliveryPayment=success');
+    const orderBundle = JSON.parse(calls[0].params.get('orderBundle'));
+    assert.equal(orderBundle.cartItems.items[0].name, 'Доставка заказа #41');
+    assert.equal(orderBundle.cartItems.items[0].itemAmount, 70000);
+    assert.deepEqual(orderBundle.cartItems.items[0].itemAttributes.attributes, [
+      { name: 'paymentMethod', value: '1' },
+      { name: 'paymentObject', value: '4' },
+    ]);
     assert.equal(calls[0].params.get('amount'), '70000');
     assert.equal(calls[0].params.get('currency'), '643');
     assert.equal(calls[0].params.get('dynamicCallbackUrl'), 'https://flowie.test/api/payments/delivery/alfa-callback');
@@ -220,7 +219,7 @@ test('delivery amount or currency mismatch cannot confirm either payment', async
 test('expired unregistered invoice is safely extended and retryable', async () => {
   const { client, state } = createPrisma({ invoice: { paymentExpiresAt: new Date(Date.now() - 1_000) } });
   const nativeFetch = global.fetch;
-  global.fetch = async (url) => jsonResponse(isQrUrl(url) ? qrResult() : { orderId: 'delivery-bank-retry', formUrl: 'https://bank.test/retry' });
+  global.fetch = async () => jsonResponse({ orderId: 'delivery-bank-retry', formUrl: 'https://bank.test/retry' });
   try {
     await withServer(client, async (base) => {
       const result = await request(base, '/api/payments/delivery/alfa-register', {
@@ -284,27 +283,12 @@ test('cancellation during bank registration preserves bank id for late-payment r
 function deliveryRegister(base) {
   return request(base,'/api/payments/delivery/alfa-register',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({orderId:41})});
 }
-test('delivery QR failure retains bank id and retry returns SBP only without duplicate registration',async()=>{
-  const {client,state}=createPrisma();const nativeFetch=global.fetch;let registrations=0,qrCalls=0;
-  global.fetch=async url=>{
-    if(isQrUrl(url)){qrCalls++;return qrCalls===1?jsonResponse({errorCode:'7',errorMessage:'QR unavailable'}):jsonResponse(qrResult());}
-    registrations++;return jsonResponse({orderId:'delivery-qr-retry',formUrl:'https://bank.test/cards'});
-  };
-  try{await withServer(client,async base=>{
-    const failed=await deliveryRegister(base);assert.equal(failed.status,500);assert.equal(failed.body.formUrl,undefined);
-    assert.equal(state.invoice.paymentChargeId,'delivery-qr-retry');
-    const retry=await deliveryRegister(base);assert.equal(retry.status,200);assert.equal(retry.body.formUrl,QR_LINK);
-  });assert.equal(registrations,1);assert.equal(qrCalls,2);}
-  finally{global.fetch=nativeFetch;}
-});
-test('delivery legacy generic URL becomes SBP and cancellation during QR acquisition withholds the link',async()=>{
-  const {client,state}=createPrisma({invoice:{paymentChargeId:'legacy-delivery',paymentMeta:JSON.stringify({alfa:{orderId:'legacy-delivery',formUrl:'https://bank.test/cards'}})}});
+test('delivery reuses the Alfa internet-acquiring URL without duplicate registration',async()=>{
+  const {client,state}=createPrisma({invoice:{paymentChargeId:'existing-delivery',paymentMeta:JSON.stringify({alfa:{orderId:'existing-delivery',formUrl:'https://bank.test/cards'}})}});
   const nativeFetch=global.fetch;const calls=[];
-  global.fetch=async url=>{calls.push(String(url));return jsonResponse(qrResult());};
+  global.fetch=async url=>{calls.push(String(url));return jsonResponse({});};
   try{await withServer(client,async base=>{
-    const first=await deliveryRegister(base);assert.equal(first.status,200);assert.equal(first.body.formUrl,QR_LINK);
-    global.fetch=async url=>{calls.push(String(url));state.order.status='CANCELLED';state.invoice.status='CANCELLED';return jsonResponse(qrResult());};
-    const canceled=await deliveryRegister(base);assert.equal(canceled.status,409);assert.equal(canceled.body.formUrl,undefined);
-  });assert.ok(calls.every(isQrUrl));assert.equal(state.invoice.paymentChargeId,'legacy-delivery');}
+    const result=await deliveryRegister(base);assert.equal(result.status,200);assert.equal(result.body.formUrl,'https://bank.test/cards');assert.equal(result.body.paymentMethod,'alfa');
+  });assert.equal(calls.length,0);assert.equal(state.invoice.paymentChargeId,'existing-delivery');}
   finally{global.fetch=nativeFetch;}
 });

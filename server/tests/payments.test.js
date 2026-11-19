@@ -11,10 +11,6 @@ process.env.ALFA_BANK_API_URL = 'https://bank.test/payment/rest';
 process.env.PUBLIC_SITE_URL = 'https://flowie.test';
 
 const paymentsRouter = require('../routes/payments');
-const QR_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX9sAAAAASUVORK5CYII=';
-const QR_LINK = 'https://qr.nspk.ru/test-payment?type=02&sum=250000&cur=RUB';
-function qrResult() { return {qrStatus: 'STARTED', payload: QR_LINK, renderedQr: QR_PNG}; }
-function isQrUrl(url) { return String(url).endsWith('/sbp/c2b/qr/dynamic/get.do'); }
 process.env.ALFA_TAX_SYSTEM = '1';
 
 test('Alfa token authentication excludes login/password and keeps the configured r-gateway', async () => {
@@ -81,6 +77,10 @@ function createPrisma(orderOverrides = {}) {
       paymentMeta: null,
       paymentExpiresAt: new Date(Date.now() + 60_000),
       totalPrice: 2500,
+      itemsTotal: 2500,
+      deliveryCost: null,
+      items: [{ productId: 1, quantity: 1, price: 2500, product: { name: 'Тестовый букет' } }],
+      user: { id: 7, email: null },
       ...orderOverrides,
     },
     history: [],
@@ -151,7 +151,6 @@ test('register sends exact RUB amount and reuses the registered bank order', asy
   const nativeFetch = global.fetch;
   global.fetch = async (url, options) => {
     calls.push({ url: String(url), params: new URLSearchParams(String(options.body)) });
-    if (isQrUrl(url)) return jsonResponse(qrResult());
     return jsonResponse({ orderId: 'bank-41', formUrl: 'https://bank.test/form/41' });
   };
   try {
@@ -170,15 +169,18 @@ test('register sends exact RUB amount and reuses the registered bank order', asy
       assert.equal(first.status, 200);
       assert.deepEqual(second.body, first.body);
       assert.equal(calls.filter(call => call.url.endsWith('/register.do')).length, 1);
-      assert.equal(calls.filter(call => isQrUrl(call.url)).length, 2);
-      assert.equal(first.body.paymentMethod, 'sbp');
-      assert.equal(first.body.formUrl, QR_LINK);
-      assert.equal(first.body.qrImage, `data:image/png;base64,${QR_PNG}`);
+      assert.equal(first.body.paymentMethod, 'alfa');
+      assert.equal(first.body.formUrl, 'https://bank.test/form/41');
       assert.equal(calls[0].params.get('taxSystem'), '1');
-      assert.equal(calls[1].params.get('mdOrder'), 'bank-41');
-      assert.equal(calls[1].params.get('qrFormat'), 'image');
-      assert.equal(calls[1].params.get('qrWidth'), '300');
-      assert.equal(calls[1].params.get('redirectUrl'), 'https://flowie.test/pay/41?payment=success');
+      const orderBundle = JSON.parse(calls[0].params.get('orderBundle'));
+      assert.equal(orderBundle.cartItems.items.length, 1);
+      assert.equal(orderBundle.cartItems.items[0].name, 'Тестовый букет');
+      assert.equal(orderBundle.cartItems.items[0].itemAmount, 250000);
+      assert.equal(orderBundle.cartItems.items[0].tax.taxType, 0);
+      assert.deepEqual(orderBundle.cartItems.items[0].itemAttributes.attributes, [
+        { name: 'paymentMethod', value: '1' },
+        { name: 'paymentObject', value: '1' },
+      ]);
       assert.equal(calls[0].params.get('amount'), '250000');
       assert.equal(calls[0].params.get('currency'), '643');
       assert.ok(Number(calls[0].params.get('sessionTimeoutSecs')) > 0);
@@ -198,7 +200,6 @@ test('concurrent registration creates only one bank order', async () => {
   const nativeFetch = global.fetch;
   let bankCalls = 0;
   global.fetch = async (url) => {
-    if (isQrUrl(url)) return jsonResponse(qrResult());
     bankCalls += 1;
     await new Promise((resolve) => setTimeout(resolve, 20));
     return jsonResponse({ orderId: 'bank-race', formUrl: 'https://bank.test/form/race' });
@@ -321,7 +322,6 @@ test('declined bank order is released and can be registered again', async () => 
   const nativeFetch = global.fetch;
   let registerCalls = 0;
   global.fetch = async (url) => {
-    if (isQrUrl(url)) return jsonResponse(qrResult());
     if (String(url).endsWith('/getOrderStatusExtended.do')) {
       return jsonResponse({ orderStatus: 6, amount: 250000, currency: '643' });
     }
@@ -370,57 +370,25 @@ function registerRequest(base) {
   return request(base, '/api/payments/alfa-register', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({orderId:41})});
 }
 
-test('SBP QR failure preserves bank id and retry never registers a duplicate order', async () => {
-  const {client,state}=createPrisma(); const nativeFetch=global.fetch;
-  let registrations=0, qrCalls=0;
-  global.fetch=async url=>{
-    if(isQrUrl(url)) {
-      qrCalls++;
-      return qrCalls===1 ? jsonResponse({errorCode:'7',errorMessage:'QR unavailable'}) : jsonResponse(qrResult());
-    }
-    registrations++; return jsonResponse({orderId:'persisted-bank',formUrl:'https://bank.test/all-methods'});
-  };
-  try {
-    await withServer(client,async base=>{
-      const failed=await registerRequest(base);assert.equal(failed.status,500);assert.equal(failed.body.formUrl,undefined);
-      assert.equal(state.order.paymentChargeId,'persisted-bank');
-      const retried=await registerRequest(base);assert.equal(retried.status,200);assert.equal(retried.body.formUrl,QR_LINK);
-    });
-    assert.equal(registrations,1);assert.equal(qrCalls,2);
-  }finally{global.fetch=nativeFetch;}
-});
-
-test('legacy generic payment URL is never returned; existing bank id only requests SBP',async()=>{
+test('existing Alfa internet-acquiring URL is reused without creating a duplicate order',async()=>{
   const {client}=createPrisma({paymentChargeId:'legacy',paymentMeta:JSON.stringify({alfa:{orderId:'legacy',formUrl:'https://bank.test/cards'}})});
   const nativeFetch=global.fetch;const calls=[];
-  global.fetch=async url=>{calls.push(String(url));return jsonResponse(qrResult());};
-  try {await withServer(client,async base=>{const result=await registerRequest(base);assert.equal(result.body.formUrl,QR_LINK);});assert.equal(calls.length,1);assert.ok(isQrUrl(calls[0]));}
+  global.fetch=async url=>{calls.push(String(url));return jsonResponse({});};
+  try {await withServer(client,async base=>{const result=await registerRequest(base);assert.equal(result.body.formUrl,'https://bank.test/cards');assert.equal(result.body.paymentMethod,'alfa');});assert.equal(calls.length,0);}
   finally{global.fetch=nativeFetch;}
 });
 
-test('cancellation during main QR request never returns a payable link and retains bank identity',async()=>{
+test('invalid internet-acquiring URL is rejected before it reaches the client',async()=>{
   const {client,state}=createPrisma();const nativeFetch=global.fetch;
-  global.fetch=async url=>{
-    if(isQrUrl(url)){state.order.status='CANCELLED';return jsonResponse(qrResult());}
-    return jsonResponse({orderId:'cancel-during-qr',formUrl:'https://bank.test/cards'});
-  };
-  try {await withServer(client,async base=>{const result=await registerRequest(base);assert.equal(result.status,409);assert.equal(result.body.formUrl,undefined);});assert.equal(state.order.paymentChargeId,'cancel-during-qr');}
+  global.fetch=async()=>jsonResponse({orderId:'bad-form',formUrl:'https://evil.test/phish'});
+  try {await withServer(client,async base=>{const result=await registerRequest(base);assert.equal(result.status,502);assert.equal(result.body.error,'ALFA_PAYMENT_URL_INVALID');assert.equal(result.body.formUrl,undefined);});assert.equal(state.order.paymentChargeId,null);}
   finally{global.fetch=nativeFetch;}
 });
 
-test('ACCEPTED QR status requests authoritative payment verification instead of marking order paid',async()=>{
-  const {client,state}=createPrisma({paymentChargeId:'qr-accepted'});const nativeFetch=global.fetch;
-  global.fetch=async()=>jsonResponse({...qrResult(),qrStatus:'ACCEPTED'});
-  try{await withServer(client,async base=>{const result=await registerRequest(base);assert.equal(result.status,409);assert.equal(result.body.error,'ALFA_SBP_STATUS_REQUIRED');assert.equal(result.body.alreadyPaid,undefined);});assert.equal(state.order.paymentStatus,'PENDING');}
-  finally{global.fetch=nativeFetch;}
-});
-
-test('SBP validator rejects non-NSPK links and non-PNG renderings; tax system only permits known codes',()=>{
-  for(const payload of ['http://qr.nspk.ru/abc','https://qr.nspk.ru.evil.test/abc','https://evil.test/abc','https://user@qr.nspk.ru/abc','javascript:alert(1)','https://qr.nspk.ru:444/abc']) {
-    assert.throws(()=>paymentsRouter._test.validateSbpQr({...qrResult(),payload}),/ALFA_SBP_URL_INVALID/);
-  }
-  for(const renderedQr of ['',Buffer.from('<svg onload="alert(1)"/>').toString('base64'),'data:image/png;base64,'+QR_PNG]) {
-    assert.throws(()=>paymentsRouter._test.validateSbpQr({...qrResult(),renderedQr}),/ALFA_SBP_QR_IMAGE_INVALID/);
+test('internet-acquiring URL validator and tax system permit only configured values',()=>{
+  assert.equal(paymentsRouter._test.validateAlfaFormUrl('https://bank.test/payment/form?id=1'),'https://bank.test/payment/form?id=1');
+  for(const value of ['http://bank.test/form','https://evil.test/form','https://user@bank.test/form','javascript:alert(1)','https://bank.test:444/form']) {
+    assert.throws(()=>paymentsRouter._test.validateAlfaFormUrl(value),/ALFA_PAYMENT_URL_INVALID/);
   }
   const previous=process.env.ALFA_TAX_SYSTEM;
   try{
