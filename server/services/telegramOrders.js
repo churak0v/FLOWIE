@@ -24,8 +24,8 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
-function rubles(kopecks) {
-  const amount = Number(kopecks || 0) / 100;
+function rubles(value) {
+  const amount = Number(value || 0);
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency',
     currency: 'RUB',

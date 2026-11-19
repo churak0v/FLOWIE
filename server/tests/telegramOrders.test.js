@@ -14,14 +14,14 @@ test('parses unique numeric Telegram chat ids', () => {
 test('formats order notification and escapes customer content', () => {
   const message = formatOrderMessage({
     id: 42,
-    totalPrice: 599900,
+    totalPrice: 5999,
     recipientName: 'Аня <3',
     recipientPhone: '+7 900 000-00-00',
     senderPhone: '+7 911 111-11-11',
     deliveryAddress: 'ул. Цветочная, 1',
     deliveryTime: 'сегодня 18:00–20:00',
     floristComment: '<без открытки>',
-    items: [{ productId: 7, quantity: 2, price: 299950, product: { name: 'Пионы & розы' } }],
+    items: [{ productId: 7, quantity: 1, price: 5999, product: { name: 'Пионы & розы' } }],
   }, 'ORDER_CREATED');
   assert.match(message, /Новый заказ №42/);
   assert.match(message, /5\s999\s₽/);
