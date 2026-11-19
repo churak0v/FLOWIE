@@ -304,6 +304,8 @@ function DeliveryPaymentCard({ info, loading, error, busy, message, onPay }) {
   const delivery = info?.delivery || order;
   const deliveryStatus = String(delivery.status || delivery.deliveryStatus || invoice?.status || '').toUpperCase();
   const invoiceStatus = String(invoice?.status || '').toUpperCase();
+  const manualSurcharges = Array.isArray(invoice?.manualSurcharges) ? invoice.manualSurcharges : [];
+  const manualReason = manualSurcharges.map((item) => item.reason).filter(Boolean).join(' · ');
   const addressWasUnknown = Boolean(delivery.askRecipientAddress) && delivery.cost == null && delivery.deliveryCost == null;
 
   let title = 'Доставка';
@@ -322,6 +324,10 @@ function DeliveryPaymentCard({ info, loading, error, busy, message, onPay }) {
   if (invoiceStatus === 'CANCELLED') description = 'Отдельный счёт на доставку отменён.';
   if (invoiceStatus === 'RECONCILIATION_REQUIRED') description = 'Платёж за доставку требует проверки менеджером.';
   if (invoiceStatus === 'PAYMENT_PENDING') title = `Доставка — ${formatMoney(invoice.amount)}`;
+  if (manualSurcharges.length) {
+    title = `Доплата — ${formatMoney(invoice.amount)}`;
+    description = manualReason || 'Индивидуальная доплата по согласованию с менеджером.';
+  }
 
   return (
     <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', display: 'grid', gap: 10 }}>

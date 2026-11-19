@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { resolveDeliveryPrice } = require('./deliveryZones');
 
 const QUOTE_KEY_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STAFF_ROLES = new Set(['admin', 'moderator', 'florist']);
@@ -60,6 +61,13 @@ function quoteLockId(orderId) {
 
 function publicDeliveryInvoice(invoice, now = Date.now()) {
   if (!invoice) return null;
+  let manualSurcharges = [];
+  try {
+    const meta = invoice.paymentMeta ? JSON.parse(invoice.paymentMeta) : {};
+    manualSurcharges = Array.isArray(meta.manualSurcharges)
+      ? meta.manualSurcharges.map((item) => ({ amount: Number(item.amount) || 0, reason: String(item.reason || '').slice(0, 200) }))
+      : [];
+  } catch {}
   const expiresAt = invoice.paymentExpiresAt ? new Date(invoice.paymentExpiresAt).getTime() : NaN;
   const status = invoice.status === 'PAYMENT_PENDING' && Number.isFinite(expiresAt) && expiresAt <= now
     ? 'EXPIRED'
@@ -73,10 +81,11 @@ function publicDeliveryInvoice(invoice, now = Date.now()) {
     paymentExpiresAt: invoice.paymentExpiresAt,
     paidAt: invoice.paidAt,
     registered: Boolean(invoice.paymentChargeId && !String(invoice.paymentChargeId).startsWith('registering:')),
+    manualSurcharges,
   };
 }
 
-async function issueDeliveryQuote({ prisma, orderId, staffUserId, body, now = () => new Date(), env = process.env }) {
+async function issueDeliveryQuote({ prisma, orderId, staffUserId, body, now = () => new Date(), env = process.env, resolvePrice = resolveDeliveryPrice }) {
   const numericOrderId = Number(orderId);
   const numericStaffId = Number(staffUserId);
   if (!Number.isSafeInteger(numericOrderId) || numericOrderId <= 0) throw new DeliveryPaymentError('BAD_ORDER_ID');
@@ -104,7 +113,13 @@ async function issueDeliveryQuote({ prisma, orderId, staffUserId, body, now = ()
       throw new DeliveryPaymentError('MAIN_PAYMENT_REQUIRED', 409);
     }
 
-    const normalized = normalizeQuoteRequest(order, body);
+    const price = order.askRecipientAddress
+      ? await resolvePrice({ prisma: tx, address: body?.deliveryAddress, env })
+      : null;
+    const normalized = normalizeQuoteRequest(order, {
+      ...body,
+      ...(price ? { amount: price.price } : {}),
+    });
     if (order.deliveryQuoteKey) {
       if (order.deliveryQuoteKey !== normalized.quoteKey || order.deliveryQuoteDigest !== normalized.digest) {
         throw new DeliveryPaymentError('DELIVERY_QUOTE_ALREADY_ISSUED', 409);

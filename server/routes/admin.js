@@ -16,6 +16,7 @@ const {
 const { loadAnalyticsReport } = require('../services/reportAnalytics');
 const {
   DeliveryPaymentError,
+  invoiceTtlMs,
   issueDeliveryQuote,
   publicDeliveryInvoice,
 } = require('../services/deliveryPayment');
@@ -968,6 +969,55 @@ router.post('/orders/:id/delivery-quote', requireAdmin, requireRoles(['admin', '
       return res.status(error.status).json({ ok: false, error: error.code });
     }
     return res.status(500).json({ ok: false, error: 'DELIVERY_QUOTE_FAILED' });
+  }
+});
+
+router.post('/orders/:id/manual-surcharge', requireAdmin, requireRoles(['admin', 'moderator']), async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+    const amount = Number(req.body?.amount);
+    const reason = String(req.body?.reason || '').trim();
+    if (!Number.isSafeInteger(orderId) || orderId <= 0) return res.status(400).json({ ok: false, error: 'BAD_ID' });
+    if (!Number.isSafeInteger(amount) || amount <= 0 || amount > 100000) return res.status(400).json({ ok: false, error: 'BAD_SURCHARGE_AMOUNT' });
+    if (reason.length < 3 || reason.length > 200) return res.status(400).json({ ok: false, error: 'BAD_SURCHARGE_REASON' });
+
+    const invoice = await prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))::text AS lock', `manual-surcharge:${orderId}`);
+      const order = await tx.order.findUnique({ where: { id: orderId }, include: { deliveryInvoice: true } });
+      if (!order) throw Object.assign(new Error('NOT_FOUND'), { statusCode: 404 });
+      if (String(order.paymentStatus || '').toUpperCase() !== 'CONFIRMED') throw Object.assign(new Error('MAIN_PAYMENT_REQUIRED'), { statusCode: 409 });
+      if (!order.deliveryQuoteKey) throw Object.assign(new Error('DELIVERY_DETAILS_REQUIRED'), { statusCode: 409 });
+
+      const existing = order.deliveryInvoice;
+      if (existing) {
+        if (existing.status !== 'PAYMENT_PENDING' || existing.paymentChargeId) {
+          throw Object.assign(new Error('SURCHARGE_INVOICE_LOCKED'), { statusCode: 409 });
+        }
+        let meta = {};
+        try { meta = existing.paymentMeta ? JSON.parse(existing.paymentMeta) : {}; } catch {}
+        const manual = Array.isArray(meta.manualSurcharges) ? meta.manualSurcharges : [];
+        return tx.deliveryInvoice.update({
+          where: { id: existing.id },
+          data: {
+            amount: existing.amount + amount,
+            paymentMeta: JSON.stringify({ ...meta, manualSurcharges: [...manual, { amount, reason, createdAt: new Date().toISOString(), createdById: req.admin.id }] }),
+          },
+        });
+      }
+      return tx.deliveryInvoice.create({
+        data: {
+          orderId,
+          amount,
+          currency: '643',
+          status: 'PAYMENT_PENDING',
+          paymentExpiresAt: new Date(Date.now() + invoiceTtlMs()),
+          paymentMeta: JSON.stringify({ manualSurcharges: [{ amount, reason, createdAt: new Date().toISOString(), createdById: req.admin.id }] }),
+        },
+      });
+    });
+    return res.status(201).json({ ok: true, invoice: publicDeliveryInvoice(invoice) });
+  } catch (error) {
+    return res.status(error?.statusCode || 500).json({ ok: false, error: error?.message || 'SURCHARGE_FAILED' });
   }
 });
 

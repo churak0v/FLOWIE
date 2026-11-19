@@ -174,6 +174,12 @@ export const adminApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload || {}),
     }),
+  createManualSurcharge: async (orderId, payload) =>
+    fetchJson(`/admin/orders/${encodeURIComponent(orderId)}/manual-surcharge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    }),
   getCouriers: async () => fetchJson('/admin/couriers', { cache: 'no-store', cacheTtlMs: 5_000 }),
   setStaffCredential: async (id, payload) => fetchJson(`/admin/staff/${encodeURIComponent(id)}/credential`, {
     method: 'PUT',

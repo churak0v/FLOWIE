@@ -25,7 +25,7 @@ test('formats order notification and escapes customer content', () => {
   }, 'ORDER_CREATED');
   assert.match(message, /Новый заказ №42/);
   assert.match(message, /5\s999\s₽/);
-  assert.match(message, /Аня &lt;3/);
+  assert.doesNotMatch(message, /Аня &lt;3/);
   assert.match(message, /Пионы &amp; розы/);
   assert.doesNotMatch(message, /<без открытки>/);
 });
@@ -68,6 +68,6 @@ test('sends a Telegram message with a direct admin order button', async () => {
   assert.match(request.url, /\/botsecret-token\/sendMessage$/);
   const payload = JSON.parse(request.options.body);
   assert.equal(payload.chat_id, '100');
-  assert.match(payload.text, /примите заказ и запустите в работу/);
+  assert.match(payload.text, /Новый заказ №42/);
   assert.equal(payload.reply_markup.inline_keyboard[0][0].url, 'https://admin.flowie.art/orders/42');
 });

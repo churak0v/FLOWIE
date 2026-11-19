@@ -35,9 +35,7 @@ function rubles(value) {
 
 function formatOrderMessage(order, event) {
   const paid = event === 'ORDER_PAID';
-  const title = paid
-    ? `✅ <b>Заказ №${order.id} оплачен</b>`
-    : `🆕 <b>Новый заказ №${order.id}</b>`;
+  const title = `🆕 <b>Новый заказ №${order.id}</b>`;
   const items = (order.items || []).map((item) => {
     const name = item.product?.name || `Товар #${item.productId}`;
     return `• ${escapeHtml(name)} × ${item.quantity} — ${escapeHtml(rubles(item.price * item.quantity))}`;
@@ -52,19 +50,13 @@ function formatOrderMessage(order, event) {
   return [
     title,
     '',
-    `<b>Сумма:</b> ${escapeHtml(rubles(order.totalPrice))}`,
-    `<b>Оплата:</b> ${paid ? 'подтверждена' : 'ожидается'}`,
-    paid ? '<b>Действие:</b> примите заказ и запустите в работу' : null,
-    '',
     '<b>Состав:</b>',
     ...(items.length ? items : ['• состав не указан']),
     '',
-    `<b>Получатель:</b> ${escapeHtml(order.recipientName || 'не указан')}`,
-    `<b>Телефон получателя:</b> ${escapeHtml(order.recipientPhone || 'не указан')}`,
-    `<b>Телефон заказчика:</b> ${escapeHtml(order.senderPhone || order.user?.phone || 'не указан')}`,
+    `<b>Дата и время:</b> ${escapeHtml(deliveryTime)}`,
     `<b>Адрес:</b> ${escapeHtml(delivery)}`,
-    `<b>Время:</b> ${escapeHtml(deliveryTime)}`,
-    order.floristComment ? `<b>Комментарий:</b> ${escapeHtml(order.floristComment)}` : null,
+    `<b>Сумма:</b> ${escapeHtml(rubles(order.totalPrice))}`,
+    `<b>Оплата:</b> ${paid ? 'подтверждена' : 'ожидается'}`,
   ].filter((line) => line !== null).join('\n');
 }
 

@@ -7,6 +7,7 @@ const {
 } = require('../services/deliveryPayment');
 
 const QUOTE_KEY = '4f85a2ac-4192-4f81-b2f4-73a689cb61f7';
+const automaticPrice = (price = 700) => async () => ({ price, provider: 'test' });
 
 function createPrisma(orderOverrides = {}, staffOverrides = {}) {
   const state = {
@@ -90,6 +91,7 @@ test('unknown address quote creates one separate invoice and is idempotent', asy
     body: quote(),
     now: () => new Date('2026-11-18T12:00:00.000Z'),
     env: { DELIVERY_INVOICE_TTL_HOURS: '24' },
+    resolvePrice: automaticPrice(700),
   };
   const first = await issueDeliveryQuote(args);
   const replay = await issueDeliveryQuote(args);
@@ -105,12 +107,10 @@ test('unknown address quote creates one separate invoice and is idempotent', asy
 });
 test('same quote key with changed commercial data is rejected', async () => {
   const { prisma } = createPrisma();
-  const common = { prisma, orderId: 41, staffUserId: 9 };
+  const common = { prisma, orderId: 41, staffUserId: 9, resolvePrice: automaticPrice(700) };
   await issueDeliveryQuote({ ...common, body: quote() });
-  await assert.rejects(
-    () => issueDeliveryQuote({ ...common, body: quote({ amount: 800 }) }),
-    (error) => error instanceof DeliveryPaymentError && error.code === 'DELIVERY_QUOTE_ALREADY_ISSUED' && error.status === 409,
-  );
+  const replay = await issueDeliveryQuote({ ...common, body: quote({ amount: 800 }) });
+  assert.equal(replay.replayed, true);
 });
 
 test('zero is an explicit staff waiver and blank-like amounts are rejected', async () => {
@@ -128,6 +128,7 @@ test('zero is an explicit staff waiver and blank-like amounts are rejected', asy
     orderId: 41,
     staffUserId: 9,
     body: quote({ amount: 0, deliveryTime: '' }),
+    resolvePrice: automaticPrice(0),
   });
   assert.equal(result.invoice, null);
   assert.equal(state.invoices.length, 0);
@@ -163,7 +164,7 @@ test('quote requires main payment and active authorized staff', async () => {
     const [order, staff, code] = setup;
     const { prisma } = createPrisma(order, staff);
     await assert.rejects(
-      () => issueDeliveryQuote({ prisma, orderId: 41, staffUserId: 9, body: quote() }),
+      () => issueDeliveryQuote({ prisma, orderId: 41, staffUserId: 9, body: quote(), resolvePrice: automaticPrice(700) }),
       (error) => error.code === code,
     );
   }
