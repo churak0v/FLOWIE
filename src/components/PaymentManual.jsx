@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Copy, CreditCard, ChevronLeft, Clock, ExternalLink } from 'lucide-react';
+import { Copy, CreditCard, ChevronLeft, Clock } from 'lucide-react';
 import { api } from '../api';
 import { useAppState } from '../state/AppState';
 import { buildActiveOrderPreview } from '../lib/orderPreview';
@@ -10,6 +10,7 @@ import { IconButton } from './ui/IconButton';
 import { Surface } from './ui/Surface';
 import { Text } from './ui/Text';
 import { AppImage } from './ui/AppImage';
+import { SbpLogo } from './ui/SbpLogo';
 import { trackAnalytics } from '../lib/analytics';
 import { sendYandexMetricaEvent } from '../lib/yandexMetrica';
 
@@ -878,7 +879,7 @@ export function PaymentManual() {
                 height: 54,
                 borderRadius: 'var(--r-lg)',
                 border: 0,
-                background: '#ef3124',
+                background: '#20134f',
                 color: '#fff',
                 fontWeight: 1000,
                 cursor: gatewayBusy ? 'default' : 'pointer',
@@ -889,8 +890,7 @@ export function PaymentManual() {
                 gap: 8,
               }}
             >
-              <ExternalLink size={18} />
-              {gatewayBusy ? 'Открываем оплату...' : 'Оплатить онлайн'}
+              {gatewayBusy ? 'Открываем оплату...' : <><span>Оплатить</span><SbpLogo compact /><span>· {formatMoney(amount)}</span></>}
             </button>
             <button
               type="button"

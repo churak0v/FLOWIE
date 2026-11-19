@@ -55,7 +55,9 @@ function validateAlfaFormUrl(value) {
   } catch {
     throw Object.assign(new Error('ALFA_PAYMENT_URL_INVALID'), { httpStatus: 502 });
   }
-  if (formUrl.protocol !== 'https:' || formUrl.hostname !== gatewayUrl.hostname || formUrl.port ||
+  const productionHost = formUrl.hostname === 'alfabank.ru' || formUrl.hostname.endsWith('.alfabank.ru');
+  const configuredHost = formUrl.hostname === gatewayUrl.hostname;
+  if (formUrl.protocol !== 'https:' || (!productionHost && !configuredHost) || formUrl.port ||
       formUrl.username || formUrl.password || formUrl.hash) {
     throw Object.assign(new Error('ALFA_PAYMENT_URL_INVALID'), { httpStatus: 502 });
   }
@@ -518,13 +520,19 @@ router.post('/alfa-register', requireAuth, async (req, res) => {
       throw err;
     }
 
-    const formUrl = validateAlfaFormUrl(result.formUrl);
+    let formUrl = null;
+    let formUrlError = null;
+    try {
+      formUrl = validateAlfaFormUrl(result.formUrl);
+    } catch (error) {
+      formUrlError = error;
+    }
     const alfaMeta = {
       alfa: {
         orderNumber,
         orderId: result.orderId,
         amountKopecks,
-        formUrl,
+        ...(formUrl ? { formUrl } : {}),
         receiptSubmitted: true,
         registeredAt: new Date().toISOString(),
       },
@@ -543,6 +551,7 @@ router.post('/alfa-register', requireAuth, async (req, res) => {
     }
 
     acquiredLock = null;
+    if (formUrlError) throw formUrlError;
     const current = await prisma.order.findUnique({ where: { id: order.id } });
     if (!current || isCancelled(current) || current.paymentChargeId !== result.orderId) {
       return res.status(409).json({ ok: false, error: 'PAYMENT_REGISTRATION_CONFLICT' });
@@ -819,7 +828,13 @@ router.post('/delivery/alfa-register', requireAuth, async (req, res) => {
       throw error;
     }
     registeredBankOrderId = result.orderId;
-    const formUrl = validateAlfaFormUrl(result.formUrl);
+    let formUrl = null;
+    let formUrlError = null;
+    try {
+      formUrl = validateAlfaFormUrl(result.formUrl);
+    } catch (error) {
+      formUrlError = error;
+    }
 
     const nextMeta = {
       ...existingMeta,
@@ -827,7 +842,7 @@ router.post('/delivery/alfa-register', requireAuth, async (req, res) => {
         orderNumber,
         orderId: result.orderId,
         amountKopecks,
-        formUrl,
+        ...(formUrl ? { formUrl } : {}),
         receiptSubmitted: true,
         registeredAt: new Date().toISOString(),
       },
@@ -847,6 +862,7 @@ router.post('/delivery/alfa-register', requireAuth, async (req, res) => {
       return res.status(409).json({ ok: false, error: 'DELIVERY_CANCELLED_AFTER_REGISTRATION' });
     }
     acquiredLock = null;
+    if (formUrlError) throw formUrlError;
     return res.json(hostedPaymentResponse(formUrl));
   } catch (error) {
     if (acquiredLock && !registeredBankOrderId) {

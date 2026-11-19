@@ -381,12 +381,13 @@ test('existing Alfa internet-acquiring URL is reused without creating a duplicat
 test('invalid internet-acquiring URL is rejected before it reaches the client',async()=>{
   const {client,state}=createPrisma();const nativeFetch=global.fetch;
   global.fetch=async()=>jsonResponse({orderId:'bad-form',formUrl:'https://evil.test/phish'});
-  try {await withServer(client,async base=>{const result=await registerRequest(base);assert.equal(result.status,502);assert.equal(result.body.error,'ALFA_PAYMENT_URL_INVALID');assert.equal(result.body.formUrl,undefined);});assert.equal(state.order.paymentChargeId,null);}
+  try {await withServer(client,async base=>{const result=await registerRequest(base);assert.equal(result.status,502);assert.equal(result.body.error,'ALFA_PAYMENT_URL_INVALID');assert.equal(result.body.formUrl,undefined);});assert.equal(state.order.paymentChargeId,'bad-form');assert.equal(JSON.parse(state.order.paymentMeta).alfa.formUrl,undefined);}
   finally{global.fetch=nativeFetch;}
 });
 
 test('internet-acquiring URL validator and tax system permit only configured values',()=>{
   assert.equal(paymentsRouter._test.validateAlfaFormUrl('https://bank.test/payment/form?id=1'),'https://bank.test/payment/form?id=1');
+  assert.equal(paymentsRouter._test.validateAlfaFormUrl('https://ecom.alfabank.ru/payment/form?id=1'),'https://ecom.alfabank.ru/payment/form?id=1');
   for(const value of ['http://bank.test/form','https://evil.test/form','https://user@bank.test/form','javascript:alert(1)','https://bank.test:444/form']) {
     assert.throws(()=>paymentsRouter._test.validateAlfaFormUrl(value),/ALFA_PAYMENT_URL_INVALID/);
   }

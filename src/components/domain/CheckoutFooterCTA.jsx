@@ -1,6 +1,6 @@
 import React from 'react';
-import { QrCode } from 'lucide-react';
 import { formatMoney } from '../../lib/money';
+import { SbpLogo } from '../ui/SbpLogo';
 
 export function CheckoutFooterCTA({ total, disabled, loading = false, onClick }) {
   return (
@@ -26,7 +26,7 @@ export function CheckoutFooterCTA({ total, disabled, loading = false, onClick })
           height: 56,
           border: 0,
           borderRadius: 'var(--r-lg)',
-          background: disabled ? 'var(--c-ink-14)' : 'linear-gradient(135deg, #15b8a6 0%, #287cf5 52%, #7f4bd8 100%)',
+          background: disabled ? 'var(--c-ink-14)' : '#20134f',
           color: '#fff',
           cursor: disabled ? 'default' : 'pointer',
           fontWeight: 900,
@@ -35,11 +35,10 @@ export function CheckoutFooterCTA({ total, disabled, loading = false, onClick })
           alignItems: 'center',
           justifyContent: 'center',
           gap: 9,
-          boxShadow: disabled ? 'none' : '0 12px 28px rgba(40,124,245,0.24)',
+          boxShadow: disabled ? 'none' : '0 12px 28px rgba(32,19,79,0.22)',
         }}
       >
-        <QrCode size={20} strokeWidth={2.6} />
-        {loading ? 'Открываем оплату…' : `Оплатить онлайн · ${formatMoney(total)}`}
+        {loading ? 'Открываем оплату…' : <><span>Оплатить</span><SbpLogo compact /><span>· {formatMoney(total)}</span></>}
       </button>
     </div>
   );
