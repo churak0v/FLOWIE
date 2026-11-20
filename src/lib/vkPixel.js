@@ -47,7 +47,7 @@ export function initVkPixel({ enabled = true } = {}) {
 }
 
 export function sendVkPixelEvent(event, payload = {}) {
-  if (!initialized || !Array.isArray(window?._tmr)) return false;
+  if (!initialized || typeof window?._tmr?.push !== 'function') return false;
   if (event === 'page_view') {
     const currentUrl = window.location.href;
     if (currentUrl === lastPageUrl) return false;
