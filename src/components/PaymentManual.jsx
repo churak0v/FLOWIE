@@ -11,8 +11,7 @@ import { Surface } from './ui/Surface';
 import { Text } from './ui/Text';
 import { AppImage } from './ui/AppImage';
 import { SbpLogo } from './ui/SbpLogo';
-import { trackAnalytics } from '../lib/analytics';
-import { sendYandexMetricaEvent } from '../lib/yandexMetrica';
+import { trackAnalytics, trackConfirmedPurchase } from '../lib/analytics';
 
 function fmtMmSs(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -556,10 +555,10 @@ export function PaymentManual() {
   // Do not clear active order on confirmed so card remains visible on home.
 
   useEffect(() => {
-    if (paymentStatus !== 'CONFIRMED' || !Number.isFinite(orderId)) return;
-    sendYandexMetricaEvent('purchase', {
+    trackConfirmedPurchase({
       orderId,
       revenue: Number(order?.totalPrice || 0),
+      paymentStatus,
     });
   }, [order?.totalPrice, orderId, paymentStatus]);
 

@@ -127,6 +127,7 @@ services:
         VITE_HERO_IMAGE: ${VITE_HERO_IMAGE:-}
         VITE_RECIPIENT_IMAGE: ${VITE_RECIPIENT_IMAGE:-}
         VITE_YANDEX_METRICA_ID: ${VITE_YANDEX_METRICA_ID:-}
+        VITE_VK_PIXEL_ID: ${VITE_VK_PIXEL_ID:-}
     expose:
       - "8080"
     healthcheck:

@@ -74,8 +74,8 @@ function AppRoutes() {
                 path: pathname,
                 ...extractAnalyticsAttribution(window.location, document.referrer),
             },
-        }, { dedupeKey: pathname });
-    }, [pathname]);
+        }, { dedupeKey: `${pathname}${location.search}` });
+    }, [location.search, pathname]);
 
     // Load products from DB-backed API so the client vitrine reflects admin toggles (isActive).
     useEffect(() => {

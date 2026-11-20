@@ -1,5 +1,6 @@
 const COUNTER_ID = Number(String(import.meta.env?.VITE_YANDEX_METRICA_ID || '').trim());
 let initialized = false;
+let lastPageUrl = '';
 
 export function initYandexMetrica({ enabled = true } = {}) {
   if (!enabled || initialized || !Number.isSafeInteger(COUNTER_ID) || COUNTER_ID <= 0 || typeof window === 'undefined') return false;
@@ -19,6 +20,7 @@ export function initYandexMetrica({ enabled = true } = {}) {
     accurateTrackBounce: true,
     webvisor: false,
   });
+  lastPageUrl = window.location.href;
   return true;
 }
 
@@ -29,6 +31,8 @@ export function sendYandexMetricaEvent(event, payload = {}) {
   if (Number.isSafeInteger(Number(payload.orderId))) safePayload.orderId = Number(payload.orderId);
   if (Number.isFinite(Number(payload.revenue))) safePayload.revenue = Math.max(0, Number(payload.revenue));
   if (event === 'page_view') {
+    if (window.location.href === lastPageUrl) return false;
+    lastPageUrl = window.location.href;
     window.ym(COUNTER_ID, 'hit', window.location.href, { title: document.title });
   } else {
     window.ym(COUNTER_ID, 'reachGoal', String(event || '').replace(/[^a-z0-9_-]/gi, '_').slice(0, 64), safePayload);

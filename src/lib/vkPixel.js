@@ -1,0 +1,64 @@
+const PIXEL_ID = String(import.meta.env?.VITE_VK_PIXEL_ID || '').trim();
+let initialized = false;
+let lastPageUrl = '';
+
+function validPixelId(value) {
+  return /^\d+$/.test(String(value || '').trim());
+}
+
+export function createVkPixelCommand(event, payload = {}, pixelId = PIXEL_ID) {
+  if (!validPixelId(pixelId)) return null;
+  if (event === 'page_view') {
+    return { id: String(pixelId), type: 'pageView', start: Date.now() };
+  }
+
+  const goal = String(event || '').replace(/[^a-z0-9_-]/gi, '_').slice(0, 64);
+  if (!goal) return null;
+  const command = { id: String(pixelId), type: 'reachGoal', goal };
+  if (Number.isFinite(Number(payload.revenue))) command.value = Math.max(0, Number(payload.revenue));
+  const params = {};
+  if (Number.isSafeInteger(Number(payload.productId)) && Number(payload.productId) > 0) {
+    params.product_id = String(Number(payload.productId));
+  }
+  if (Number.isSafeInteger(Number(payload.orderId)) && Number(payload.orderId) > 0) {
+    params.order_id = String(Number(payload.orderId));
+  }
+  if (Object.keys(params).length) command.params = params;
+  return command;
+}
+
+export function initVkPixel({ enabled = true } = {}) {
+  if (!enabled || initialized || !validPixelId(PIXEL_ID) || typeof window === 'undefined') return false;
+  initialized = true;
+  window._tmr = window._tmr || [];
+  const command = createVkPixelCommand('page_view');
+  window._tmr.push(command);
+  lastPageUrl = window.location.href;
+
+  if (!document.getElementById('tmr-code')) {
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.async = true;
+    script.id = 'tmr-code';
+    script.src = 'https://top-fwz1.mail.ru/js/code.js';
+    document.head.appendChild(script);
+  }
+  return true;
+}
+
+export function sendVkPixelEvent(event, payload = {}) {
+  if (!initialized || !Array.isArray(window?._tmr)) return false;
+  if (event === 'page_view') {
+    const currentUrl = window.location.href;
+    if (currentUrl === lastPageUrl) return false;
+    lastPageUrl = currentUrl;
+  }
+  const command = createVkPixelCommand(event, payload);
+  if (!command) return false;
+  window._tmr.push(command);
+  return true;
+}
+
+export function vkPixelId() {
+  return validPixelId(PIXEL_ID) ? PIXEL_ID : null;
+}

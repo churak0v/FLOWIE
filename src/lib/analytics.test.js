@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import {
   ANALYTICS_OPT_OUT_KEY,
+  ANALYTICS_PURCHASE_KEY_PREFIX,
   clearAnalyticsQueue,
   createAnalyticsUuid,
   extractAnalyticsAttribution,
@@ -12,6 +13,7 @@ import {
   sanitizeAnalyticsPayload,
   setAnalyticsOptOut,
   trackAnalytics,
+  trackConfirmedPurchase,
 } from './analytics.js';
 
 const require = createRequire(import.meta.url);
@@ -79,16 +81,68 @@ test('redacts phone and email patterns from search queries', () => {
 });
 
 test('extracts only UTM values and external referrer hostname', () => {
+  const restoreSession = replaceGlobal('sessionStorage', memoryStorage());
   const meta = extractAnalyticsAttribution(
-    { search: '?utm_source=tg&utm_medium=bot&utm_campaign=november&phone=secret', hostname: 'flowie.example' },
+    { search: '?utm_source=tg&utm_medium=bot&utm_campaign=november&utm_content=rose-video&phone=secret', hostname: 'flowie.example' },
     'https://partner.example/private/path?token=secret',
   );
   assert.deepEqual(meta, {
     utm_source: 'tg',
     utm_medium: 'bot',
     utm_campaign: 'november',
+    utm_content: 'rose-video',
     referrerHost: 'partner.example',
   });
+  assert.equal(extractAnalyticsAttribution({ search: '', hostname: 'flowie.example' }, '').utm_content, 'rose-video');
+  restoreSession();
+});
+
+test('tracks the required funnel events and rejects unknown events', () => {
+  const restoreStorage = replaceGlobal('localStorage', memoryStorage());
+  const restoreNavigator = replaceGlobal('navigator', { doNotTrack: '0', globalPrivacyControl: false });
+  try {
+    clearAnalyticsQueue();
+    assert.equal(trackAnalytics('product_view', { productId: 1 }), true);
+    assert.equal(trackAnalytics('cart_add', { productId: 1, meta: { quantity: 1 } }), true);
+    assert.equal(trackAnalytics('checkout_start'), true);
+    assert.equal(trackAnalytics('payment_start', { orderId: 2 }), true);
+    assert.equal(trackAnalytics('not_allowed'), false);
+    assert.equal(getAnalyticsDebugState().queued, 4);
+  } finally {
+    clearAnalyticsQueue();
+    restoreNavigator();
+    restoreStorage();
+  }
+});
+
+test('records a confirmed purchase once per order in the same browser', () => {
+  const localStorage = memoryStorage();
+  const restoreStorage = replaceGlobal('localStorage', localStorage);
+  const restoreNavigator = replaceGlobal('navigator', { doNotTrack: '0', globalPrivacyControl: false });
+  try {
+    assert.equal(trackConfirmedPurchase({ orderId: 991991, revenue: 4590, paymentStatus: 'PENDING' }), false);
+    assert.equal(trackConfirmedPurchase({ orderId: 991991, revenue: 4590, paymentStatus: 'CONFIRMED' }), true);
+    assert.equal(localStorage.getItem(`${ANALYTICS_PURCHASE_KEY_PREFIX}991991`), '1');
+    assert.equal(trackConfirmedPurchase({ orderId: 991991, revenue: 4590, paymentStatus: 'CONFIRMED' }), false);
+  } finally {
+    restoreNavigator();
+    restoreStorage();
+  }
+});
+
+test('does not record purchases while analytics is disabled', () => {
+  const localStorage = memoryStorage();
+  const restoreStorage = replaceGlobal('localStorage', localStorage);
+  const restoreNavigator = replaceGlobal('navigator', { doNotTrack: '0', globalPrivacyControl: false });
+  try {
+    setAnalyticsOptOut(true);
+    assert.equal(trackConfirmedPurchase({ orderId: 991992, revenue: 1, paymentStatus: 'CONFIRMED' }), false);
+    assert.equal(localStorage.getItem(`${ANALYTICS_PURCHASE_KEY_PREFIX}991992`), null);
+  } finally {
+    clearAnalyticsQueue();
+    restoreNavigator();
+    restoreStorage();
+  }
 });
 
 test('opt-out and DNT disable behavioral analytics', () => {

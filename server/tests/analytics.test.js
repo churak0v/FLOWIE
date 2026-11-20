@@ -30,6 +30,7 @@ test('client event normalization keeps only allowlisted, bounded attribution', (
       utm_source: 'telegram',
       utm_medium: 'bot',
       utm_campaign: 'november',
+      utm_content: 'rose-video',
       referrerHost: 'https://t.me/something/private',
     },
   }));
@@ -38,6 +39,7 @@ test('client event normalization keeps only allowlisted, bounded attribution', (
   assert.equal(normalized.meta.path, '/catalog');
   assert.equal(normalized.meta.referrerHost, 't.me');
   assert.equal(normalized.meta.utm_source, 'telegram');
+  assert.equal(normalized.meta.utm_content, 'rose-video');
   assert.equal(JSON.stringify(normalized).includes('private'), false);
 });
 test('search queries redact email and phone-like personal data', () => {

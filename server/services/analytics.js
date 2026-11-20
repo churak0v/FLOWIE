@@ -16,7 +16,7 @@ const CLIENT_EVENTS = new Set([
 
 const SERVER_EVENTS = new Set(['order_created', 'payment_success']);
 const TOP_LEVEL_FIELDS = new Set(['event', 'eventId', 'sessionId', 'productId', 'orderId', 'meta']);
-const COMMON_ATTRIBUTION_FIELDS = new Set(['path', 'utm_source', 'utm_medium', 'utm_campaign', 'referrerHost']);
+const COMMON_ATTRIBUTION_FIELDS = new Set(['path', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'referrerHost']);
 const EVENT_META_FIELDS = {
   page_view: COMMON_ATTRIBUTION_FIELDS,
   product_view: COMMON_ATTRIBUTION_FIELDS,
@@ -134,7 +134,7 @@ function attributionFromHref(value) {
   try {
     const url = new URL(value);
     const out = { path: normalizePath(url.pathname) };
-    for (const key of ['utm_source', 'utm_medium', 'utm_campaign']) {
+    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) {
       const item = url.searchParams.get(key);
       if (item) out[key] = redactDimension(item, 80, `BAD_${key.toUpperCase()}`);
     }
@@ -167,7 +167,7 @@ function normalizeMeta(event, input, sessionId) {
     if (!SAFE_CODE_RE.test(code)) throw new AnalyticsValidationError('BAD_ERROR_CODE');
     out.errorCode = code;
   }
-  for (const key of ['utm_source', 'utm_medium', 'utm_campaign']) {
+  for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) {
     if (meta[key] != null) out[key] = redactDimension(meta[key], 80, `BAD_${key.toUpperCase()}`);
   }
   if (meta.referrerHost != null) out.referrerHost = normalizeHost(meta.referrerHost);

@@ -1,9 +1,12 @@
-import { sendYandexMetricaEvent } from './yandexMetrica';
+import { sendYandexMetricaEvent } from './yandexMetrica.js';
+import { sendVkPixelEvent } from './vkPixel.js';
 
 const API_BASE = import.meta.env?.VITE_API_URL || '/api';
 
 export const ANALYTICS_OPT_OUT_KEY = 'flowie_analytics_opt_out';
 export const ANALYTICS_SESSION_KEY = 'flowie_analytics_session_id';
+export const ANALYTICS_ATTRIBUTION_KEY = 'flowie_analytics_attribution';
+export const ANALYTICS_PURCHASE_KEY_PREFIX = 'flowie_analytics_purchase_';
 
 const ALLOWED_EVENTS = new Set([
   'page_view',
@@ -28,10 +31,11 @@ const META_LIMITS = {
   utm_source: 80,
   utm_medium: 80,
   utm_campaign: 80,
+  utm_content: 80,
   referrerHost: 255,
 };
 
-const ATTRIBUTION_KEYS = ['path', 'utm_source', 'utm_medium', 'utm_campaign', 'referrerHost'];
+const ATTRIBUTION_KEYS = ['path', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'referrerHost'];
 const EVENT_META_KEYS = {
   page_view: new Set(ATTRIBUTION_KEYS),
   product_view: new Set(ATTRIBUTION_KEYS),
@@ -55,6 +59,7 @@ let flushTimer = null;
 let flushing = false;
 let bootstrapReady = false;
 let memorySessionId = '';
+const recordedPurchases = new Set();
 
 function safeStorage(storageName) {
   try {
@@ -192,12 +197,24 @@ export function sanitizeAnalyticsPayload(event, input = {}) {
 }
 
 export function extractAnalyticsAttribution(locationLike = globalThis.location, referrer = globalThis.document?.referrer) {
-  const meta = {};
+  const storage = safeStorage('sessionStorage');
+  let stored = {};
+  try {
+    stored = JSON.parse(storage?.getItem(ANALYTICS_ATTRIBUTION_KEY) || '{}');
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {};
+  } catch {
+    stored = {};
+  }
+  const meta = { ...stored };
+  let hasCampaignParams = false;
   try {
     const params = new URLSearchParams(locationLike?.search || '');
-    for (const key of ['utm_source', 'utm_medium', 'utm_campaign']) {
+    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) {
       const value = boundedString(params.get(key) || '', META_LIMITS[key]);
-      if (value) meta[key] = value;
+      if (value) {
+        meta[key] = value;
+        hasCampaignParams = true;
+      }
     }
   } catch {
     // Ignore malformed URLs.
@@ -208,6 +225,13 @@ export function extractAnalyticsAttribution(locationLike = globalThis.location, 
     if (host && host !== currentHost) meta.referrerHost = host;
   } catch {
     // Referrer may be absent or invalid.
+  }
+  if (hasCampaignParams) {
+    try {
+      storage?.setItem(ANALYTICS_ATTRIBUTION_KEY, JSON.stringify(meta));
+    } catch {
+      // Storage can be unavailable in restricted webviews.
+    }
   }
   return meta;
 }
@@ -243,7 +267,34 @@ export function trackAnalytics(event, input = {}, options = {}) {
   if (queue.length >= MAX_QUEUE_SIZE) queue.shift();
   queue.push({ payload, attempts: 0 });
   sendYandexMetricaEvent(event, payload);
+  sendVkPixelEvent(event, payload);
   scheduleFlush();
+  return true;
+}
+
+export function trackConfirmedPurchase({ orderId, revenue, paymentStatus } = {}) {
+  if (!isAnalyticsEnabled() || String(paymentStatus || '').toUpperCase() !== 'CONFIRMED') return false;
+  const safeOrderId = entityId(orderId);
+  if (safeOrderId === undefined) return false;
+  const storageKey = `${ANALYTICS_PURCHASE_KEY_PREFIX}${safeOrderId}`;
+  if (recordedPurchases.has(storageKey)) return false;
+  try {
+    if (safeStorage('localStorage')?.getItem(storageKey) === '1') return false;
+  } catch {
+    // Keep in-memory deduplication when persistent storage is unavailable.
+  }
+
+  const payload = { orderId: safeOrderId };
+  const safeRevenue = Number(revenue);
+  if (Number.isFinite(safeRevenue)) payload.revenue = Math.max(0, safeRevenue);
+  sendYandexMetricaEvent('purchase', payload);
+  sendVkPixelEvent('purchase', payload);
+  recordedPurchases.add(storageKey);
+  try {
+    safeStorage('localStorage')?.setItem(storageKey, '1');
+  } catch {
+    // The event is still deduplicated for the current page lifecycle.
+  }
   return true;
 }
 
