@@ -128,6 +128,7 @@ services:
         VITE_RECIPIENT_IMAGE: ${VITE_RECIPIENT_IMAGE:-}
         VITE_YANDEX_METRICA_ID: ${VITE_YANDEX_METRICA_ID:-}
         VITE_VK_PIXEL_ID: ${VITE_VK_PIXEL_ID:-}
+        VITE_BUILD_SHA: ${RELEASE_TAG}
     expose:
       - "8080"
     healthcheck:
@@ -144,6 +145,7 @@ services:
       dockerfile: Dockerfile.admin.production
       args:
         VITE_API_URL: /api
+        VITE_BUILD_SHA: ${RELEASE_TAG}
     expose:
       - "8080"
     healthcheck:

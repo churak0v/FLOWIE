@@ -74,7 +74,7 @@ export function HeroCarousel({ slides, className }) {
                 playsInline
                 autoPlay
                 loop
-                preload="auto"
+                preload={idx === 0 ? 'metadata' : 'none'}
                 aria-hidden="true"
                 style={{
                   width: '100%',
@@ -91,7 +91,7 @@ export function HeroCarousel({ slides, className }) {
                 aria-hidden="true"
                 loading={idx === 0 ? 'eager' : 'lazy'}
                 fetchPriority={idx === 0 ? 'high' : 'low'}
-                variant="detail"
+                variant="hero"
                 style={{
                   width: '100%',
                   height: '100%',

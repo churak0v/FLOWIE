@@ -3,21 +3,27 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
+# Only the build environment needs Sharp; final image remains static Nginx.
+RUN npm install --no-save --no-package-lock --no-audit --no-fund sharp@0.34.5
 
 COPY index.html vite.config.js ./
 COPY public ./public
+COPY scripts/generateStaticImageVariants.cjs ./scripts/generateStaticImageVariants.cjs
+RUN node ./scripts/generateStaticImageVariants.cjs
 COPY src ./src
 
 ARG VITE_API_URL=/api
 ARG VITE_HERO_IMAGE
 ARG VITE_RECIPIENT_IMAGE
 ARG VITE_YANDEX_METRICA_ID
+ARG VITE_BUILD_SHA
 ARG VITE_VK_PIXEL_ID
 ENV VITE_API_URL=${VITE_API_URL} \
     VITE_HERO_IMAGE=${VITE_HERO_IMAGE} \
     VITE_RECIPIENT_IMAGE=${VITE_RECIPIENT_IMAGE} \
     VITE_YANDEX_METRICA_ID=${VITE_YANDEX_METRICA_ID} \
-    VITE_VK_PIXEL_ID=${VITE_VK_PIXEL_ID}
+    VITE_VK_PIXEL_ID=${VITE_VK_PIXEL_ID} \
+    VITE_BUILD_SHA=${VITE_BUILD_SHA}
 
 RUN npm run build
 
