@@ -14,6 +14,7 @@ const {
   verifyStoredAdminCredentials,
 } = require('../services/adminCredentials');
 const { loadAnalyticsReport } = require('../services/reportAnalytics');
+const { BANNER_IDS, normalizeBanner } = require('../services/homeBanners');
 const {
   DeliveryPaymentError,
   invoiceTtlMs,
@@ -2045,6 +2046,40 @@ router.put('/staff/:id/credential', requireAdmin, requireRoles(['admin']), async
     if (e?.code === 'P2002') return res.status(409).json({ ok: false, error: 'ADMIN_LOGIN_TAKEN' });
     if (e?.message === 'BAD_ADMIN_PASSWORD') return res.status(400).json({ ok: false, error: 'BAD_ADMIN_PASSWORD' });
     return res.status(500).json({ ok: false, error: 'STAFF_CREDENTIAL_UPDATE_FAILED' });
+  }
+});
+
+// Home banners are persisted in PostgreSQL, not editable Docker files.
+router.get('/home-banners', requireAdmin, requireRoles(['admin']), async (_req, res) => {
+  try {
+    const banners = await prisma.homeBanner.findMany({ orderBy: [{sort:'asc'}, {id:'asc'}] });
+    return res.json({ok:true, banners});
+  } catch (error) {
+    console.error('[admin] banner list failed',error?.message);
+    return res.status(500).json({ok:false,error:'BANNERS_FAILED'});
+  }
+});
+
+router.put('/home-banners/:id', requireAdmin, requireRoles(['admin']), requireSameOrigin, async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!BANNER_IDS.includes(id)) return res.status(404).json({ok:false,error:'BANNER_NOT_FOUND'});
+  let data;
+  try { data = normalizeBanner(req.body); }
+  catch (error) { return res.status(400).json({ok:false,error:error.code || 'BANNER_INVALID'}); }
+  try {
+    if (!data.isActive) {
+      const others = await prisma.homeBanner.count({where:{isActive:true,id:{not:id}}});
+      if (!others) return res.status(409).json({ok:false,error:'LAST_BANNER_REQUIRED'});
+    }
+    const banner = await prisma.homeBanner.update({where:{id},data});
+    await writeAudit({actorId:req.admin.id,action:'HOME_BANNER_UPDATED',
+      entity:'homeBanner',entityId:id,
+      payload:{href:banner.href,isActive:banner.isActive,sort:banner.sort}});
+    return res.json({ok:true,banner});
+  } catch (error) {
+    if (error?.code === 'P2025') return res.status(404).json({ok:false,error:'BANNER_NOT_FOUND'});
+    console.error('[admin] banner update failed',error?.message);
+    return res.status(500).json({ok:false,error:'BANNER_SAVE_FAILED'});
   }
 });
 

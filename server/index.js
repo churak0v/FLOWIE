@@ -50,6 +50,7 @@ const deliveryRoutes = require('./routes/delivery');
 	const chatsRoutes = require('./routes/chats');
 	const recipientsRoutes = require('./routes/recipients');
 	const collectionsRoutes = require('./routes/collections');
+const homeBannersRoutes = require('./routes/homeBanners');
 	const paymentsRoutes = require('./routes/payments');
 	const seoRoutes = require('./routes/seo');
 
@@ -63,6 +64,7 @@ app.use('/api/search', require('./routes/search'));
 	app.use('/api/chats', chatsRoutes);
 	app.use('/api/recipients', recipientsRoutes);
 	app.use('/api/collections', collectionsRoutes);
+app.use('/api/home-banners', homeBannersRoutes);
 	app.use('/api/payments', paymentsRoutes);
 	app.use('/api/admin', adminRoutes);
 	app.use('/api/events', eventsRoutes);
