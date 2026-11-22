@@ -90,6 +90,8 @@ export function HeroCarousel({ slides, className }) {
                 alt=""
                 aria-hidden="true"
                 loading={idx === 0 ? 'eager' : 'lazy'}
+                fetchPriority={idx === 0 ? 'high' : 'low'}
+                variant="detail"
                 style={{
                   width: '100%',
                   height: '100%',

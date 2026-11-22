@@ -3,6 +3,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { generateImageVariants } = require('../services/imageVariants');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -50,6 +51,17 @@ async function verifyImages(req, res, next) {
                 'image/webp': bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP',
             };
             if (!matches[file.mimetype]) throw Object.assign(new Error('INVALID_IMAGE_CONTENT'), { status: 415 });
+        }
+        // Generate immutable mobile-friendly versions once, never on GET requests.
+        // Keep the original available even if a conversion fails.
+        for (const file of files) {
+            if (file.mimetype === 'image/gif') continue;
+            try {
+                const result = await generateImageVariants(file.path);
+                console.info('[image-variants]', file.filename, result);
+            } catch (error) {
+                console.error('[image-variants] failure', file.filename, error.message);
+            }
         }
         return next();
     } catch (err) {

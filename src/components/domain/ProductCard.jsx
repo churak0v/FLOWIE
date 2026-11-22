@@ -69,6 +69,7 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
           alt={title}
           loading="lazy"
           fetchPriority="auto"
+          variant="card"
           style={{
             position: isList ? 'absolute' : undefined,
             inset: isList ? 0 : undefined,

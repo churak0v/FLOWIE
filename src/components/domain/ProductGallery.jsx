@@ -51,8 +51,9 @@ export function ProductGallery({ title, images }) {
             key={`${img || 'empty'}:${idx}`}
             src={img}
             alt={idx === 0 ? title : `${title} ${idx + 1}`}
-            loading="eager"
+            loading={idx === 0 ? 'eager' : 'lazy'}
             fetchPriority={idx === 0 ? 'high' : 'auto'}
+            variant="detail"
             style={{
               width: '100%',
               minWidth: '100%',
@@ -169,7 +170,8 @@ export function ProductGallery({ title, images }) {
               <AppImage
                 src={img}
                 alt=""
-                loading="eager"
+                loading="lazy"
+                variant="thumb"
                 style={{
                   width: '100%',
                   height: '100%',
