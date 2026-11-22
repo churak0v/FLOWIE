@@ -10,6 +10,7 @@ export const ANALYTICS_PURCHASE_KEY_PREFIX = 'flowie_analytics_purchase_';
 
 const ALLOWED_EVENTS = new Set([
   'page_view',
+  'home_banner_click',
   'product_view',
   'search',
   'filter_change',
@@ -33,11 +34,13 @@ const META_LIMITS = {
   utm_campaign: 80,
   utm_content: 80,
   referrerHost: 255,
+  bannerId: 32,
 };
 
 const ATTRIBUTION_KEYS = ['path', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'referrerHost'];
 const EVENT_META_KEYS = {
   page_view: new Set(ATTRIBUTION_KEYS),
+  home_banner_click: new Set([...ATTRIBUTION_KEYS, 'bannerId']),
   product_view: new Set(ATTRIBUTION_KEYS),
   search: new Set([...ATTRIBUTION_KEYS, 'query', 'resultCount']),
   filter_change: new Set([...ATTRIBUTION_KEYS, 'filter', 'value']),
