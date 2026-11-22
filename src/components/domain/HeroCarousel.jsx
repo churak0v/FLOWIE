@@ -20,7 +20,7 @@ export function HeroCarousel({ slides, className }) {
 
   function openSlide(slide) {
     if (!slide?.href) return;
-    trackAnalytics('home_banner_click', { meta: { bannerId: String(slide.id || ''), href: slide.href } });
+    trackAnalytics('home_banner_click', { meta: { bannerId: String(slide.id || '') } });
     navigate(slide.href);
   }
 
