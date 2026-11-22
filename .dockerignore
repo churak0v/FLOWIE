@@ -17,7 +17,9 @@ backups
 *.bak
 .flowie-validation.*
 docs
-scripts
+# Keep only the static image generator visible in the Docker build context.
+scripts/*
+!scripts/generateStaticImageVariants.cjs
 compose*.yml
 bin
 .DS_Store
