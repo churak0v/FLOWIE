@@ -20,7 +20,14 @@ async function main() {
     for (const width of SIZES) for (const ext of ['avif', 'webp']) {
       const file = variantPath(source, width, ext);
       const meta = await sharp(file).metadata();
-      assert.equal(meta.format, ext);
+      // sharp reports AVIF as a HEIF container with the AV1 codec.
+      // Checking only the filename (or expecting format === 'avif') is insufficient.
+      if (ext === 'avif') {
+        assert.equal(meta.format, 'heif');
+        assert.equal(meta.compression, 'av1');
+      } else {
+        assert.equal(meta.format, 'webp');
+      }
       assert.equal(meta.width, width);
       assert.ok((await fs.stat(file)).size > 0);
     }
