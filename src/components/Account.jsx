@@ -87,7 +87,7 @@ export function Account() {
 
   if (state.auth.meLoading) {
     return (
-      <AppShell>
+      <AppShell className="ym-hide-content">
         <Surface variant="soft" style={{ padding: 18, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
           <Text variant="subtitle">Загружаем профиль…</Text>
         </Surface>
@@ -97,7 +97,7 @@ export function Account() {
 
   if (!phoneBound) {
     return (
-      <AppShell style={{ '--app-content-inset-bottom': '0px' }}>
+      <AppShell className="ym-hide-content" style={{ '--app-content-inset-bottom': '0px' }}>
         <div style={{ paddingTop: 'calc(var(--sp-2) + var(--app-inset-top))' }}>
           <Text variant="title">Вход в профиль</Text>
           <Surface
@@ -119,7 +119,7 @@ export function Account() {
 
   return (
     <>
-      <AppShell style={{ '--app-content-inset-bottom': '0px', padding: 0 }}>
+      <AppShell className="ym-hide-content" style={{ '--app-content-inset-bottom': '0px', padding: 0 }}>
         <div
           style={{
             width: '100%',

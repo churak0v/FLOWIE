@@ -237,7 +237,7 @@ function RecipientDetailsBlock({ receiveSelf, onModeChange, name, phone, onNameC
         </Surface>
       ) : (
         <div style={{ display: 'grid', gap: 8 }}>
-          <input
+          <input className="ym-disable-keys"
             value={name}
             onChange={(event) => onNameChange(event.target.value)}
             placeholder="Имя получателя"
@@ -245,7 +245,7 @@ function RecipientDetailsBlock({ receiveSelf, onModeChange, name, phone, onNameC
             aria-label="Имя получателя"
             style={{ height: 48, borderRadius: 14, border: '1px solid var(--border)', padding: '0 12px', background: 'var(--surface)' }}
           />
-          <input
+          <input className="ym-disable-keys"
             type="tel"
             inputMode="tel"
             value={phone}
@@ -451,6 +451,7 @@ export function Checkout() {
         <div style={{ marginTop: 'var(--sp-6)', display: 'grid', gap: 16 }}>
           <CheckoutItemsPreview items={state.cart.items} productsById={productsById} />
 
+          <div className="ym-hide-content">
           <RecipientDetailsBlock
             receiveSelf={receiveSelf}
             onModeChange={setReceiveSelf}
@@ -461,6 +462,7 @@ export function Checkout() {
             selfName={buyerName}
             selfPhone={hasSenderPhone ? `${phoneCountry.dial} ${formatPhoneDigits(phoneDigits, phoneCountry)}` : ''}
           />
+          </div>
 
           <Surface variant="default" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', display: 'grid', gap: 12 }}>
             <Text variant="title">Детали доставки</Text>
@@ -472,7 +474,7 @@ export function Checkout() {
                   <Text variant="caption" muted>FLOWIE свяжется с получателем. Доставка будет рассчитана и оплачена отдельно.</Text>
                 </span>
               </span>
-              <input
+              <input className="ym-disable-keys"
                 type="checkbox"
                 checked={state.checkout.askRecipientAddress}
                 onChange={actions.toggleAskAddress}
@@ -489,7 +491,7 @@ export function Checkout() {
                   <Text variant="caption" muted>FLOWIE согласует удобный интервал напрямую с получателем.</Text>
                 </span>
               </span>
-              <input
+              <input className="ym-disable-keys"
                 type="checkbox"
                 checked={state.checkout.askRecipientTime}
                 onChange={actions.toggleAskTime}
@@ -509,7 +511,7 @@ export function Checkout() {
           ) : (
             <Surface variant="default" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', display: 'grid', gap: 10 }}>
               <Text variant="title">Адрес доставки</Text>
-              <input
+              <input className="ym-disable-keys"
                 value={state.checkout.address?.street || ''}
                 onChange={(event) => actions.setAddress({ street: event.target.value })}
                 placeholder="Город, улица, дом"
@@ -519,6 +521,7 @@ export function Checkout() {
               />
               {suggestionsLoading ? <Text variant="caption" muted>Ищем адрес...</Text> : null}
               {addressSuggestions.length ? (
+                <div className="ym-hide-content">
                 <Surface variant="soft" style={{ padding: 6, borderRadius: 14, border: '1px solid var(--border)', display: 'grid', gap: 2 }}>
                   {addressSuggestions.map((item, index) => (
                     <button
@@ -535,11 +538,12 @@ export function Checkout() {
                     </button>
                   ))}
                 </Surface>
+                </div>
               ) : null}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
-                <input value={state.checkout.address?.flat || ''} onChange={(event) => actions.setAddress({ flat: event.target.value })} placeholder="Квартира" aria-label="Квартира" style={{ height: 44, minWidth: 0, borderRadius: 12, border: '1px solid var(--border)', padding: '0 9px', background: 'var(--surface)' }} />
-                <input value={state.checkout.address?.entrance || ''} onChange={(event) => actions.setAddress({ entrance: event.target.value })} placeholder="Подъезд" aria-label="Подъезд" style={{ height: 44, minWidth: 0, borderRadius: 12, border: '1px solid var(--border)', padding: '0 9px', background: 'var(--surface)' }} />
-                <input value={state.checkout.address?.floor || ''} onChange={(event) => actions.setAddress({ floor: event.target.value })} placeholder="Этаж" aria-label="Этаж" style={{ height: 44, minWidth: 0, borderRadius: 12, border: '1px solid var(--border)', padding: '0 9px', background: 'var(--surface)' }} />
+                <input className="ym-disable-keys" value={state.checkout.address?.flat || ''} onChange={(event) => actions.setAddress({ flat: event.target.value })} placeholder="Квартира" aria-label="Квартира" style={{ height: 44, minWidth: 0, borderRadius: 12, border: '1px solid var(--border)', padding: '0 9px', background: 'var(--surface)' }} />
+                <input className="ym-disable-keys" value={state.checkout.address?.entrance || ''} onChange={(event) => actions.setAddress({ entrance: event.target.value })} placeholder="Подъезд" aria-label="Подъезд" style={{ height: 44, minWidth: 0, borderRadius: 12, border: '1px solid var(--border)', padding: '0 9px', background: 'var(--surface)' }} />
+                <input className="ym-disable-keys" value={state.checkout.address?.floor || ''} onChange={(event) => actions.setAddress({ floor: event.target.value })} placeholder="Этаж" aria-label="Этаж" style={{ height: 44, minWidth: 0, borderRadius: 12, border: '1px solid var(--border)', padding: '0 9px', background: 'var(--surface)' }} />
               </div>
               <YandexDeliveryMap config={mapConfig} coords={state.delivery.coords} />
               {deliveryError ? (
@@ -564,8 +568,8 @@ export function Checkout() {
             <Surface variant="default" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', display: 'grid', gap: 10 }}>
               <Text variant="title">Время доставки</Text>
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 10 }}>
-                <input type="date" value={state.checkout.deliveryDate || ''} onChange={(event) => actions.setDeliveryTime({ date: event.target.value, time: state.checkout.deliveryTime })} aria-label="Дата доставки" style={{ height: 48, minWidth: 0, borderRadius: 14, border: '1px solid var(--border)', padding: '0 10px', background: 'var(--surface)' }} />
-                <input value={state.checkout.deliveryTime || ''} onChange={(event) => actions.setDeliveryTime({ date: state.checkout.deliveryDate, time: event.target.value })} placeholder="Например, 18:00–20:00" aria-label="Интервал доставки" style={{ height: 48, minWidth: 0, borderRadius: 14, border: '1px solid var(--border)', padding: '0 10px', background: 'var(--surface)' }} />
+                <input className="ym-disable-keys" type="date" value={state.checkout.deliveryDate || ''} onChange={(event) => actions.setDeliveryTime({ date: event.target.value, time: state.checkout.deliveryTime })} aria-label="Дата доставки" style={{ height: 48, minWidth: 0, borderRadius: 14, border: '1px solid var(--border)', padding: '0 10px', background: 'var(--surface)' }} />
+                <input className="ym-disable-keys" value={state.checkout.deliveryTime || ''} onChange={(event) => actions.setDeliveryTime({ date: state.checkout.deliveryDate, time: event.target.value })} placeholder="Например, 18:00–20:00" aria-label="Интервал доставки" style={{ height: 48, minWidth: 0, borderRadius: 14, border: '1px solid var(--border)', padding: '0 10px', background: 'var(--surface)' }} />
               </div>
               {!hasDeliveryTime ? <Text variant="caption" style={{ color: 'var(--accent)' }}>Укажите дату и интервал либо выберите уточнение времени у получателя.</Text> : null}
             </Surface>
@@ -584,7 +588,7 @@ export function Checkout() {
               </Surface>
             ) : (
               <>
-                <input
+                <input className="ym-disable-keys"
                   value={buyerName}
                   onChange={(event) => setBuyerName(event.target.value.slice(0, 100))}
                   placeholder="Ваше имя"
@@ -643,7 +647,7 @@ export function Checkout() {
                     }}
                   >
                     <span style={{ paddingLeft: 12, fontWeight: 900, whiteSpace: 'nowrap' }}>{phoneCountry.dial}</span>
-                    <input
+                    <input className="ym-disable-keys"
                       value={formatPhoneDigits(phoneDigits, phoneCountry)}
                       onChange={(e) => setPhoneDigits(digitsOnly(e.target.value).slice(0, phoneCountry.max))}
                       placeholder={phoneCountry.placeholder}
@@ -668,7 +672,7 @@ export function Checkout() {
 
             {state.auth.me?.consentPersonal ? null : (
               <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
-                <input
+                <input className="ym-disable-keys"
                   type="checkbox"
                   checked={consentChecked}
                   onChange={async (e) => { setConsentLocal(e.target.checked); await actions.setConsent?.(e.target.checked); }}

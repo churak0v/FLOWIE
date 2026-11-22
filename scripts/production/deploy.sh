@@ -23,6 +23,8 @@ wait_for_healthy db 60
 wait_for_healthy api 60
 wait_for_healthy web 60
 wait_for_healthy admin 60
+# Refresh Nginx upstream IPs after Docker recreates web/admin/api.
+compose restart edge
 wait_for_healthy edge 60
 
 echo "Containers are healthy. Complete the HTTPS, admin and controlled-order checks in docs/production-deployment.md."
