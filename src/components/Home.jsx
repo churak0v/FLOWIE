@@ -153,32 +153,21 @@ export function Home() {
 
   useEffect(() => {
     let alive = true;
-
-    const cacheKey = 'home_config_v9_ru_flowers';
+    const cacheKey = 'home_banners_v1';
     const cached = readCacheEntry(cacheKey);
     const cachedSlides = Array.isArray(cached?.data?.heroSlides) ? cached.data.heroSlides : null;
     if (cachedSlides?.length) setHeroSlides(cachedSlides);
-
-    const shouldFetch = !cachedSlides?.length || !isCacheFresh(cached, 5 * 60_000);
-    if (!shouldFetch) {
-      return () => {
-        alive = false;
-      };
-    }
-
-    fetch('/config/home.json', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((cfg) => {
+    if (!cachedSlides?.length || !isCacheFresh(cached, 60_000)) {
+      api.getHomeBanners().then(result => {
         if (!alive) return;
-        if (cfg?.heroSlides?.length) {
-          setHeroSlides(cfg.heroSlides);
-          writeCacheEntry(cacheKey, { heroSlides: cfg.heroSlides });
+        const slides = Array.isArray(result?.heroSlides) ? result.heroSlides : [];
+        if (slides.length) {
+          setHeroSlides(slides);
+          writeCacheEntry(cacheKey, { heroSlides: slides });
         }
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
+      }).catch(() => {}); // Keep bundled banners if API is unavailable.
+    }
+    return () => { alive = false; };
   }, []);
 
   // Load active order details for the home cards.

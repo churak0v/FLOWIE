@@ -152,6 +152,8 @@ export const api = {
         });
     },
 
+    getHomeBanners: async () => fetchJson(API_URL + '/home-banners', { cache: 'no-store' }),
+
     // Collections (thematic + scenarios)
     getCollections: async () => {
         return fetchJson(`${API_URL}/collections`, { cache: 'no-store', cacheTtlMs: 60_000 });

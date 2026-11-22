@@ -21,36 +21,28 @@ export const MOCK_ASSETS = {
 
 export const HERO_SLIDES = [
   {
-    id: 'flowers-now',
-    caption: 'Свежие цветы быстро.',
-    subtitle: 'Букеты собираются сегодня и приезжают в нужный момент',
+    id: 'mother',
+    caption: 'Мам, это всё тебе.',
+    subtitle: 'Цветы ко Дню матери — подарок, который скажет больше слов',
     image: MOCK_ASSETS.hero,
     imagePosition: 'center 54%',
     href: '/catalog',
   },
   {
-    id: 'delivery-fast',
-    caption: 'Доставка от 45 минут.',
-    subtitle: 'Выберите букет, добавьте адрес и следите за заказом',
+    id: 'birthday',
+    caption: 'С днём рождения. По-настоящему.',
+    subtitle: 'Выбрать букет, который запомнится',
     image: MOCK_ASSETS.heroDelivery,
     imagePosition: 'center 58%',
     href: '/catalog',
   },
   {
-    id: 'real-bouquets',
-    caption: 'Настоящие букеты. Честные цены.',
-    subtitle: 'Без звонков и догадок — просто цветы уже в пути',
+    id: 'premium',
+    caption: 'Большие букеты. Большие эмоции.',
+    subtitle: 'Для особенного повода — выразительные цветочные композиции',
     image: MOCK_ASSETS.heroWishlist,
     imagePosition: 'center 58%',
-    href: '/catalog',
-  },
-  {
-    id: 'manager-control',
-    caption: 'Менеджер видит каждый заказ.',
-    subtitle: 'Фото, статусы, заметки курьера и время доставки — в одном процессе',
-    image: MOCK_ASSETS.heroTrust,
-    imagePosition: 'center 58%',
-    href: '/catalog',
+    href: '/catalog?sort=price_desc',
   },
 ];
 
