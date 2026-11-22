@@ -30,3 +30,7 @@ server/prisma/*.db-journal
 
 # Bundled local toolchains / generated assets
 bin/
+
+# Static photo variants are produced during builds
+/public/**/*@*.avif
+/public/**/*@*.webp

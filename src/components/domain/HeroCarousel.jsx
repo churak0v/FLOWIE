@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cx } from '../../lib/cx';
 import { AppImage } from '../ui/AppImage';
+import { trackAnalytics } from '../../lib/analytics';
 
 function isVideoSrc(src) {
   return /\.mp4($|[?#])/i.test(String(src || '').trim());
@@ -16,6 +17,12 @@ export function HeroCarousel({ slides, className }) {
   // The Home panel has a large top radius. We extend the hero underlay below the panel edge
   // so the rounded corners always reveal media (not the page background).
   const UNDERLAY_EXTRA_PX = 48;
+
+  function openSlide(slide) {
+    if (!slide?.href) return;
+    trackAnalytics('home_banner_click', { meta: { bannerId: String(slide.id || '') } });
+    navigate(slide.href);
+  }
 
   useEffect(() => {
     if (safeSlides.length <= 1) return undefined;
@@ -74,7 +81,7 @@ export function HeroCarousel({ slides, className }) {
                 playsInline
                 autoPlay
                 loop
-                preload="auto"
+                preload={idx === 0 ? 'metadata' : 'none'}
                 aria-hidden="true"
                 style={{
                   width: '100%',
@@ -91,7 +98,7 @@ export function HeroCarousel({ slides, className }) {
                 aria-hidden="true"
                 loading={idx === 0 ? 'eager' : 'lazy'}
                 fetchPriority={idx === 0 ? 'high' : 'low'}
-                variant="detail"
+                variant="hero"
                 style={{
                   width: '100%',
                   height: '100%',
@@ -100,13 +107,12 @@ export function HeroCarousel({ slides, className }) {
                 }}
               />
             )}
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-              background: 'linear-gradient(180deg, rgba(40,20,25,0.10), rgba(40,20,25,0.16) 42%, rgba(40,20,25,0.58))',
-              }}
-            />
+            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+              background: 'linear-gradient(180deg, rgba(40,20,25,0.10), rgba(40,20,25,0.16) 42%, rgba(40,20,25,0.58))' }} />
+            {s.href ? <button type="button" aria-label={'Открыть баннер: ' + (s.caption || '')}
+              tabIndex={idx === active ? 0 : -1} onClick={() => openSlide(s)}
+              style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'transparent', border: 0,
+                cursor: 'pointer', touchAction: 'pan-x' }} /> : null}
           </div>
         ))}
       </div>
@@ -155,8 +161,7 @@ export function HeroCarousel({ slides, className }) {
           <button
             type="button"
             onClick={() => {
-              const href = safeSlides[active]?.href;
-              if (href) navigate(href);
+              openSlide(safeSlides[active]);
             }}
             style={{
               marginTop: 10,

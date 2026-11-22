@@ -622,7 +622,7 @@ export function PaymentManual() {
 
   if (loading) {
     return (
-      <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-content-inset-bottom': '0px' }}>
+      <AppShell className="ym-hide-content" style={{ '--app-shell-bottom-space': '0px', '--app-content-inset-bottom': '0px' }}>
         <Text variant="title">Оплата</Text>
         <div style={{ marginTop: 'var(--sp-6)' }}>
           <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
@@ -635,7 +635,7 @@ export function PaymentManual() {
 
   if (error) {
     return (
-      <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-content-inset-bottom': '0px' }}>
+      <AppShell className="ym-hide-content" style={{ '--app-shell-bottom-space': '0px', '--app-content-inset-bottom': '0px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <IconButton onClick={() => navigate(-1)} aria-label="Назад">
             <ChevronLeft size={22} />
@@ -668,7 +668,7 @@ export function PaymentManual() {
     ) || { name: order?.recipientName || 'Получатель', image: null };
 
     return (
-      <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '0px', '--app-content-inset-bottom': '0px' }}>
+      <AppShell className="ym-hide-content" style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '0px', '--app-content-inset-bottom': '0px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <IconButton onClick={() => navigate(-1)} aria-label="Назад">
             <ChevronLeft size={22} />
@@ -840,7 +840,7 @@ export function PaymentManual() {
 
   // Payment screen
   return (
-    <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '0px', '--app-content-inset-bottom': '0px' }}>
+    <AppShell className="ym-hide-content" style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '0px', '--app-content-inset-bottom': '0px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <IconButton onClick={() => navigate(-1)} aria-label="Назад">
           <ChevronLeft size={22} />

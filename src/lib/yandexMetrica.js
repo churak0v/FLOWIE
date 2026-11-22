@@ -18,7 +18,7 @@ export function initYandexMetrica({ enabled = true } = {}) {
     clickmap: true,
     trackLinks: true,
     accurateTrackBounce: true,
-    webvisor: false,
+    webvisor: true,
   });
   lastPageUrl = window.location.href;
   return true;
@@ -30,6 +30,7 @@ export function sendYandexMetricaEvent(event, payload = {}) {
   if (Number.isSafeInteger(Number(payload.productId))) safePayload.productId = Number(payload.productId);
   if (Number.isSafeInteger(Number(payload.orderId))) safePayload.orderId = Number(payload.orderId);
   if (Number.isFinite(Number(payload.revenue))) safePayload.revenue = Math.max(0, Number(payload.revenue));
+  if (typeof payload?.meta?.bannerId === 'string') safePayload.bannerId = payload.meta.bannerId.slice(0, 32);
   if (event === 'page_view') {
     if (window.location.href === lastPageUrl) return false;
     lastPageUrl = window.location.href;

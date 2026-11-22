@@ -13,6 +13,7 @@ import { ChatThreadPage } from './pages/ChatThread';
 import { CashPage } from './pages/Cash';
 import { AnalyticsPage } from './pages/Analytics';
 import { DeliveryZonesPage } from './pages/DeliveryZones';
+import { HomeBannersPage } from './pages/HomeBanners';
 import { ProfilePage } from './pages/Profile';
 import { ProfileWorkingHoursPage } from './pages/ProfileWorkingHours';
 import { ProfileStaffPage } from './pages/ProfileStaff';
@@ -42,6 +43,7 @@ function AdminFrame({ user, onLogout }) {
           <Route path="/cash" element={isAdmin ? <CashPage /> : <Navigate to="/orders" replace />} />
           <Route path="/analytics" element={isAdmin ? <AnalyticsPage /> : <Navigate to="/orders" replace />} />
           <Route path="/delivery" element={isAdmin ? <DeliveryZonesPage /> : <Navigate to="/orders" replace />} />
+          <Route path="/profile/banners" element={isAdmin ? <HomeBannersPage /> : <Navigate to="/profile" replace />} />
           <Route path="/profile" element={<ProfilePage user={user} onLogout={onLogout} />} />
           <Route path="/profile/working-hours" element={isAdmin ? <ProfileWorkingHoursPage /> : <Navigate to="/profile" replace />} />
           <Route path="/profile/staff" element={isAdmin ? <ProfileStaffPage /> : <Navigate to="/profile" replace />} />

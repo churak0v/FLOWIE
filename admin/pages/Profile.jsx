@@ -90,6 +90,13 @@ export function ProfilePage({ user, onLogout }) {
         </Surface>
 
         <MenuItem
+          title="Баннеры главной"
+          caption={isAdmin ? 'День матери, дни рождения, премиум' : 'Доступно только admin'}
+          disabled={!isAdmin}
+          onClick={() => navigate('/profile/banners')}
+        />
+
+        <MenuItem
           title="Доставка"
           caption={isAdmin ? 'Зоны на карте, тарифы и условия' : 'Доступно только admin'}
           disabled={!isAdmin}

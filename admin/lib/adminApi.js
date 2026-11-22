@@ -187,6 +187,11 @@ export const adminApi = {
     body: JSON.stringify(payload || {}),
   }),
 
+  getHomeBanners: async () => fetchJson('/admin/home-banners', { cache: 'no-store' }),
+  updateHomeBanner: async (id, payload) => fetchJson('/admin/home-banners/' + encodeURIComponent(id), {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  }),
+
   // Collections
   getCollections: async (opts = {}) => fetchJson('/admin/collections', { cache: 'no-store', cacheTtlMs: 10_000, ...(opts || {}) }),
   getCollection: async (id, opts = {}) =>

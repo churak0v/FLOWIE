@@ -502,6 +502,20 @@ model DeliveryZone {
   @@index([active, priority])
 }
 
+model HomeBanner {
+  id            String   @id @db.VarChar(32)
+  caption       String   @db.VarChar(100)
+  subtitle      String   @default("") @db.VarChar(220)
+  image         String   @db.VarChar(500)
+  href          String   @default("/catalog") @db.VarChar(300)
+  imagePosition String   @default("center 58%") @db.VarChar(60)
+  sort          Int      @default(0)
+  isActive      Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
+
+  @@index([isActive, sort])
+}
+
 model DeliverySettings {
   id        Int      @id @default(1)
   mode      String   @default("flat") @db.VarChar(10)

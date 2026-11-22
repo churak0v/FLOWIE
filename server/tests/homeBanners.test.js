@@ -1,0 +1,21 @@
+'use strict';
+const assert = require('node:assert/strict');
+const { BANNER_IDS, normalizeBanner, validHref, validImage } = require('../services/homeBanners');
+assert.deepEqual(BANNER_IDS, ['mother', 'birthday', 'premium']);
+assert.equal(validHref('/catalog?collection=den-materi-2026'), true);
+assert.equal(validHref('/catalog?sort=price_desc'), true);
+assert.equal(validHref('/product/55'), true);
+assert.equal(validHref('//evil.test'), false);
+assert.equal(validHref('https://evil.test'), false);
+assert.equal(validHref('/checkout'), false);
+assert.equal(validHref('/catalog?redirect=evil'), false);
+assert.equal(validImage('/hero/flowie-hero-wishlist-grounded.jpg'), true);
+assert.equal(validImage('/uploads/12345678-1234-4234-a234-123456789abc.jpg'), true);
+assert.equal(validImage('https://evil.test/a.jpg'), false);
+const entry = {caption:'Мам, это всё тебе.', subtitle:'Ко Дню матери', image:'/hero/flowie-hero-wishlist-grounded.jpg',
+  href:'/catalog', imagePosition:'center 54%', sort:0, isActive:true};
+assert.deepEqual(normalizeBanner(entry),entry);
+assert.throws(()=>normalizeBanner({...entry,href:'/checkout'}), /BANNER_HREF_INVALID/);
+assert.throws(()=>normalizeBanner({...entry,image:'javascript:alert(1)'}), /BANNER_IMAGE_INVALID/);
+assert.throws(()=>normalizeBanner({...entry,caption:''}), /BANNER_TEXT_INVALID/);
+console.log('PASS editable banners validation and internal destination safety');

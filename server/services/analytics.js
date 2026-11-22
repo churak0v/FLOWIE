@@ -1,5 +1,6 @@
 const CLIENT_EVENTS = new Set([
   'page_view',
+  'home_banner_click',
   'product_view',
   'search',
   'filter_change',
@@ -19,6 +20,7 @@ const TOP_LEVEL_FIELDS = new Set(['event', 'eventId', 'sessionId', 'productId', 
 const COMMON_ATTRIBUTION_FIELDS = new Set(['path', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'referrerHost']);
 const EVENT_META_FIELDS = {
   page_view: COMMON_ATTRIBUTION_FIELDS,
+  home_banner_click: new Set([...COMMON_ATTRIBUTION_FIELDS, 'bannerId']),
   product_view: COMMON_ATTRIBUTION_FIELDS,
   search: new Set([...COMMON_ATTRIBUTION_FIELDS, 'query', 'resultCount']),
   filter_change: new Set([...COMMON_ATTRIBUTION_FIELDS, 'filter', 'value']),
@@ -158,6 +160,7 @@ function normalizeMeta(event, input, sessionId) {
   if (meta.href != null) Object.assign(out, attributionFromHref(meta.href));
   if (meta.path != null) out.path = normalizePath(meta.path);
   if (meta.query != null) out.query = redactSearchQuery(meta.query);
+  if (meta.bannerId != null) out.bannerId = safeToken(meta.bannerId, 32, 'BAD_BANNER_ID');
   if (meta.resultCount != null) out.resultCount = boundedCount(meta.resultCount, 'BAD_RESULT_COUNT');
   if (meta.filter != null) out.filter = safeToken(meta.filter, 60, 'BAD_FILTER');
   if (meta.value != null) out.value = redactDimension(meta.value, 100, 'BAD_FILTER_VALUE');

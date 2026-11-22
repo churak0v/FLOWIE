@@ -11,32 +11,37 @@ function normalizeAssetUrl(raw) {
 const DEFAULT_FALLBACK =
   'https://images.unsplash.com/photo-1561181286-d3fee7d55364?auto=format&fit=crop&w=1200&q=80';
 
-// Only immutable, server-owned uploads have generated variants. Images from
-// external services and bundled static assets use their normal source URLs.
+// Generated variants exist for uploads (3 sizes) and bundled public photos
+// (4 sizes). Third-party images are never rewritten.
 function variantSources(url) {
-  if (!/^\/uploads\/[0-9a-f-]+\.(?:jpe?g|png|webp)$/i.test(url)) return null;
-  const suffix = (ext) => [
-    [320, url + '@320.' + ext],
-    [640, url + '@640.' + ext],
-    [1280, url + '@1280.' + ext],
-  ].map(([width, src]) => src + ' ' + width + 'w').join(', ');
-  return { avif: suffix('avif'), webp: suffix('webp') };
+  const upload = /^\/uploads\/[0-9a-f-]+\.(?:jpe?g|png|webp)$/i.test(url);
+  const staticPhoto = /^\/(?:hero|upsells|assets)\/[a-z0-9_./-]+\.(?:jpe?g|png|webp)$/i.test(url) ||
+    /^\/[a-z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(url);
+  if (!upload && !staticPhoto) return null;
+
+  const widths = upload ? [320, 640, 1280] : [320, 640, 1280, 1920];
+  const revision = staticPhoto && import.meta.env.VITE_BUILD_SHA
+    ? '?v=' + encodeURIComponent(import.meta.env.VITE_BUILD_SHA) : '';
+  const srcset = ext => widths.map(width => url + '@' + width + '.' + ext + revision + ' ' + width + 'w').join(', ');
+  return { avif: srcset('avif'), webp: srcset('webp'), revision };
 }
 
 export function AppImage({
   src, alt = '', fallback = DEFAULT_FALLBACK, onError,
   variant = 'card', sizes, ...props
 }) {
-  const original = normalizeAssetUrl(src);
-  const fallbackUrl = normalizeAssetUrl(fallback) || DEFAULT_FALLBACK;
   const [failedVariant, setFailedVariant] = useState('');
   const [failedOriginal, setFailedOriginal] = useState('');
-
+  const original = normalizeAssetUrl(src);
+  const fallbackUrl = normalizeAssetUrl(fallback) || DEFAULT_FALLBACK;
   const originalFailed = !original || original === failedOriginal;
-  const finalSrc = originalFailed ? fallbackUrl : original;
   const sources = !originalFailed && failedVariant !== original ? variantSources(original) : null;
+  const staticPhoto = original.startsWith('/hero/') || original.startsWith('/upsells/') ||
+    original.startsWith('/assets/') || /^\/[a-z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(original);
+  const rev = staticPhoto && import.meta.env.VITE_BUILD_SHA ? '?v=' + encodeURIComponent(import.meta.env.VITE_BUILD_SHA) : '';
+  const finalSrc = originalFailed ? fallbackUrl : original + rev;
 
-  const handleError = (event) => {
+  const handleError = event => {
     if (sources && failedVariant !== original) setFailedVariant(original);
     else if (!originalFailed) setFailedOriginal(original);
     onError?.(event);
@@ -51,10 +56,11 @@ export function AppImage({
   const styles = props.style || {};
   const { style, className, ...imgProps } = props;
   const responsiveSizes = sizes || (
-    variant === 'detail' ? '(max-width: 600px) 100vw, 800px'
-      : variant === 'thumb' ? '80px'
-        : variant === 'tile' ? '156px'
-          : '(max-width: 600px) 45vw, 320px'
+    variant === 'hero' ? '100vw'
+      : variant === 'detail' ? '(max-width: 600px) 100vw, 800px'
+        : variant === 'thumb' ? '80px'
+          : variant === 'tile' ? '156px'
+            : '(max-width: 600px) 45vw, 320px'
   );
   return (
     <picture className={className} style={{ ...styles, display: styles.display || 'block' }}>
@@ -65,7 +71,7 @@ export function AppImage({
         referrerPolicy="no-referrer" onError={handleError}
         style={{
           display: 'block', width: '100%',
-          height: styles.height === 'auto' || !styles.height ? 'auto' : '100%',
+          height: styles.height === 'auto' && !styles.aspectRatio ? 'auto' : '100%',
           aspectRatio: styles.aspectRatio, objectFit: styles.objectFit,
           objectPosition: styles.objectPosition, borderRadius: styles.borderRadius,
           filter: styles.filter,

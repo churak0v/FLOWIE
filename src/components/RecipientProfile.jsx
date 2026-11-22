@@ -438,7 +438,7 @@ export function RecipientProfile() {
   if (!Number.isFinite(id) || !recipient) {
     const isReferralPlaceholder = Number(id) === 2 || Number(id) === 2002;
     return (
-      <AppShell style={{ display: 'flex', flexDirection: 'column', '--app-content-inset-bottom': '0px' }}>
+      <AppShell className="ym-hide-content" style={{ display: 'flex', flexDirection: 'column', '--app-content-inset-bottom': '0px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Text variant="title">Адрес доставки</Text>
         </div>
@@ -470,7 +470,7 @@ export function RecipientProfile() {
   };
 
   return (
-    <AppShell style={{ '--app-content-inset-bottom': '0px', '--app-shell-extra-bottom': '76px' }}>
+    <AppShell className="ym-hide-content" style={{ '--app-content-inset-bottom': '0px', '--app-shell-extra-bottom': '76px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <IconButton
           onClick={goBack}
