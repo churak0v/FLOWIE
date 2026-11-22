@@ -9,7 +9,7 @@ function flowieHeroPreload() {
     name: 'flowie-hero-preload',
     apply: 'build',
     transformIndexHtml(html) {
-      const home = JSON.parse(readFileSync(new URL('./public/config/home.json', import.meta.url), 'utf8'))
+      const home = JSON.parse(readFileSync('public/config/home.json', 'utf8'))
       const image = home.heroSlides?.find(slide => slide.image && !slide.video)?.image
       const placeholder = '<!-- FLOWIE_HERO_PRELOAD -->'
       if (!/^\/hero\/[a-z0-9_./-]+\.(?:jpe?g|png|webp)$/i.test(image || '')) {
