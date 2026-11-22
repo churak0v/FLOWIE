@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { Surface } from './ui/Surface';
 import { HeroBlock } from './domain/HeroBlock';
+import { AppImage } from './ui/AppImage';
 import { SubscriptionRow } from './domain/SubscriptionRow';
 import { ActiveOrderCard } from './domain/ActiveOrderCard';
 import { FrequentlyOrderedSection } from './domain/FrequentlyOrderedSection';
@@ -37,9 +38,10 @@ function PickTile({ title, subtitle, image, href, accent = false }) {
       data-href={href}
     >
       {image ? (
-        <img
+        <AppImage
           src={image}
           alt=""
+          variant="tile"
           loading="lazy"
           decoding="async"
           style={{

@@ -23,7 +23,14 @@ app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 // Uploaded files are immutable (random filenames), so we can cache them aggressively.
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { maxAge: 31536000000, immutable: true }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+    maxAge: 31536000000,
+    immutable: true,
+    setHeaders(res, filename) {
+        if (filename.endsWith('.avif')) res.setHeader('Content-Type', 'image/avif');
+        if (filename.endsWith('.webp')) res.setHeader('Content-Type', 'image/webp');
+    },
+}));
 
 const { authenticate } = require('./middleware/auth');
 app.use(authenticate);
