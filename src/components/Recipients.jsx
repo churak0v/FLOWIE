@@ -15,7 +15,7 @@ export function Recipients() {
 
   return (
     <>
-      <AppShell style={{ display: 'flex', flexDirection: 'column', '--app-content-inset-bottom': '0px' }}>
+      <AppShell className="ym-hide-content" style={{ display: 'flex', flexDirection: 'column', '--app-content-inset-bottom': '0px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <IconButton onClick={() => navigate(-1)} aria-label="Назад">
             <ChevronLeft size={22} />
