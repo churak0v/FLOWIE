@@ -172,6 +172,20 @@ function homePage({ products, collections, baseUrl }) {
   };
 }
 
+// A lightweight campaign document: do not delay the first HTML on catalog/DB reads.
+// React replaces this content inside #root when the normal storefront mounts.
+function mothersDayPage({ baseUrl }) {
+  return {
+    title: 'День матери — 29 ноября: букеты в Ижевске | FLOWIE',
+    description: 'Букеты для мамы с доставкой по Ижевску 29 ноября. Выберите букет и оформите предзаказ в FLOWIE.',
+    canonical: `${baseUrl}/mothers-day`,
+    content: `<h1>День матери — 29 ноября</h1>
+      <p>Букеты для мамы с доставкой по Ижевску 29 ноября.</p>
+      <p>Выберите букет и оформите предзаказ в FLOWIE. Актуальные цены доступны в каталоге.</p>
+      <p><a href="/catalog?occasion=mothers-day">Выбрать букет для мамы</a></p>`,
+  };
+}
+
 function catalogPage({ products, collection, collections, baseUrl }) {
   const canonical = collection ? canonicalCollectionUrl(baseUrl, collection) : `${baseUrl}/catalog`;
   const title = collection ? `${collection.title} — цветы с доставкой | FLOWIE` : 'Каталог цветов с доставкой | FLOWIE';
@@ -254,6 +268,7 @@ module.exports = {
   escapeHtml,
   escapeXml,
   homePage,
+  mothersDayPage,
   jsonLd,
   notFoundPage,
   plainText,

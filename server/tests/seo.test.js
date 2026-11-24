@@ -122,6 +122,47 @@ test('browser and crawler receive the same server-rendered content', async () =>
   });
 });
 
+test('campaign landing exposes the offer without JavaScript or a catalog database query', async () => {
+  const unavailableCatalog = {
+    product: { findMany: async () => { throw new Error('CATALOG_UNAVAILABLE'); } },
+    collection: { findMany: async () => { throw new Error('CATALOG_UNAVAILABLE'); } },
+  };
+  const router = createSeoRouter({ prisma: unavailableCatalog, loadShell: async () => SHELL });
+  await withServer(router, async (base) => {
+    let browserHtml;
+    for (const userAgent of ['Mozilla/5.0', 'VK URL Autotest']) {
+      const response = await fetch(`${base}/mothers-day?utm_source=vk&utm_campaign=mom`, { headers: { 'user-agent': userAgent } });
+      const html = await response.text();
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('content-type'), /text\/html/);
+      assert.equal(response.headers.get('x-robots-tag'), null);
+      assert.match(response.headers.get('cache-control'), /no-store/);
+      assert.match(html, /<title>День матери — 29 ноября: букеты в Ижевске \| FLOWIE<\/title>/);
+      assert.match(html, /<meta name="description" content="Букеты для мамы с доставкой по Ижевску 29 ноября/);
+      assert.match(html, /<meta name="robots" content="index,follow">/);
+      assert.doesNotMatch(html, /noindex|utm_source|utm_campaign/);
+      assert.match(html, /<link rel="canonical" href="https:\/\/flowie\.test\/mothers-day">/);
+      assert.match(html, /<div id="root"><main id="seo-content"><h1>День матери — 29 ноября<\/h1>/);
+      assert.match(html, /href="\/catalog\?occasion=mothers-day"/);
+      assert.match(html, /src="\/assets\/app\.js"/);
+      assert.equal((html.match(/id="root"/g) || []).length, 1);
+      if (browserHtml) assert.equal(html, browserHtml);
+      browserHtml = html;
+    }
+  });
+});
+
+test('campaign landing is routed to the SEO renderer by both storefront ingress configurations', () => {
+  const root = path.join(__dirname, '..', '..');
+  for (const filename of ['default.conf', 'production-edge.conf.template']) {
+    const config = fs.readFileSync(path.join(root, 'nginx', filename), 'utf8');
+    const block = config.match(/location = \/mothers-day \{([^}]+)\}/)?.[1];
+    assert.ok(block, filename);
+    assert.match(block, /proxy_pass http:\/\/(?:api:3001|\$api_host);/);
+    assert.doesNotMatch(block, /noindex/);
+  }
+});
+
 test('collection pages use real collection products and canonical slug', async () => {
   await withServer(seoRouter(), async (base) => {
     const response = await fetch(`${base}/catalog?collection=romantic`, { headers: { host: 'flowie.test' } });
