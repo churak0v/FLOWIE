@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cx } from '../../lib/cx';
@@ -39,12 +39,16 @@ export function HeroCarousel({ slides, className }) {
   return (
     <div
       className={cx(className)}
+      role={!safeSlides.length ? 'status' : undefined}
+      aria-busy={!safeSlides.length}
+      aria-label={!safeSlides.length ? 'Загружаем актуальные баннеры' : undefined}
       style={{
         position: 'relative',
         height: `calc(55dvh + ${UNDERLAY_EXTRA_PX}px)`,
         minHeight: 360 + UNDERLAY_EXTRA_PX,
         overflow: 'hidden',
         borderRadius: 0,
+        background: 'linear-gradient(145deg, var(--c-ink-06), var(--c-ink-14))',
       }}
     >
       <div
@@ -63,6 +67,16 @@ export function HeroCarousel({ slides, className }) {
           scrollSnapType: safeSlides.length > 1 ? 'x mandatory' : undefined,
         }}
       >
+        {!safeSlides.length ? (
+          <div
+            aria-hidden="true"
+            style={{
+              minWidth: '100%',
+              height: '100%',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.13), rgba(255,255,255,0.04))',
+            }}
+          />
+        ) : null}
         {safeSlides.map((s, idx) => (
           <div
             key={s.id || idx}
