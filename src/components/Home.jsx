@@ -15,6 +15,8 @@ import { useAppState } from '../state/AppState';
 import { buildActiveOrderPreview } from '../lib/orderPreview';
 import { isCacheFresh, readCacheEntry, writeCacheEntry } from '../lib/persistedCache';
 
+const HOME_BANNERS_CACHE_KEY = 'home_banners_v2';
+
 function PickTile({ title, subtitle, image, href, accent = false }) {
   return (
     <Link
@@ -148,21 +150,25 @@ export function Home() {
   const { state, actions } = useAppState();
   const activeOrder = state.orders.activeOrderPreview;
   const [activeOrders, setActiveOrders] = useState([]);
-  const [heroSlides, setHeroSlides] = useState(HERO_SLIDES);
+  const [heroSlides] = useState(() => {
+    const cached = readCacheEntry(HOME_BANNERS_CACHE_KEY);
+    const cachedSlides = Array.isArray(cached?.data?.heroSlides) ? cached.data.heroSlides : null;
+    return cachedSlides?.length ? cachedSlides : HERO_SLIDES;
+  });
   const isAuthenticated = Boolean(state.auth.me?.phoneVerified);
 
   useEffect(() => {
     let alive = true;
-    const cacheKey = 'home_banners_v1';
+    const cacheKey = HOME_BANNERS_CACHE_KEY;
     const cached = readCacheEntry(cacheKey);
     const cachedSlides = Array.isArray(cached?.data?.heroSlides) ? cached.data.heroSlides : null;
-    if (cachedSlides?.length) setHeroSlides(cachedSlides);
     if (!cachedSlides?.length || !isCacheFresh(cached, 60_000)) {
       api.getHomeBanners().then(result => {
         if (!alive) return;
         const slides = Array.isArray(result?.heroSlides) ? result.heroSlides : [];
         if (slides.length) {
-          setHeroSlides(slides);
+          // Do not replace the hero whose bundled preload is already in flight.
+          // The refreshed banner set is picked up on the next page load.
           writeCacheEntry(cacheKey, { heroSlides: slides });
         }
       }).catch(() => {}); // Keep bundled banners if API is unavailable.

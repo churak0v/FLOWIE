@@ -74,7 +74,7 @@ export function HeroCarousel({ slides, className }) {
               background: 'var(--c-ink-06)',
             }}
           >
-            {s.video || isVideoSrc(s.image) ? (
+            {idx !== active ? null : s.video || isVideoSrc(s.image) ? (
               <video
                 src={s.video || s.image}
                 muted
@@ -96,8 +96,8 @@ export function HeroCarousel({ slides, className }) {
                 src={s.image}
                 alt=""
                 aria-hidden="true"
-                loading={idx === 0 ? 'eager' : 'lazy'}
-                fetchPriority={idx === 0 ? 'high' : 'low'}
+                loading="eager"
+                fetchPriority={idx === 0 ? 'high' : 'auto'}
                 variant="hero"
                 style={{
                   width: '100%',

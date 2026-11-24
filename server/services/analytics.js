@@ -87,6 +87,15 @@ function redactDimension(value, max, code) {
     .slice(0, max);
 }
 
+function redactAttributionDimension(key, value, source) {
+  const normalized = boundedString(value, 200, `BAD_${key.toUpperCase()}`, { allowEmpty: true });
+  const isVkNumericCampaign = key === 'utm_campaign'
+    && String(source || '').trim().toLowerCase() === 'vk_ads'
+    && /^\d{1,10}$/.test(normalized);
+  if (isVkNumericCampaign) return normalized.slice(0, 80);
+  return redactDimension(normalized, 80, `BAD_${key.toUpperCase()}`);
+}
+
 function normalizePath(value) {
   const raw = boundedString(value, 2048, 'BAD_PATH');
   try {
@@ -136,9 +145,10 @@ function attributionFromHref(value) {
   try {
     const url = new URL(value);
     const out = { path: normalizePath(url.pathname) };
+    const source = url.searchParams.get('utm_source');
     for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) {
       const item = url.searchParams.get(key);
-      if (item) out[key] = redactDimension(item, 80, `BAD_${key.toUpperCase()}`);
+      if (item) out[key] = redactAttributionDimension(key, item, source);
     }
     return out;
   } catch {
@@ -171,7 +181,7 @@ function normalizeMeta(event, input, sessionId) {
     out.errorCode = code;
   }
   for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) {
-    if (meta[key] != null) out[key] = redactDimension(meta[key], 80, `BAD_${key.toUpperCase()}`);
+    if (meta[key] != null) out[key] = redactAttributionDimension(key, meta[key], meta.utm_source);
   }
   if (meta.referrerHost != null) out.referrerHost = normalizeHost(meta.referrerHost);
 

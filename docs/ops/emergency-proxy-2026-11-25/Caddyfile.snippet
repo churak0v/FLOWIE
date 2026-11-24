@@ -1,0 +1,26 @@
+# Temporary FLOWIE ingress on the SPEKA host.
+# Caddy supplies X-Forwarded-For/X-Forwarded-Proto automatically.
+# The origin connects by IP to avoid a DNS loop and verifies the existing
+# FLOWIE certificate with the explicit SNI name.
+
+flowie.art {
+	reverse_proxy https://168.113.209.147 {
+		header_up Host flowie.art
+		transport http {
+			tls_server_name flowie.art
+			dial_timeout 5s
+			response_header_timeout 30s
+		}
+	}
+}
+
+admin.flowie.art {
+	reverse_proxy https://168.113.209.147 {
+		header_up Host admin.flowie.art
+		transport http {
+			tls_server_name admin.flowie.art
+			dial_timeout 5s
+			response_header_timeout 30s
+		}
+	}
+}
