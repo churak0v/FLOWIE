@@ -5,6 +5,7 @@ const {
   createShellLoader,
   escapeXml,
   homePage,
+  mothersDayPage,
   notFoundPage,
   productPage,
   renderDocument,
@@ -118,6 +119,14 @@ function createSeoRouter({ prisma = new PrismaClient(), loadShell = createShellL
         prisma.collection.findMany({ where: { isActive: true }, orderBy: [{ sort: 'asc' }, { id: 'asc' }] }),
       ]);
       return sendPage(req, res, 200, homePage({ products, collections, baseUrl }));
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.get('/mothers-day', async (req, res, next) => {
+    try {
+      return await sendPage(req, res, 200, mothersDayPage({ baseUrl: requestBaseUrl(req) }));
     } catch (error) {
       return next(error);
     }
