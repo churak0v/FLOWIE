@@ -24,19 +24,33 @@ export function initYandexMetrica({ enabled = true } = {}) {
   return true;
 }
 
+export function createYandexMetricaGoal(event, payload = {}) {
+  const params = {};
+  if (Number.isSafeInteger(Number(payload.productId))) params.productId = Number(payload.productId);
+  if (Number.isSafeInteger(Number(payload.orderId))) params.orderId = Number(payload.orderId);
+  if (Number.isFinite(Number(payload.revenue))) params.revenue = Math.max(0, Number(payload.revenue));
+  if (typeof payload?.meta?.bannerId === 'string') params.bannerId = payload.meta.bannerId.slice(0, 32);
+  for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) {
+    if (typeof payload?.meta?.[key] === 'string') params[key] = payload.meta[key].slice(0, 80);
+  }
+  const rawGoal = event === 'page_view' ? 'landing_view' : event;
+  const goal = String(rawGoal || '').replace(/[^a-z0-9_-]/gi, '_').slice(0, 64);
+  return goal ? { goal, params } : null;
+}
+
 export function sendYandexMetricaEvent(event, payload = {}) {
   if (!initialized || typeof window?.ym !== 'function') return false;
-  const safePayload = {};
-  if (Number.isSafeInteger(Number(payload.productId))) safePayload.productId = Number(payload.productId);
-  if (Number.isSafeInteger(Number(payload.orderId))) safePayload.orderId = Number(payload.orderId);
-  if (Number.isFinite(Number(payload.revenue))) safePayload.revenue = Math.max(0, Number(payload.revenue));
-  if (typeof payload?.meta?.bannerId === 'string') safePayload.bannerId = payload.meta.bannerId.slice(0, 32);
+  const command = createYandexMetricaGoal(event, payload);
+  if (!command) return false;
   if (event === 'page_view') {
-    if (window.location.href === lastPageUrl) return false;
-    lastPageUrl = window.location.href;
-    window.ym(COUNTER_ID, 'hit', window.location.href, { title: document.title });
+    const isInitialLanding = window.location.href === lastPageUrl;
+    if (!isInitialLanding) {
+      lastPageUrl = window.location.href;
+      window.ym(COUNTER_ID, 'hit', window.location.href, { title: document.title });
+    }
+    if (isInitialLanding) window.ym(COUNTER_ID, 'reachGoal', command.goal, command.params);
   } else {
-    window.ym(COUNTER_ID, 'reachGoal', String(event || '').replace(/[^a-z0-9_-]/gi, '_').slice(0, 64), safePayload);
+    window.ym(COUNTER_ID, 'reachGoal', command.goal, command.params);
   }
   return true;
 }

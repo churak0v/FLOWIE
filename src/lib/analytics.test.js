@@ -94,6 +94,14 @@ test('extracts only UTM values and external referrer hostname', () => {
     referrerHost: 'partner.example',
   });
   assert.equal(extractAnalyticsAttribution({ search: '', hostname: 'flowie.example' }, '').utm_content, 'rose-video');
+  assert.deepEqual(extractAnalyticsAttribution(
+    { search: '?utm_source=vk_ads&utm_campaign=123456789', hostname: 'flowie.example' },
+    '',
+  ), {
+    utm_source: 'vk_ads',
+    utm_campaign: '123456789',
+    referrerHost: 'partner.example',
+  });
   restoreSession();
 });
 

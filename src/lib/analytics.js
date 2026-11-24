@@ -209,15 +209,16 @@ export function extractAnalyticsAttribution(locationLike = globalThis.location, 
     stored = {};
   }
   const meta = { ...stored };
-  let hasCampaignParams = false;
+  const campaign = {};
   try {
     const params = new URLSearchParams(locationLike?.search || '');
     for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) {
       const value = boundedString(params.get(key) || '', META_LIMITS[key]);
-      if (value) {
-        meta[key] = value;
-        hasCampaignParams = true;
-      }
+      if (value) campaign[key] = value;
+    }
+    if (Object.keys(campaign).length) {
+      for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) delete meta[key];
+      Object.assign(meta, campaign);
     }
   } catch {
     // Ignore malformed URLs.
@@ -229,7 +230,7 @@ export function extractAnalyticsAttribution(locationLike = globalThis.location, 
   } catch {
     // Referrer may be absent or invalid.
   }
-  if (hasCampaignParams) {
+  if (Object.keys(campaign).length) {
     try {
       storage?.setItem(ANALYTICS_ATTRIBUTION_KEY, JSON.stringify(meta));
     } catch {
@@ -256,7 +257,13 @@ export function clearAnalyticsQueue() {
 
 export function trackAnalytics(event, input = {}, options = {}) {
   if (!isAnalyticsEnabled()) return false;
-  const payload = sanitizeAnalyticsPayload(event, input);
+  const payload = sanitizeAnalyticsPayload(event, {
+    ...input,
+    meta: {
+      ...extractAnalyticsAttribution(),
+      ...(input.meta && typeof input.meta === 'object' ? input.meta : {}),
+    },
+  });
   if (!payload) return false;
 
   if (options.dedupeKey) {
@@ -287,7 +294,7 @@ export function trackConfirmedPurchase({ orderId, revenue, paymentStatus } = {})
     // Keep in-memory deduplication when persistent storage is unavailable.
   }
 
-  const payload = { orderId: safeOrderId };
+  const payload = { orderId: safeOrderId, meta: extractAnalyticsAttribution() };
   const safeRevenue = Number(revenue);
   if (Number.isFinite(safeRevenue)) payload.revenue = Math.max(0, safeRevenue);
   sendYandexMetricaEvent('purchase', payload);
