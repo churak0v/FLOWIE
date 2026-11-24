@@ -26,8 +26,10 @@ test('suggests 29 November only when the customer has not selected a date', () =
   assert.equal(getMothersDayDeliveryDateSuggestion('2026-11-28'), '2026-11-28');
 });
 
-test('uses the curated collection order, skips inactive and hero-image products, then uses configured fallback ids', () => {
+test('starts with active value offers, then uses the curated collection and configured fallback ids', () => {
   const products = [
+    { id: 75, title: 'Value offer', price: 3_000, image: '/75.jpg' },
+    { id: 70, title: 'Inactive value offer', price: 3_790, image: '/70.jpg', isActive: false },
     { id: 55, title: 'Fallback', price: 4_000, image: '/55.jpg' },
     { id: 3, title: 'Third', price: 7_000, image: '/3.jpg' },
     { id: 2, title: 'Second', price: 5_000, image: '/hero.jpg' },
@@ -36,7 +38,7 @@ test('uses the curated collection order, skips inactive and hero-image products,
   ];
   const collections = [{ slug: 'день-матери', productIds: [3, 2, 20] }];
 
-  assert.deepEqual(selectMothersDayProducts(products, collections, '/hero.jpg').map((product) => product.id), [3, 55]);
+  assert.deepEqual(selectMothersDayProducts(products, collections, '/hero.jpg').map((product) => product.id), [75, 3, 55]);
 });
 
 test('builds only populated price tiers from actual selected prices', () => {
