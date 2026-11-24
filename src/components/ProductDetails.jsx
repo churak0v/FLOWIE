@@ -9,7 +9,6 @@ import { ProductInfo } from './domain/ProductInfo';
 import { AlsoLikeSection } from './domain/AlsoLikeSection';
 import { ProductAddBar } from './domain/ProductAddBar';
 import { api } from '../api';
-import { prefetchImages } from '../lib/prefetch';
 import { readCacheEntry, writeCacheEntry, isCacheFresh } from '../lib/persistedCache';
 import { Text } from './ui/Text';
 import { toUiComposition, toUiSize } from '../lib/productUi';
@@ -40,16 +39,12 @@ export function ProductDetails() {
     const cached = readCacheEntry(cacheKey);
     if (cached?.data) {
       setProduct(cached.data);
-      const imgs = cached.data?.images?.length ? cached.data.images : cached.data?.image ? [cached.data.image] : [];
-      prefetchImages(imgs, { max: 24 });
     }
   }, [cacheKey, productFromList]);
 
   useEffect(() => {
     if (!productFromList || !cacheKey) return;
     writeCacheEntry(cacheKey, productFromList);
-    const imgs = productFromList?.images?.length ? productFromList.images : productFromList?.image ? [productFromList.image] : [];
-    prefetchImages(imgs, { max: 24 });
   }, [cacheKey, productFromList]);
 
   useEffect(() => {
@@ -93,7 +88,6 @@ export function ProductDetails() {
         };
         setProduct(next);
         if (cacheKey) writeCacheEntry(cacheKey, next);
-        prefetchImages(next.images?.length ? next.images : next.image ? [next.image] : [], { max: 24 });
       })
       .catch(() => {})
       .finally(() => {});

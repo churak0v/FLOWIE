@@ -42,6 +42,42 @@ test('client event normalization keeps only allowlisted, bounded attribution', (
   assert.equal(normalized.meta.utm_content, 'rose-video');
   assert.equal(JSON.stringify(normalized).includes('private'), false);
 });
+
+test('VK numeric campaign IDs survive attribution redaction', () => {
+  const direct = normalizeClientEvent(payload({
+    meta: {
+      path: '/',
+      utm_source: 'vk_ads',
+      utm_medium: 'cpc',
+      utm_campaign: '123456789',
+    },
+  }));
+  assert.equal(direct.meta.utm_campaign, '123456789');
+
+  const fromHref = normalizeClientEvent(payload({
+    event: 'ref_open',
+    meta: {
+      tag: 'vk',
+      source: 'startapp',
+      href: 'https://flowie.test/?utm_source=vk_ads&utm_medium=cpc&utm_campaign=987654321',
+    },
+  }));
+  assert.equal(fromHref.meta.utm_campaign, '987654321');
+});
+
+test('phone-like campaign values remain redacted', () => {
+  for (const campaign of ['+7 (999) 123-45-67', '79991234567']) {
+    const normalized = normalizeClientEvent(payload({
+      meta: { path: '/', utm_source: 'vk_ads', utm_campaign: campaign },
+    }));
+    assert.equal(normalized.meta.utm_campaign, '[phone]');
+  }
+
+  const untrustedNumeric = normalizeClientEvent(payload({
+    meta: { path: '/', utm_source: 'unknown', utm_campaign: '123456789' },
+  }));
+  assert.equal(untrustedNumeric.meta.utm_campaign, '[phone]');
+});
 test('search queries redact email and phone-like personal data', () => {
   const result = redactSearchQuery('букет для user@example.com +7 (999) 123-45-67 на юбилей');
   assert.equal(result.includes('user@example.com'), false);
