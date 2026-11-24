@@ -43,16 +43,18 @@ test('client event normalization keeps only allowlisted, bounded attribution', (
   assert.equal(JSON.stringify(normalized).includes('private'), false);
 });
 
-test('VK numeric campaign IDs survive attribution redaction', () => {
+test('VK numeric campaign and creative IDs survive attribution redaction', () => {
   const direct = normalizeClientEvent(payload({
     meta: {
       path: '/',
       utm_source: 'vk_ads',
       utm_medium: 'cpc',
       utm_campaign: '123456789',
+      utm_content: '253606716',
     },
   }));
   assert.equal(direct.meta.utm_campaign, '123456789');
+  assert.equal(direct.meta.utm_content, '253606716');
 
   const fromHref = normalizeClientEvent(payload({
     event: 'ref_open',
@@ -74,9 +76,10 @@ test('phone-like campaign values remain redacted', () => {
   }
 
   const untrustedNumeric = normalizeClientEvent(payload({
-    meta: { path: '/', utm_source: 'unknown', utm_campaign: '123456789' },
+    meta: { path: '/', utm_source: 'unknown', utm_campaign: '123456789', utm_content: '253606716' },
   }));
   assert.equal(untrustedNumeric.meta.utm_campaign, '[phone]');
+  assert.equal(untrustedNumeric.meta.utm_content, '[phone]');
 });
 test('search queries redact email and phone-like personal data', () => {
   const result = redactSearchQuery('букет для user@example.com +7 (999) 123-45-67 на юбилей');

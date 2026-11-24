@@ -89,10 +89,10 @@ function redactDimension(value, max, code) {
 
 function redactAttributionDimension(key, value, source) {
   const normalized = boundedString(value, 200, `BAD_${key.toUpperCase()}`, { allowEmpty: true });
-  const isVkNumericCampaign = key === 'utm_campaign'
+  const isVkNumericId = (key === 'utm_campaign' || key === 'utm_content')
     && String(source || '').trim().toLowerCase() === 'vk_ads'
     && /^\d{1,10}$/.test(normalized);
-  if (isVkNumericCampaign) return normalized.slice(0, 80);
+  if (isVkNumericId) return normalized.slice(0, 80);
   return redactDimension(normalized, 80, `BAD_${key.toUpperCase()}`);
 }
 
