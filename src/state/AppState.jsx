@@ -559,6 +559,7 @@ export function AppStateProvider({ children }) {
         composition: toUiComposition(p.composition),
         size: toUiSize(p.width, p.height),
         categoryId: p.categoryId ?? null,
+        isActive: p.isActive !== false,
       };
     };
 

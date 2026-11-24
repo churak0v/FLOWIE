@@ -13,6 +13,7 @@ const ProductDetails = lazyNamed(() => import('./components/ProductDetails'), 'P
 const Cart = lazyNamed(() => import('./components/Cart'), 'Cart');
 const Checkout = lazyNamed(() => import('./components/Checkout'), 'Checkout');
 const Catalog = lazyNamed(() => import('./components/Catalog'), 'Catalog');
+const MothersDayLanding = lazyNamed(() => import('./components/MothersDayLanding'), 'MothersDayLanding');
 const Favorites = lazyNamed(() => import('./components/Favorites'), 'Favorites');
 const Recipients = lazyNamed(() => import('./components/Recipients'), 'Recipients');
 const Account = lazyNamed(() => import('./components/Account'), 'Account');
@@ -134,8 +135,8 @@ function AppRoutes() {
         return (state.cart.items || []).reduce((acc, it) => acc + (productsById.get(String(it.productId))?.price || 0) * it.qty, 0);
     }, [productsById, state.cart.items]);
 
-    const showMiniCart = pathname === '/' || pathname === '/catalog' || pathname === '/shop' || /^\/recipients\/\d+/.test(pathname);
-    const miniCartBottom = /^\/recipients\/\d+/.test(pathname)
+    const showMiniCart = pathname === '/' || pathname === '/catalog' || pathname === '/shop' || pathname === '/mothers-day' || /^\/recipients\/\d+/.test(pathname);
+    const miniCartBottom = pathname === '/mothers-day' || /^\/recipients\/\d+/.test(pathname)
         ? 'calc(16px + var(--app-nav-inset-bottom))'
         : 'calc(108px + var(--app-nav-inset-bottom))';
 
@@ -169,6 +170,7 @@ function AppRoutes() {
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/catalog" element={<Catalog />} />
                 <Route path="/shop" element={<Catalog />} />
+                <Route path="/mothers-day" element={<MothersDayLanding />} />
 
                 <Route path="/favorites" element={<Favorites />} />
                 <Route path="/recipients" element={<Recipients />} />
