@@ -23,6 +23,11 @@ export function createVkPixelCommand(event, payload = {}, pixelId = PIXEL_ID) {
   if (Number.isSafeInteger(Number(payload.orderId)) && Number(payload.orderId) > 0) {
     params.order_id = String(Number(payload.orderId));
   }
+  for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) {
+    if (typeof payload?.meta?.[key] === 'string' && payload.meta[key]) {
+      params[key] = payload.meta[key].slice(0, 80);
+    }
+  }
   if (Object.keys(params).length) command.params = params;
   return command;
 }
@@ -50,8 +55,17 @@ export function sendVkPixelEvent(event, payload = {}) {
   if (!initialized || typeof window?._tmr?.push !== 'function') return false;
   if (event === 'page_view') {
     const currentUrl = window.location.href;
-    if (currentUrl === lastPageUrl) return false;
-    lastPageUrl = currentUrl;
+    const isInitialLanding = currentUrl === lastPageUrl;
+    if (!isInitialLanding) {
+      lastPageUrl = currentUrl;
+      const pageView = createVkPixelCommand(event, payload);
+      if (pageView) window._tmr.push(pageView);
+      return true;
+    }
+    const landingView = createVkPixelCommand('landing_view', payload);
+    if (!landingView) return false;
+    window._tmr.push(landingView);
+    return true;
   }
   const command = createVkPixelCommand(event, payload);
   if (!command) return false;
