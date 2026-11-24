@@ -14,6 +14,8 @@ import { api } from '../api';
 import { useAppState } from '../state/AppState';
 import { buildActiveOrderPreview } from '../lib/orderPreview';
 import { isCacheFresh, readCacheEntry, writeCacheEntry } from '../lib/persistedCache';
+import { MothersDayPreorder } from './domain/MothersDayPreorder';
+import { isMothersDayCampaignActive, MOTHERS_DAY_CATALOG_HREF } from '../lib/mothersDayCampaign';
 
 const HOME_BANNERS_CACHE_KEY = 'home_banners_v2';
 
@@ -156,6 +158,7 @@ export function Home() {
     return cachedSlides?.length ? cachedSlides : HERO_SLIDES;
   });
   const isAuthenticated = Boolean(state.auth.me?.phoneVerified);
+  const mothersDayCampaignActive = isMothersDayCampaignActive();
 
   useEffect(() => {
     let alive = true;
@@ -219,11 +222,20 @@ export function Home() {
         const key = String(s?.id ?? `${media}::${s?.caption || ''}`);
         if (!key || seen.has(key)) continue;
         seen.add(key);
-        out.push({ id: key, image: s?.image, video: s?.video, imagePosition: s?.imagePosition, caption: s?.caption, subtitle: s?.subtitle, href: s?.href });
+        const isMothersDay = mothersDayCampaignActive && String(s?.id || '').toLowerCase() === 'mother';
+        out.push({
+          id: key,
+          image: s?.image,
+          video: s?.video,
+          imagePosition: s?.imagePosition,
+          caption: s?.caption,
+          subtitle: isMothersDay ? 'Предзаказ на 29 ноября · выбрать букет' : s?.subtitle,
+          href: isMothersDay ? MOTHERS_DAY_CATALOG_HREF : s?.href,
+        });
       }
       return out;
     },
-    [heroSlides]
+    [heroSlides, mothersDayCampaignActive]
   );
 
   return (
@@ -273,7 +285,13 @@ export function Home() {
 
             {isAuthenticated ? <SubscriptionRow /> : null}
 
-            <div style={{ marginTop: isAuthenticated ? 0 : -6 }}>
+            {mothersDayCampaignActive ? (
+              <div style={{ marginTop: isAuthenticated ? 0 : -6 }}>
+                <MothersDayPreorder />
+              </div>
+            ) : null}
+
+            <div style={{ marginTop: mothersDayCampaignActive ? 18 : (isAuthenticated ? 0 : -6) }}>
               <QuickPicks products={state.products.items || []} />
             </div>
 

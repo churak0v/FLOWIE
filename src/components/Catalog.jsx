@@ -11,6 +11,8 @@ import { useAppState } from '../state/AppState';
 import { trackAnalytics } from '../lib/analytics';
 import { useCatalogSearch } from '../lib/useCatalogSearch';
 import { buildFlowerOptions, filterCatalogProducts, normalizePriceBoundary, PRICE_PRESETS, selectCatalogScopeProducts } from '../lib/catalogFilters';
+import { MothersDayPreorder } from './domain/MothersDayPreorder';
+import { isMothersDayCampaignActive } from '../lib/mothersDayCampaign';
 
 const SORT_OPTIONS = [
   { value: 'default', label: 'По умолчанию' },
@@ -46,6 +48,7 @@ export function Catalog() {
   const collectionId = query.get('collection');
   const scenarioId = query.get('scenario');
   const searchQuery = query.get('search') || '';
+  const isMothersDay = query.get('occasion') === 'mothers-day' && isMothersDayCampaignActive();
   const selectedFlowers = useMemo(() => query.getAll('flower').filter(Boolean), [query]);
   const minPrice = query.get('min');
   const maxPrice = query.get('max');
@@ -57,7 +60,7 @@ export function Catalog() {
   const scenarios = state.collections.scenarios || [];
   const activeCollection = findBySlugOrId(collections, collectionId);
   const activeScenario = findBySlugOrId(scenarios, scenarioId);
-  const title = activeCollection?.title || activeScenario?.title || 'Каталог цветов';
+  const title = activeCollection?.title || activeScenario?.title || (isMothersDay ? 'Букеты ко Дню матери' : 'Каталог цветов');
 
   const baseProducts = useMemo(() => {
     const allProducts = state.products.items || [];
@@ -185,6 +188,12 @@ export function Catalog() {
             <Text variant="caption" muted style={{ marginTop: 2 }}>{searchResult.loading ? 'Ищем букеты…' : `${shown.length} вариантов`}</Text>
           </div>
         </div>
+
+        {isMothersDay ? (
+          <div style={{ marginTop: 16 }}>
+            <MothersDayPreorder compact />
+          </div>
+        ) : null}
 
         <div style={{ position: 'relative', marginTop: 18 }}>
           <Search aria-hidden="true" size={18} color="var(--muted)" style={{ position: 'absolute', left: 14, top: 13 }} />

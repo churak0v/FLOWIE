@@ -15,6 +15,7 @@ import { AppImage } from './ui/AppImage';
 import { trackAnalytics } from '../lib/analytics';
 import { buildCheckoutDeliveryTime, calculateCheckoutPayment, isValidCheckoutPhone, normalizeCheckoutPhone } from '../lib/checkoutDelivery';
 import { YandexDeliveryMap } from './domain/YandexDeliveryMap';
+import { isMothersDayCampaignActive, MOTHERS_DAY_DELIVERY_DATE } from '../lib/mothersDayCampaign';
 
 const PHONE_COUNTRIES = [
   { iso: 'RU', flag: '🇷🇺', name: 'Russia', dial: '+7', placeholder: '999 000-00-00', max: 10 },
@@ -279,6 +280,7 @@ export function Checkout() {
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const mothersDayCampaignActive = isMothersDayCampaignActive();
 
   const productsById = useMemo(() => new Map(state.products.items.map((p) => [String(p.id), p])), [state.products.items]);
   const itemsTotal = useMemo(() => state.cart.items.reduce((sum, it) => sum + (productsById.get(String(it.productId))?.price || 0) * it.qty, 0), [productsById, state.cart.items]);
@@ -567,10 +569,31 @@ export function Checkout() {
           {state.checkout.askRecipientTime ? null : (
             <Surface variant="default" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', display: 'grid', gap: 10 }}>
               <Text variant="title">Время доставки</Text>
+              {mothersDayCampaignActive ? <button
+                type="button"
+                onClick={() => actions.setDeliveryTime({ date: MOTHERS_DAY_DELIVERY_DATE, time: state.checkout.deliveryTime })}
+                aria-pressed={state.checkout.deliveryDate === MOTHERS_DAY_DELIVERY_DATE}
+                style={{
+                  minHeight: 44,
+                  padding: '0 13px',
+                  borderRadius: 13,
+                  border: state.checkout.deliveryDate === MOTHERS_DAY_DELIVERY_DATE ? '1px solid var(--accent)' : '1px solid var(--c-accent-border)',
+                  background: state.checkout.deliveryDate === MOTHERS_DAY_DELIVERY_DATE ? 'var(--c-accent-10)' : 'var(--surface)',
+                  color: 'var(--text)',
+                  fontWeight: 900,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                }}
+              >
+                День матери · воскресенье, 29 ноября
+              </button> : null}
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 10 }}>
                 <input className="ym-disable-keys" type="date" value={state.checkout.deliveryDate || ''} onChange={(event) => actions.setDeliveryTime({ date: event.target.value, time: state.checkout.deliveryTime })} aria-label="Дата доставки" style={{ height: 48, minWidth: 0, borderRadius: 14, border: '1px solid var(--border)', padding: '0 10px', background: 'var(--surface)' }} />
                 <input className="ym-disable-keys" value={state.checkout.deliveryTime || ''} onChange={(event) => actions.setDeliveryTime({ date: state.checkout.deliveryDate, time: event.target.value })} placeholder="Например, 18:00–20:00" aria-label="Интервал доставки" style={{ height: 48, minWidth: 0, borderRadius: 14, border: '1px solid var(--border)', padding: '0 10px', background: 'var(--surface)' }} />
               </div>
+              {state.checkout.deliveryDate === MOTHERS_DAY_DELIVERY_DATE ? (
+                <Text variant="caption" muted>Укажите удобный интервал. Если детали потребуется уточнить, FLOWIE свяжется по контакту покупателя.</Text>
+              ) : null}
               {!hasDeliveryTime ? <Text variant="caption" style={{ color: 'var(--accent)' }}>Укажите дату и интервал либо выберите уточнение времени у получателя.</Text> : null}
             </Surface>
           )}
