@@ -15,7 +15,7 @@ import { useAppState } from '../state/AppState';
 import { buildActiveOrderPreview } from '../lib/orderPreview';
 import { readCacheEntry, writeCacheEntry } from '../lib/persistedCache';
 import { MothersDayPreorder } from './domain/MothersDayPreorder';
-import { isMothersDayCampaignActive, MOTHERS_DAY_CATALOG_HREF } from '../lib/mothersDayCampaign';
+import { isMothersDayCampaignActive, MOTHERS_DAY_CATALOG_HREF, pickMothersDayPromoProduct } from '../lib/mothersDayCampaign';
 
 const HOME_BANNERS_CACHE_KEY = 'home_banners_v2';
 const HOME_BANNERS_TIMEOUT_MS = 4_000;
@@ -254,6 +254,10 @@ export function Home() {
     () => heroSlides.find((slide) => String(slide?.id || '').toLowerCase() === 'mother') || null,
     [heroSlides]
   );
+  const mothersDayPromoProduct = useMemo(
+    () => pickMothersDayPromoProduct(state.products.items, mothersDaySlide?.image),
+    [mothersDaySlide?.image, state.products.items]
+  );
 
   return (
     <>
@@ -304,7 +308,7 @@ export function Home() {
 
             {mothersDayCampaignActive ? (
               <div style={{ marginTop: isAuthenticated ? 0 : -6 }}>
-                <MothersDayPreorder image={mothersDaySlide?.image} imagePosition={mothersDaySlide?.imagePosition} />
+                <MothersDayPreorder image={mothersDayPromoProduct?.image} imagePosition="center" />
               </div>
             ) : null}
 
