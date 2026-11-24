@@ -1,6 +1,7 @@
 export const MOTHERS_DAY_CATALOG_HREF = '/catalog?occasion=mothers-day';
 export const MOTHERS_DAY_DELIVERY_DATE = '2026-11-29';
 export const MOTHERS_DAY_COLLECTION_SLUG = 'день-матери';
+export const MOTHERS_DAY_VALUE_PRODUCT_IDS = [75, 70];
 export const MOTHERS_DAY_FALLBACK_PRODUCT_IDS = [55, 3, 2, 20, 35, 34, 33, 36, 32, 37, 57, 54, 41, 29, 7];
 export const MOTHERS_DAY_PRODUCT_LIMIT = 10;
 
@@ -33,7 +34,11 @@ export function selectMothersDayProducts(products, collections, heroImage = '', 
     .filter((product) => product?.isActive !== false && !product?.isUpsell)
     .map((product) => [String(product.id), product]));
   const collection = (collections || []).find((item) => String(item?.slug || '').toLowerCase() === MOTHERS_DAY_COLLECTION_SLUG);
-  const configuredIds = [...(collection?.productIds || []), ...MOTHERS_DAY_FALLBACK_PRODUCT_IDS];
+  const configuredIds = [
+    ...MOTHERS_DAY_VALUE_PRODUCT_IDS,
+    ...(collection?.productIds || []),
+    ...MOTHERS_DAY_FALLBACK_PRODUCT_IDS,
+  ];
   const selected = [];
   const seen = new Set();
 
