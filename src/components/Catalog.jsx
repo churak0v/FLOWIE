@@ -49,6 +49,8 @@ export function Catalog() {
   const scenarioId = query.get('scenario');
   const searchQuery = query.get('search') || '';
   const isMothersDay = query.get('occasion') === 'mothers-day' && isMothersDayCampaignActive();
+  const campaignImage = typeof location.state?.campaignImage === 'string' ? location.state.campaignImage : '';
+  const campaignImagePosition = typeof location.state?.campaignImagePosition === 'string' ? location.state.campaignImagePosition : undefined;
   const selectedFlowers = useMemo(() => query.getAll('flower').filter(Boolean), [query]);
   const minPrice = query.get('min');
   const maxPrice = query.get('max');
@@ -191,7 +193,7 @@ export function Catalog() {
 
         {isMothersDay ? (
           <div style={{ marginTop: 16 }}>
-            <MothersDayPreorder compact />
+            <MothersDayPreorder compact image={campaignImage} imagePosition={campaignImagePosition} />
           </div>
         ) : null}
 

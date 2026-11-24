@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
@@ -13,11 +13,18 @@ import { HERO_SLIDES } from '../data/mock';
 import { api } from '../api';
 import { useAppState } from '../state/AppState';
 import { buildActiveOrderPreview } from '../lib/orderPreview';
-import { isCacheFresh, readCacheEntry, writeCacheEntry } from '../lib/persistedCache';
+import { readCacheEntry, writeCacheEntry } from '../lib/persistedCache';
 import { MothersDayPreorder } from './domain/MothersDayPreorder';
 import { isMothersDayCampaignActive, MOTHERS_DAY_CATALOG_HREF } from '../lib/mothersDayCampaign';
 
 const HOME_BANNERS_CACHE_KEY = 'home_banners_v2';
+const HOME_BANNERS_TIMEOUT_MS = 4_000;
+
+function cachedHomeSlides() {
+  const cached = readCacheEntry(HOME_BANNERS_CACHE_KEY);
+  const slides = Array.isArray(cached?.data?.heroSlides) ? cached.data.heroSlides : [];
+  return slides;
+}
 
 function PickTile({ title, subtitle, image, href, accent = false }) {
   return (
@@ -150,34 +157,39 @@ function QuickPicks({ products }) {
 export function Home() {
   const navigate = useNavigate();
   const { state, actions } = useAppState();
-  const activeOrder = state.orders.activeOrderPreview;
   const [activeOrders, setActiveOrders] = useState([]);
-  const [heroSlides] = useState(() => {
-    const cached = readCacheEntry(HOME_BANNERS_CACHE_KEY);
-    const cachedSlides = Array.isArray(cached?.data?.heroSlides) ? cached.data.heroSlides : null;
-    return cachedSlides?.length ? cachedSlides : HERO_SLIDES;
-  });
+  const [initialHeroSlides] = useState(cachedHomeSlides);
+  const [heroSlides, setHeroSlides] = useState(initialHeroSlides);
   const isAuthenticated = Boolean(state.auth.me?.phoneVerified);
   const mothersDayCampaignActive = isMothersDayCampaignActive();
 
   useEffect(() => {
     let alive = true;
-    const cacheKey = HOME_BANNERS_CACHE_KEY;
-    const cached = readCacheEntry(cacheKey);
-    const cachedSlides = Array.isArray(cached?.data?.heroSlides) ? cached.data.heroSlides : null;
-    if (!cachedSlides?.length || !isCacheFresh(cached, 60_000)) {
-      api.getHomeBanners().then(result => {
+    let timeoutId;
+
+    const timeout = new Promise((_, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error('HOME_BANNERS_TIMEOUT')), HOME_BANNERS_TIMEOUT_MS);
+    });
+
+    Promise.race([api.getHomeBanners(), timeout])
+      .then((result) => {
         if (!alive) return;
-        const slides = Array.isArray(result?.heroSlides) ? result.heroSlides : [];
-        if (slides.length) {
-          // Do not replace the hero whose bundled preload is already in flight.
-          // The refreshed banner set is picked up on the next page load.
-          writeCacheEntry(cacheKey, { heroSlides: slides });
-        }
-      }).catch(() => {}); // Keep bundled banners if API is unavailable.
-    }
-    return () => { alive = false; };
-  }, []);
+        const nextSlides = Array.isArray(result?.heroSlides) ? result.heroSlides.filter(Boolean) : [];
+        if (!nextSlides.length) throw new Error('HOME_BANNERS_EMPTY');
+        writeCacheEntry(HOME_BANNERS_CACHE_KEY, { heroSlides: nextSlides });
+        setHeroSlides(nextSlides);
+      })
+      .catch(() => {
+        if (!alive || initialHeroSlides.length) return;
+        setHeroSlides(HERO_SLIDES);
+      })
+      .finally(() => window.clearTimeout(timeoutId));
+
+    return () => {
+      alive = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [initialHeroSlides]);
 
   // Load active order details for the home cards.
   useEffect(() => {
@@ -238,6 +250,11 @@ export function Home() {
     [heroSlides, mothersDayCampaignActive]
   );
 
+  const mothersDaySlide = useMemo(
+    () => heroSlides.find((slide) => String(slide?.id || '').toLowerCase() === 'mother') || null,
+    [heroSlides]
+  );
+
   return (
     <>
       <AppShell style={{ padding: 0, '--app-content-inset-bottom': '0px' }}>
@@ -287,7 +304,7 @@ export function Home() {
 
             {mothersDayCampaignActive ? (
               <div style={{ marginTop: isAuthenticated ? 0 : -6 }}>
-                <MothersDayPreorder />
+                <MothersDayPreorder image={mothersDaySlide?.image} imagePosition={mothersDaySlide?.imagePosition} />
               </div>
             ) : null}
 
