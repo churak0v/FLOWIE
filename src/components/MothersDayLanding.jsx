@@ -4,6 +4,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { api } from '../api';
 import { HERO_SLIDES } from '../data/mock';
 import { trackAnalytics } from '../lib/analytics';
+import { formatMoney } from '../lib/money';
 import {
   getMothersDayPriceTiers,
   getMothersDayDeliveryDateSuggestion,
@@ -44,6 +45,10 @@ export function MothersDayLanding() {
     [motherBanner?.image, state.collections.items, state.products.items]
   );
   const priceTiers = useMemo(() => getMothersDayPriceTiers(products), [products]);
+  const minimumPrice = useMemo(
+    () => products.reduce((minimum, product) => Math.min(minimum, Number(product?.price) || Infinity), Infinity),
+    [products]
+  );
 
   if (campaignEnded) {
     return <Navigate to={`/catalog${location.search || ''}`} replace />;
@@ -73,7 +78,9 @@ export function MothersDayLanding() {
             <div>
               <p style={{ margin: '0 0 7px', fontSize: 13, fontWeight: 900, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Предзаказ · доставка 29 ноября</p>
               <h1 style={{ margin: 0, maxWidth: 360, fontSize: 'clamp(31px, 9vw, 42px)', lineHeight: 0.98, letterSpacing: '-0.035em' }}>День матери — 29 ноября</h1>
-              <p style={{ margin: '10px 0 0', maxWidth: 350, fontSize: 15, fontWeight: 750, lineHeight: 1.35 }}>Букеты с доставкой по Ижевску 29 ноября.</p>
+              <p style={{ margin: '10px 0 0', maxWidth: 350, fontSize: 15, fontWeight: 750, lineHeight: 1.35 }}>
+                {Number.isFinite(minimumPrice) ? `Букеты от ${formatMoney(minimumPrice)}. ` : ''}Доставка по Ижевску 29 ноября.
+              </p>
               <button type="button" onClick={scrollToBouquets} style={{ marginTop: 16, minHeight: 50, padding: '0 18px', border: 0, borderRadius: 999, background: 'var(--accent)', color: 'var(--c-accent-contrast)', fontWeight: 1000, display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', boxShadow: 'var(--shadow-accent)' }}>
                 Выбрать букет <ArrowDown size={18} strokeWidth={3} />
               </button>
