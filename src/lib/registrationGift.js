@@ -6,6 +6,7 @@ export function normalizeRegistrationGiftStatus(value) {
         id: String(value.campaign.id || ''),
         title: String(value.campaign.title || ''),
         body: String(value.campaign.body || value.campaign.terms || ''),
+        terms: String(value.campaign.terms || ''),
         ctaLabel: String(value.campaign.ctaLabel || ''),
       }
     : null;

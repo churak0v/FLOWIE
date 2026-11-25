@@ -31,7 +31,7 @@ test('an existing claim remains visible after campaign acquisition is disabled',
 
 test('campaign copy is normalized and cannot enable an offer by itself', () => {
   const status = normalizeRegistrationGiftStatus({ campaign: { id: 7, title: 'Дарим подарок', terms: 'Условия' } });
-  assert.deepEqual(status.campaign, { id: '7', title: 'Дарим подарок', body: 'Условия', ctaLabel: '' });
+  assert.deepEqual(status.campaign, { id: '7', title: 'Дарим подарок', body: 'Условия', terms: 'Условия', ctaLabel: '' });
   assert.equal(shouldShowRegistrationGift(status), false);
 });
 

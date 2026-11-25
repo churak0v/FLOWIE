@@ -1,14 +1,44 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Gift } from 'lucide-react';
 import { REGISTRATION_GIFT_DWELL_MS, shouldShowRegistrationGift, shouldShowRegistrationGiftAccountStatus } from '../../lib/registrationGift';
 import { Text } from '../ui/Text';
 
 export function RegistrationGiftOffer({ status, user, placement, onExpose, onLogin, onRefresh }) {
   const rootRef = useRef(null);
-  const exposureStartedRef = useRef(false);
+  const exposurePromiseRef = useRef(null);
+  const [exposurePhase, setExposurePhase] = useState(status?.exposed ? 'saved' : 'idle');
 
   useEffect(() => {
-    if (!shouldShowRegistrationGift(status) || status.exposed || exposureStartedRef.current) return undefined;
+    if (status?.exposed) setExposurePhase('saved');
+  }, [status?.exposed]);
+
+  const ensureExposure = useCallback(() => {
+    if (status?.exposed || exposurePhase === 'saved') return Promise.resolve(true);
+    if (exposurePromiseRef.current) return exposurePromiseRef.current;
+    if (typeof onExpose !== 'function') {
+      setExposurePhase('error');
+      return Promise.resolve(false);
+    }
+
+    setExposurePhase('saving');
+    const request = Promise.resolve(onExpose({ placement }))
+      .then(() => {
+        setExposurePhase('saved');
+        return true;
+      })
+      .catch(() => {
+        setExposurePhase('error');
+        return false;
+      })
+      .finally(() => {
+        exposurePromiseRef.current = null;
+      });
+    exposurePromiseRef.current = request;
+    return request;
+  }, [exposurePhase, onExpose, placement, status?.exposed]);
+
+  useEffect(() => {
+    if (!shouldShowRegistrationGift(status) || status.exposed || exposurePhase !== 'idle') return undefined;
     const node = rootRef.current;
     if (!node || typeof IntersectionObserver !== 'function') return undefined;
 
@@ -22,10 +52,8 @@ export function RegistrationGiftOffer({ status, user, placement, onExpose, onLog
       }
       if (dwellTimer) return;
       dwellTimer = window.setTimeout(() => {
-        exposureStartedRef.current = true;
-        observer.disconnect();
-        Promise.resolve(onExpose?.({ placement })).catch(() => {
-          exposureStartedRef.current = false;
+        ensureExposure().then(() => {
+          observer.disconnect();
         });
       }, REGISTRATION_GIFT_DWELL_MS);
     }, { threshold: [0.5] });
@@ -35,17 +63,23 @@ export function RegistrationGiftOffer({ status, user, placement, onExpose, onLog
       window.clearTimeout(dwellTimer);
       observer.disconnect();
     };
-  }, [onExpose, placement, status]);
+  }, [ensureExposure, exposurePhase, status]);
 
   if (!shouldShowRegistrationGift(status)) return null;
 
   const title = status.campaign?.title || 'Raffaello к первому заказу за регистрацию';
   const body = status.campaign?.body || 'Зарегистрируйтесь — Raffaello добавим к вашему первому заказу.';
-  const ctaLabel = status.campaign?.ctaLabel || (user?.phoneVerified ? 'Проверить статус' : 'Зарегистрироваться');
+  const ctaLabel = exposurePhase === 'error'
+    ? 'Повторить и зарегистрироваться'
+    : status.campaign?.ctaLabel || (user?.phoneVerified ? 'Проверить статус' : 'Зарегистрироваться');
 
-  const activate = () => {
-    if (user?.phoneVerified) onRefresh?.();
-    else onLogin?.();
+  const activate = async () => {
+    if (user?.phoneVerified) {
+      onRefresh?.();
+      return;
+    }
+    const recorded = await ensureExposure();
+    if (recorded) onLogin?.();
   };
 
   return (
@@ -66,6 +100,7 @@ export function RegistrationGiftOffer({ status, user, placement, onExpose, onLog
           color: 'var(--c-ink-92)',
           textAlign: 'left',
           cursor: 'pointer',
+          opacity: exposurePhase === 'saving' ? 0.72 : 1,
         }}
       >
         <span aria-hidden="true" style={{ width: 48, height: 48, borderRadius: 16, display: 'grid', placeItems: 'center', background: 'var(--bg)', color: 'var(--accent)' }}>
@@ -74,9 +109,14 @@ export function RegistrationGiftOffer({ status, user, placement, onExpose, onLog
         <span style={{ minWidth: 0 }}>
           <Text variant="subtitle">{title}</Text>
           <Text variant="caption" muted style={{ marginTop: 3 }}>{body}</Text>
-          <Text variant="caption" style={{ marginTop: 7, color: 'var(--accent)', fontWeight: 850 }}>{ctaLabel}</Text>
+          <Text variant="caption" style={{ marginTop: 7, color: 'var(--accent)', fontWeight: 850 }}>{exposurePhase === 'saving' ? 'Сохраняем подарок…' : ctaLabel}</Text>
         </span>
       </button>
+      {exposurePhase === 'error' ? (
+        <Text role="alert" variant="caption" style={{ marginTop: 8, color: '#a33b4c' }}>
+          Не удалось сохранить подарок. Нажмите ещё раз, чтобы повторить.
+        </Text>
+      ) : null}
     </section>
   );
 }
@@ -84,13 +124,15 @@ export function RegistrationGiftOffer({ status, user, placement, onExpose, onLog
 export function RegistrationGiftAccountStatus({ status }) {
   if (!shouldShowRegistrationGiftAccountStatus(status)) return null;
   const fulfilled = status.fulfilled === true;
+  const title = status.campaign?.title || 'Подарок за регистрацию';
+  const terms = status.campaign?.terms || status.campaign?.body || 'Добавим подарок к первому заказу.';
   return (
     <section aria-label="Статус подарка" style={{ marginTop: 16, padding: 14, border: '1px solid var(--border)', borderRadius: 18, background: 'var(--c-accent-06, #fff7fa)', display: 'grid', gridTemplateColumns: '40px minmax(0, 1fr)', gap: 12, alignItems: 'center' }}>
       <span aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 14, display: 'grid', placeItems: 'center', background: 'var(--bg)', color: 'var(--accent)' }}><Gift size={20} /></span>
       <span>
-        <Text variant="subtitle">Подарок за регистрацию</Text>
+        <Text variant="subtitle">{title}</Text>
         <Text variant="caption" muted style={{ marginTop: 3 }}>
-          {fulfilled ? 'Raffaello уже передан с заказом.' : 'Raffaello добавим к вашему первому заказу.'}
+          {fulfilled ? 'Подарок уже передан с заказом.' : terms}
         </Text>
       </span>
     </section>
