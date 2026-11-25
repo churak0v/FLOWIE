@@ -95,7 +95,11 @@ function normalizeAnalytics(value) {
     for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'referrerHost']) {
         const item = String(source[key] || '').trim();
         if (!item) continue;
-        if (item.length > (key === 'referrerHost' ? 255 : 80) || /[\u0000-\u001f\u007f]/.test(item)) throw new OrderCreationError('BAD_ANALYTICS_ATTRIBUTION');
+        const hasControlCharacter = [...item].some((character) => {
+            const codePoint = character.codePointAt(0);
+            return codePoint <= 31 || codePoint === 127;
+        });
+        if (item.length > (key === 'referrerHost' ? 255 : 80) || hasControlCharacter) throw new OrderCreationError('BAD_ANALYTICS_ATTRIBUTION');
         attribution[key] = item;
     }
     for (const key of ['yclid', 'mt_click_id']) {
