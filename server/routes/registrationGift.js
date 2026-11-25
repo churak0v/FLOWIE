@@ -79,19 +79,27 @@ function createRegistrationGiftAdminRouter({ prisma, now = () => new Date() }) {
               id: true,
               name: true,
               verifiedPhone: true,
-              orders: {
-                where: { paymentStatus: 'CONFIRMED', paidAt: { not: null }, status: { notIn: ['CANCELLED', 'cancelled'] } },
-                orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
-                take: 1,
-                select: { id: true, status: true, deliveredAt: true, createdAt: true },
-              },
             },
           },
         },
       });
+      const enriched = await Promise.all(gifts.map(async (gift) => ({
+        gift,
+        firstEligibleOrder: gift.fulfillmentMode === 'first_order'
+          ? await prisma.order.findFirst({
+            where: {
+              userId: gift.userId,
+              paymentStatus: 'CONFIRMED',
+              paidAt: { gte: gift.claimedAt },
+              status: { notIn: ['CANCELLED', 'cancelled'] },
+            },
+            orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
+            select: { id: true, status: true, deliveredAt: true, createdAt: true },
+          }) : null,
+      })));
       return res.json({
         ok: true,
-        gifts: gifts.map((gift) => ({
+        gifts: enriched.map(({ gift, firstEligibleOrder }) => ({
           id: gift.id,
           campaignId: gift.campaignId,
           giftName: gift.giftName,
@@ -106,9 +114,9 @@ function createRegistrationGiftAdminRouter({ prisma, now = () => new Date() }) {
             name: gift.user.name,
             phone: gift.verifiedPhone || gift.user.verifiedPhone,
           },
-          firstEligibleOrder: gift.user.orders[0] || null,
+          firstEligibleOrder,
           readyToFulfill: gift.fulfillmentMode !== 'first_order'
-            || ['DELIVERED', 'COMPLETED'].includes(String(gift.user.orders[0]?.status || '').toUpperCase()),
+            || ['DELIVERED', 'COMPLETED'].includes(String(firstEligibleOrder?.status || '').toUpperCase()),
         })),
       });
     } catch {
@@ -124,22 +132,22 @@ function createRegistrationGiftAdminRouter({ prisma, now = () => new Date() }) {
       }
       const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true, userId: true } });
       if (!order) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
+      const gift = await prisma.registrationGiftLedger.findFirst({
+        where: { userId: order.userId, claimedAt: { not: null }, fulfilledAt: null },
+        orderBy: { claimedAt: 'asc' },
+      });
+      if (!gift) return res.json({ ok: true, gift: null });
       const firstPaidOrder = await prisma.order.findFirst({
         where: {
           userId: order.userId,
           paymentStatus: 'CONFIRMED',
-          paidAt: { not: null },
+          paidAt: { gte: gift.claimedAt },
           status: { notIn: ['CANCELLED', 'cancelled'] },
         },
         orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
         select: { id: true, status: true },
       });
       if (firstPaidOrder?.id !== orderId) return res.json({ ok: true, gift: null });
-      const gift = await prisma.registrationGiftLedger.findFirst({
-        where: { userId: order.userId, claimedAt: { not: null }, fulfilledAt: null },
-        orderBy: { claimedAt: 'asc' },
-      });
-      if (!gift) return res.json({ ok: true, gift: null });
       return res.json({
         ok: true,
         gift: {

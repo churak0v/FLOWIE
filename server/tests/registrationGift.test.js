@@ -18,8 +18,8 @@ const enabledEnv = {
   FLOWIE_REGISTRATION_GIFT_ENABLED: 'true',
   FLOWIE_REGISTRATION_GIFT_CAMPAIGN_ID: 'raff-registration-v1',
   FLOWIE_REGISTRATION_GIFT_TITLE: 'Подарок за регистрацию',
-  FLOWIE_REGISTRATION_GIFT_BODY: 'Raffaello вместе с первым выполненным заказом',
-  FLOWIE_REGISTRATION_GIFT_ITEM: 'Raffaello',
+  FLOWIE_REGISTRATION_GIFT_BODY: 'Коробка Raffaello 150 г к первому заказу после регистрации.',
+  FLOWIE_REGISTRATION_GIFT_ITEM: 'Raffaello 150 г',
   FLOWIE_REGISTRATION_GIFT_QUANTITY: '1',
   FLOWIE_REGISTRATION_GIFT_FULFILLMENT_MODE: 'first_order',
 };
@@ -33,15 +33,19 @@ function createPrisma() {
     exposureCreates: 0,
   };
   const ledger = {
-    findFirst: async ({ where }) => state.ledgers.find((row) => {
+    findFirst: async ({ where, orderBy }) => state.ledgers.filter((row) => {
       if (where.campaignId && row.campaignId !== where.campaignId) return false;
       if (where.userId != null && row.userId !== where.userId) return false;
       if (where.claimedAt?.not === null && !row.claimedAt) return false;
       if (where.fulfilledAt === null && row.fulfilledAt) return false;
       return !where.OR || where.OR.some((part) => (part.userId != null && row.userId === part.userId)
         || (part.verifiedPhone != null && row.verifiedPhone === part.verifiedPhone));
-    }) || null,
-    findMany: async ({ where, include }) => {
+    }).sort((a, b) => {
+      if (orderBy?.claimedAt === 'desc') return Number(new Date(b.claimedAt || 0)) - Number(new Date(a.claimedAt || 0));
+      if (orderBy?.exposedAt === 'desc') return Number(new Date(b.exposedAt || 0)) - Number(new Date(a.exposedAt || 0));
+      return 0;
+    })[0] || null,
+    findMany: async ({ where, include, orderBy }) => {
       let rows = state.ledgers.filter((row) => {
         if (where.campaignId && row.campaignId !== where.campaignId) return false;
         if (where.claimedAt?.not === null && !row.claimedAt) return false;
@@ -51,10 +55,13 @@ function createPrisma() {
           || part.userId?.in?.includes(row.userId));
         return true;
       });
+      if (orderBy?.exposedAt === 'desc') rows.sort((a, b) => Number(new Date(b.exposedAt || 0)) - Number(new Date(a.exposedAt || 0)));
       if (include?.user) rows = rows.map((row) => {
         const user = state.users.get(row.userId);
         const orders = state.orders.filter((order) => order.userId === row.userId
-          && order.paymentStatus === 'CONFIRMED' && order.paidAt && !['CANCELLED', 'cancelled'].includes(order.status))
+          && order.paymentStatus === 'CONFIRMED' && order.paidAt
+          && (!where.paidAt?.gte || order.paidAt >= where.paidAt.gte)
+          && !['CANCELLED', 'cancelled'].includes(order.status))
           .sort((a, b) => new Date(a.paidAt) - new Date(b.paidAt))
           .slice(0, 1);
         return { ...row, user: { ...user, orders } };
@@ -101,7 +108,9 @@ function createPrisma() {
         return order ? { id: order.id, userId: order.userId } : null;
       },
       findFirst: async ({ where }) => state.orders.filter((order) => order.userId === where.userId
-        && order.paymentStatus === 'CONFIRMED' && order.paidAt && !['CANCELLED', 'cancelled'].includes(order.status))
+        && order.paymentStatus === 'CONFIRMED' && order.paidAt
+        && (!where.paidAt?.gte || order.paidAt >= where.paidAt.gte)
+        && !['CANCELLED', 'cancelled'].includes(order.status))
         .sort((a, b) => new Date(a.paidAt) - new Date(b.paidAt))[0] || null,
     },
     $transaction: async (fn) => fn(prisma),
@@ -114,7 +123,7 @@ test('campaign is fail-closed and publishes no promise until explicitly complete
   assert.equal(getRegistrationGiftConfig({ FLOWIE_REGISTRATION_GIFT_ENABLED: 'true' }).enabled, false);
   const config = getRegistrationGiftConfig(enabledEnv);
   assert.equal(config.enabled, true);
-  assert.equal(config.giftName, 'Raffaello');
+  assert.equal(config.giftName, 'Raffaello 150 г');
   assert.equal(config.giftQuantity, 1);
   assert.equal(config.fulfillmentMode, 'first_order');
 });
@@ -179,7 +188,7 @@ test('disabling new promotion exposure does not erase or prevent an already-seen
   });
   assert.equal(status.enabled, false);
   assert.equal(status.claimed, true);
-  assert.equal(status.campaign.giftName, 'Raffaello');
+  assert.equal(status.campaign.giftName, 'Raffaello 150 г');
   assert.equal(status.campaign.termsVersion, 'raff-registration-v1');
 });
 
@@ -209,6 +218,36 @@ test('a concurrent phone claim resolves to the unique campaign-phone winner', as
     env: enabledEnv,
   });
   assert.equal(result.id, 'claim-winner');
+});
+
+test('campaign rotation claims the current exposure and verified status prefers a real claim over newer nulls', async () => {
+  const { prisma, state } = createPrisma();
+  const snapshot = {
+    userId: 10, verifiedPhone: null, giftName: 'Raffaello 150 г', giftQuantity: 1,
+    fulfillmentMode: 'first_order', offerTitle: 'Raffaello в подарок', offerBody: 'Условия',
+    offerTerms: 'Условия', termsVersion: 'v1', claimedAt: null, fulfilledAt: null,
+  };
+  state.ledgers.push(
+    { id: 'old', campaignId: 'old-campaign', exposedAt: new Date('2026-11-24'), ...snapshot },
+    { id: 'current', campaignId: 'raff-registration-v1', exposedAt: new Date('2026-11-25'), ...snapshot },
+  );
+  const claimed = await claimRegistrationGiftForVerifiedPhone(prisma, {
+    sourceUserId: 10, targetUserId: 10, verifiedPhone: '+79995550001',
+    newlyVerifiedAccount: true, env: enabledEnv, now: () => new Date('2026-11-26'),
+  });
+  assert.equal(claimed.id, 'current');
+  assert.equal(state.ledgers.find((row) => row.id === 'old').claimedAt, null);
+  state.ledgers.push({
+    id: 'newer-unclaimed', campaignId: 'future', exposedAt: new Date('2026-11-27'),
+    ...snapshot,
+  });
+  const status = await getRegistrationGiftStatus({
+    prisma,
+    user: { id: 10, verifiedPhone: '+79995550001' },
+    env: { ...enabledEnv, FLOWIE_REGISTRATION_GIFT_CAMPAIGN_ID: 'future' },
+  });
+  assert.equal(status.claimed, true);
+  assert.equal(status.campaign.id, 'raff-registration-v1');
 });
 
 async function withServer({ prisma, userId, admin = false }, run) {
@@ -251,11 +290,13 @@ test('staff sees an outstanding gift but can fulfill it only on the first paid d
   state.users.set(10, { id: 10, name: 'Клиент', verifiedPhone: '+79995550001' });
   state.ledgers.push({
     id: 'gift-1', campaignId: 'raff-registration-v1', userId: 10, verifiedPhone: '+79995550001',
-    giftName: 'Raffaello', fulfillmentMode: 'first_order', exposedAt: new Date(), claimedAt: new Date(), fulfilledAt: null,
+    giftName: 'Raffaello 150 г', fulfillmentMode: 'first_order', exposedAt: new Date('2026-11-26'),
+    claimedAt: new Date('2026-11-26'), fulfilledAt: null,
   });
   state.orders.push(
+    { id: 19, userId: 10, paymentStatus: 'CONFIRMED', paidAt: new Date('2026-11-25'), status: 'DELIVERED', deliveredAt: new Date('2026-11-25'), createdAt: new Date('2026-11-25') },
     { id: 20, userId: 10, paymentStatus: 'CONFIRMED', paidAt: new Date('2026-11-25'), status: 'CANCELLED', createdAt: new Date('2026-11-25') },
-    { id: 21, userId: 10, paymentStatus: 'CONFIRMED', paidAt: new Date('2026-11-26'), status: 'DELIVERED', deliveredAt: new Date('2026-11-26'), createdAt: new Date('2026-11-26') },
+    { id: 21, userId: 10, paymentStatus: 'CONFIRMED', paidAt: new Date('2026-11-26T01:00:00Z'), status: 'DELIVERED', deliveredAt: new Date('2026-11-26T02:00:00Z'), createdAt: new Date('2026-11-26T01:00:00Z') },
     { id: 22, userId: 10, paymentStatus: 'CONFIRMED', paidAt: new Date('2026-11-27'), status: 'DELIVERED', deliveredAt: new Date('2026-11-27'), createdAt: new Date('2026-11-27') },
   );
   await withServer({ prisma, userId: 1, admin: true }, async (base) => {
@@ -266,10 +307,16 @@ test('staff sees an outstanding gift but can fulfill it only on the first paid d
 
     response = await fetch(`${base}/api/admin/registration-gifts/order/21`);
     body = await response.json();
-    assert.equal(body.gift.giftName, 'Raffaello');
+    assert.equal(body.gift.giftName, 'Raffaello 150 г');
     assert.equal(body.gift.readyToFulfill, true);
     response = await fetch(`${base}/api/admin/registration-gifts/order/22`);
     assert.equal((await response.json()).gift, null);
+
+    response = await fetch(`${base}/api/admin/registration-gifts/gift-1/fulfill`, {
+      method: 'POST', headers: { origin: base, 'content-type': 'application/json' }, body: JSON.stringify({ orderId: 19 }),
+    });
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).error, 'FIRST_PAID_ORDER_REQUIRED');
 
     response = await fetch(`${base}/api/admin/registration-gifts/gift-1/fulfill`, {
       method: 'POST', headers: { origin: base, 'content-type': 'application/json' }, body: JSON.stringify({ orderId: 22 }),

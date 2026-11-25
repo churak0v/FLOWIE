@@ -36,9 +36,8 @@ function rubles(value) {
 
 function registrationGiftForOrder(order, event) {
   if (event !== 'ORDER_PAID') return null;
-  const firstPaidOrderId = order.user?.orders?.[0]?.id;
-  if (Number(firstPaidOrderId) !== Number(order.id)) return null;
-  return (order.user?.registrationGifts || []).find((row) => row.claimedAt && !row.fulfilledAt) || null;
+  // processPending enriches only the first eligible post-registration order.
+  return order.registrationGift || null;
 }
 
 function registrationGiftCallbackData(giftId, orderId) {
@@ -153,12 +152,6 @@ async function processPending(prisma, env = process.env, fetchImpl = fetch) {
           user: {
             include: {
               registrationGifts: { where: { claimedAt: { not: null }, fulfilledAt: null } },
-              orders: {
-                where: { paymentStatus: 'CONFIRMED', paidAt: { not: null }, status: { notIn: ['CANCELLED', 'cancelled'] } },
-                orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
-                take: 1,
-                select: { id: true },
-              },
             },
           },
           items: { include: { product: true } },
@@ -177,6 +170,20 @@ async function processPending(prisma, env = process.env, fetchImpl = fetch) {
     });
     if (claimed.count !== 1) continue;
     try {
+      const gift = notification.order.user?.registrationGifts?.[0] || null;
+      if (gift && notification.event === 'ORDER_PAID') {
+        const firstEligibleOrder = await prisma.order.findFirst({
+          where: {
+            userId: gift.userId,
+            paymentStatus: 'CONFIRMED',
+            paidAt: { gte: gift.claimedAt },
+            status: { notIn: ['CANCELLED', 'cancelled'] },
+          },
+          orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
+          select: { id: true },
+        });
+        if (firstEligibleOrder?.id === notification.order.id) notification.order.registrationGift = gift;
+      }
       await sendTelegramMessage(notification, env, fetchImpl);
       await prisma.telegramOrderNotification.update({
         where: { id: notification.id },

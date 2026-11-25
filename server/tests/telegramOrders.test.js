@@ -35,15 +35,12 @@ test('paid first order tells the manager to add the outstanding registration gif
     id: 42,
     totalPrice: 5999,
     items: [],
-    user: {
-      orders: [{ id: 42 }],
-      registrationGifts: [{ giftName: 'Raffaello <gift>', giftQuantity: 1, claimedAt: new Date(), fulfilledAt: null }],
-    },
+    registrationGift: { giftName: 'Raffaello <gift>', giftQuantity: 1, claimedAt: new Date(), fulfilledAt: null },
   };
   const first = formatOrderMessage(order, 'ORDER_PAID');
   assert.match(first, /Подарок за регистрацию/);
   assert.match(first, /Raffaello &lt;gift&gt;/);
-  assert.doesNotMatch(formatOrderMessage({ ...order, id: 43 }, 'ORDER_PAID'), /Подарок за регистрацию/);
+  assert.doesNotMatch(formatOrderMessage({ ...order, registrationGift: null }, 'ORDER_PAID'), /Подарок за регистрацию/);
   assert.doesNotMatch(formatOrderMessage(order, 'ORDER_CREATED'), /Подарок за регистрацию/);
 });
 
@@ -89,16 +86,13 @@ test('sends a Telegram message with a direct admin order button', async () => {
   assert.equal(payload.reply_markup.inline_keyboard[0][0].url, 'https://admin.flowie.art/orders/42');
 });
 
-test('adds an idempotent fulfillment callback only for the first paid order gift', async () => {
+test('adds an idempotent fulfillment callback only for an enriched paid order gift', async () => {
   let payload;
   const order = {
     id: 42,
     totalPrice: 10000,
     items: [],
-    user: {
-      orders: [{ id: 42 }],
-      registrationGifts: [{ id: 'gift_abc-1', giftName: 'Raffaello', giftQuantity: 1, claimedAt: new Date(), fulfilledAt: null }],
-    },
+    registrationGift: { id: 'gift_abc-1', giftName: 'Raffaello', giftQuantity: 1, claimedAt: new Date(), fulfilledAt: null },
   };
   await sendTelegramMessage({ orderId: 42, chatId: '100', event: 'ORDER_PAID', order }, {
     TELEGRAM_ORDER_BOT_TOKEN: 'secret-token',
@@ -113,6 +107,7 @@ test('adds an idempotent fulfillment callback only for the first paid order gift
   }]);
 
   order.id = 43;
+  order.registrationGift = null;
   await sendTelegramMessage({ orderId: 43, chatId: '100', event: 'ORDER_PAID', order }, {
     TELEGRAM_ORDER_BOT_TOKEN: 'secret-token', TELEGRAM_ORDER_CHAT_IDS: '100',
   }, async (_url, options) => {

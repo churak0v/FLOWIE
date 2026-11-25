@@ -82,9 +82,16 @@ async function findCurrentLedger(prisma, config, user) {
   if (!user?.id) return null;
   const or = [{ userId: user.id }];
   if (user.verifiedPhone) or.push({ verifiedPhone: user.verifiedPhone });
+  if (user.verifiedPhone) {
+    const claimed = await prisma.registrationGiftLedger.findFirst({
+      where: { OR: or, claimedAt: { not: null } },
+      orderBy: { claimedAt: 'desc' },
+    });
+    if (claimed) return claimed;
+  }
   return prisma.registrationGiftLedger.findFirst({
     where: { ...(!user.verifiedPhone && config.id ? { campaignId: config.id } : {}), OR: or },
-    orderBy: user.verifiedPhone ? { claimedAt: 'desc' } : { exposedAt: 'asc' },
+    orderBy: { exposedAt: 'desc' },
   });
 }
 
@@ -129,17 +136,20 @@ async function claimRegistrationGiftForVerifiedPhone(tx, {
   now = () => new Date(),
 }) {
   if (!newlyVerifiedAccount || !targetUserId || !verifiedPhone) return null;
+  const config = getRegistrationGiftConfig(env);
   const userIds = [...new Set([sourceUserId, targetUserId].filter(Boolean))];
   const rows = await tx.registrationGiftLedger.findMany({
     where: {
       OR: [{ verifiedPhone }, { userId: { in: userIds } }],
     },
-    orderBy: { exposedAt: 'asc' },
+    orderBy: { exposedAt: 'desc' },
   });
   const claimed = rows.find((row) => row.verifiedPhone === verifiedPhone && row.claimedAt);
   if (claimed) return claimed;
-  const target = rows.find((row) => row.userId === targetUserId && !row.claimedAt);
-  const source = rows.find((row) => row.userId === sourceUserId && !row.claimedAt);
+  const preferred = config.id ? rows.filter((row) => row.campaignId === config.id) : rows;
+  const candidates = preferred.some((row) => !row.claimedAt) ? preferred : rows;
+  const target = candidates.find((row) => row.userId === targetUserId && !row.claimedAt);
+  const source = candidates.find((row) => row.userId === sourceUserId && !row.claimedAt);
   let candidate = target || source;
   if (!candidate) return null;
 
@@ -187,7 +197,7 @@ async function fulfillRegistrationGift({
         where: {
           userId: gift.userId,
           paymentStatus: 'CONFIRMED',
-          paidAt: { not: null },
+          paidAt: { gte: gift.claimedAt },
           status: { notIn: ['CANCELLED', 'cancelled'] },
         },
         orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
