@@ -7,14 +7,34 @@ class BouquetCardError extends Error {
   constructor(code, message) { super(message); this.code = code; }
 }
 
-function parseNaturalComposition(text) {
+function parseSellingPrice(text) {
+  const value = String(text || '').trim().replace(/\s*(?:₽|руб(?:\.|ля|лей)?|р\.?)$/iu, '').trim();
+  if (!/^(?:\d+|\d{1,3}(?:[ \u00a0\u202f]\d{3})+)$/.test(value)) return null;
+  const price = Number(value.replace(/[ \u00a0\u202f]/g, ''));
+  return Number.isSafeInteger(price) && price > 0 && price <= 2147483647 ? price : null;
+}
+
+function parseCardComposition(text) {
   const value = String(text || '').trim();
   if (!value) throw new BouquetCardError('COMPOSITION_EMPTY', 'Напишите состав, например: Роза 9 шт, эвкалипт 2 ветки.');
   const parts = value.split(/\n|;|,(?!\d)/).map((part) => part.trim()).filter(Boolean);
   if (!parts.length || parts.length > 100) throw new BouquetCardError('COMPOSITION_SIZE', 'Укажите от 1 до 100 позиций состава.');
-  const lines = parts.map((part, index) => {
-    const match = /^(.+?)\s+(\d+(?:[.,]\d+)?)\s+([\p{L}][\p{L}.\-]*)$/u.exec(part);
-    if (!match) throw new BouquetCardError('COMPOSITION_AMBIGUOUS', `Не понял позицию ${index + 1}. Напишите: название, количество и единицу.`);
+  const lines = []; const notes = []; let sellingPriceRubles = null;
+  for (const [index, part] of parts.entries()) {
+    const priceLine = /^(?:цена(?:\s+продажи)?|продажная\s+цена|стоимость)\s*[:—–-]?\s*(\d.*)$/iu.exec(part);
+    if (priceLine) {
+      const price = parseSellingPrice(priceLine[1]);
+      if (price == null || (sellingPriceRubles != null && sellingPriceRubles !== price)) {
+        throw new BouquetCardError('COMPOSITION_PRICE', 'Уточните продажную цену в рублях, например: Цена: 7560.');
+      }
+      sellingPriceRubles = price; continue;
+    }
+    const normalized = part.replace(/\s*[:—–-]\s*(?=\d)/gu, ' ');
+    const match = /^(.+?)\s+(\d+(?:[.,]\d+)?)\s*([\p{L}][\p{L}.\-]*)?$/u.exec(normalized);
+    if (!match) {
+      if (part.length <= 240 && /[\p{L}]/u.test(part) && !/\d/.test(part)) { notes.push(part); continue; }
+      throw new BouquetCardError('COMPOSITION_AMBIGUOUS', `Уточните строку «${part.slice(0, 60)}». Можно написать: Розы — 9.`);
+    }
     const name = match[1].trim().replace(/\s+/g, ' ');
     if (name.length < 2 || name.length > 240 || /(^|\s)\d+(?:[.,]\d+)?($|\s)/.test(name)) {
       throw new BouquetCardError('COMPOSITION_AMBIGUOUS', `Уточните название в позиции ${index + 1}.`);
@@ -23,13 +43,16 @@ function parseNaturalComposition(text) {
     if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 10000) {
       throw new BouquetCardError('COMPOSITION_QUANTITY', `Проверьте количество в позиции ${index + 1}.`);
     }
-    const unit = match[3].toLocaleLowerCase('ru-RU').replace(/\.$/, '');
-    return { ingredientId: draftIngredientId(name), name, quantity, unit, supplierId: null };
-  });
-  try { return validateRecipe(lines); } catch {
+    const unit = (match[3] || 'шт').toLocaleLowerCase('ru-RU').replace(/\.$/, '');
+    lines.push({ ingredientId: draftIngredientId(name), name, quantity, unit, supplierId: null });
+  }
+  if (!lines.length) throw new BouquetCardError('COMPOSITION_AMBIGUOUS', 'Укажите количество цветов, например: Розы — 9. Декор можно написать без количества.');
+  try { return { lines: validateRecipe(lines), notes, sellingPriceRubles }; } catch {
     throw new BouquetCardError('COMPOSITION_DUPLICATE', 'Объедините одинаковые позиции состава в одну строку.');
   }
 }
+
+function parseNaturalComposition(text) { return parseCardComposition(text).lines; }
 
 async function getCardEconomics({ prisma, recipe, asOf = new Date() }) {
   if (!prisma || !recipe || !Array.isArray(recipe.lines)) throw new TypeError('BOUQUET_CARD_ECONOMICS_INPUT');
@@ -61,4 +84,4 @@ async function getCardEconomics({ prisma, recipe, asOf = new Date() }) {
   };
 }
 
-module.exports = { BouquetCardError, getCardEconomics, parseNaturalComposition };
+module.exports = { BouquetCardError, getCardEconomics, parseNaturalComposition, parseCardComposition, parseSellingPrice };

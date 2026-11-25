@@ -2,7 +2,20 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { BouquetCardError, getCardEconomics, parseNaturalComposition } = require('../services/bouquetCardEconomics');
+const { BouquetCardError, getCardEconomics, parseNaturalComposition, parseCardComposition } = require('../services/bouquetCardEconomics');
+
+test('phone message accepts dash, omitted units, unquantified decor and a separate selling price', () => {
+  const parsed = parseCardComposition('Розы кустовые -9\nЛента атласная\nЦена : 7560');
+  assert.equal(parsed.lines.length, 1);
+  assert.deepEqual(parsed.lines.map(({ name, quantity, unit }) => [name, quantity, unit]), [['Розы кустовые', 9, 'шт']]);
+  assert.deepEqual(parsed.notes, ['Лента атласная']);
+  assert.equal(parsed.sellingPriceRubles, 7560);
+  for (const value of ['Розы — 9', 'Розы: 9', 'Розы 9шт', 'Розы 9']) {
+    assert.equal(parseCardComposition(value).lines[0].quantity, 9);
+  }
+  assert.throws(() => parseCardComposition('Розы 9\nЦена: 0'), BouquetCardError);
+  assert.throws(() => parseCardComposition('Розы 9\nЦена: 7500\nЦена: 7600'), BouquetCardError);
+});
 
 test('ordinary Russian composition parses commas, newlines, semicolons and decimal quantities', () => {
   const lines = parseNaturalComposition('Роза Пинк Флойд 9 шт, эвкалипт 2 ветки\nЛента 1,5 м; Пион 3 шт.');

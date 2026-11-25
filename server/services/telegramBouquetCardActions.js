@@ -2,7 +2,7 @@
 
 const { getTelegramBouquetImportConfig, isAuthorized } = require('./telegramBouquetImport');
 const { CARD_ACTIONS, bouquetKeyboard } = require('./telegramBouquetKeyboard');
-const { BouquetCardError, parseNaturalComposition } = require('./bouquetCardEconomics');
+const { BouquetCardError, parseCardComposition, parseSellingPrice } = require('./bouquetCardEconomics');
 
 const STATUSES = ['COLLECTING', 'REVIEW_REQUIRED', 'PARTIAL_REVIEW_REQUIRED'];
 const COMMANDS = new Set(Object.values(CARD_ACTIONS));
@@ -18,13 +18,6 @@ function sameLines(left, right) {
 function cleanCardName(value) {
   return String(value || 'Букет без названия').replace(/\s*[—-]\s*(?:предположительно|черновик)\s*$/iu, '')
     .replace(/\s*\((?:предварительный вариант|предположительно|черновик)\)\s*$/iu, '').trim().slice(0, 120);
-}
-
-function parseSellingPrice(text) {
-  const value = String(text || '').trim().replace(/\s*(?:₽|руб(?:\.|ля|лей)?|р\.?)$/iu, '').trim();
-  if (!/^(?:\d+|\d{1,3}(?:[ \u00a0\u202f]\d{3})+)$/.test(value)) return null;
-  const price = Number(value.replace(/[ \u00a0\u202f]/g, ''));
-  return Number.isSafeInteger(price) && price > 0 && price <= 2147483647 ? price : null;
 }
 
 function createTelegramBouquetCardActionsHandler({ prisma, env = process.env, fetchImpl = globalThis.fetch } = {}) {
@@ -100,7 +93,7 @@ function createTelegramBouquetCardActionsHandler({ prisma, env = process.env, fe
         if (mapped === '/card_edit_composition') {
           state.cardEdit = { mode: 'composition', targetCustomId: currentId };
           await tx.bouquetImportBatch.update({ where: { id: batch.id }, data: { state } });
-          return { status: 'awaiting_composition', text: 'Напишите состав, например: Роза 9 шт, эвкалипт 2 ветки.' };
+          return { status: 'awaiting_composition', text: 'Напишите состав как удобно, например:\nРозы кустовые — 9\nЛента атласная\nЦена: 7560\n\nЦену можно указать сразу или отдельно кнопкой «Изменить цену».' };
         }
         if (mapped === '/card_edit_price') {
           state.cardEdit = { mode: 'price', targetCustomId: currentId };
@@ -127,7 +120,10 @@ function createTelegramBouquetCardActionsHandler({ prisma, env = process.env, fe
           if (!array(recipe?.lines).length) return { status: 'composition_missing', text: 'Сначала укажите состав букета.' };
           await tx.bouquetRecipe.update({ where: { id: source.recipeId }, data: { confirmedAt: new Date() } });
           if (source.productId) {
-            await tx.product.update({ where: { id: source.productId }, data: { composition: {
+            await tx.product.update({ where: { id: source.productId }, data: {
+              description: ['Состав:', ...recipe.lines.map((line) => `${line.name} — ${line.quantity} ${line.unit}`),
+                ...array(source.compositionNotes)].join('\n'),
+              composition: {
               deleteMany: {}, create: recipe.lines.map((line, index) => ({
                 name: line.name, quantity: `${line.quantity} ${line.unit}`, sort: index + 1,
               })),
@@ -158,10 +154,19 @@ function createTelegramBouquetCardActionsHandler({ prisma, env = process.env, fe
           }
           delete state.cardEdit;
         } else if (pending.mode === 'composition') {
-          const lines = parseNaturalComposition(text);
+          const parsed = parseCardComposition(text);
+          const { lines, notes, sellingPriceRubles } = parsed;
           if (!edited.recipeId) return { status: 'composition_missing', text: 'Состав пока нельзя сохранить. Попробуйте немного позже.' };
-          await tx.bouquetRecipe.update({ where: { id: edited.recipeId }, data: { lines, confirmedAt: null, snapshot: null } });
-          edited.compositionProposal = lines; delete state.cardEdit;
+          const recipe = await tx.bouquetRecipe.findUnique({ where: { id: edited.recipeId } });
+          await tx.bouquetRecipe.update({ where: { id: edited.recipeId }, data: { lines, confirmedAt: null, snapshot: null,
+            ...(sellingPriceRubles != null ? { costs: { ...(recipe?.costs || {}), sellingPriceKopecks: sellingPriceRubles * 100 } } : {}),
+          } });
+          if (sellingPriceRubles != null) {
+            edited.sellingPriceRubles = sellingPriceRubles;
+            if (edited.productId) await tx.product.update({ where: { id: edited.productId }, data: { price: sellingPriceRubles } });
+          }
+          edited.compositionProposal = lines; edited.compositionNotes = notes; edited.compositionSourceText = text;
+          delete state.cardEdit;
         } else if (pending.mode === 'merge') {
           const number = Number(text);
           if (!Number.isSafeInteger(number) || number < 1 || number > drafts.length) return { status: 'invalid_merge', text: `Укажите номер карточки от 1 до ${drafts.length}.` };
@@ -182,7 +187,10 @@ function createTelegramBouquetCardActionsHandler({ prisma, env = process.env, fe
           delete state.cardEdit;
         } else return { status: 'ignored' };
         await tx.bouquetImportBatch.update({ where: { id: batch.id }, data: { state } });
-        const messages = { name: 'Название обновлено.', price: `Продажная цена: ${edited.sellingPriceRubles?.toLocaleString('ru-RU')} ₽. Сохранено.`, composition: 'Состав обновлён. Проверьте его и подтвердите.',
+        const compositionSummary = array(edited.compositionProposal).map((line) => `${line.name} — ${line.quantity} ${line.unit}`);
+        const messages = { name: 'Название обновлено.', price: `Продажная цена: ${edited.sellingPriceRubles?.toLocaleString('ru-RU')} ₽. Сохранено.`, composition: ['Состав сохранён:', ...compositionSummary, ...array(edited.compositionNotes),
+          ...(edited.sellingPriceRubles ? [`Продажная цена: ${edited.sellingPriceRubles.toLocaleString('ru-RU')} ₽`] : []),
+          'Проверьте и подтвердите состав кнопкой внизу.'].join('\n'),
           merge: 'Карточки объединены.' };
         return { status: `${pending.mode}_saved`, text: messages[pending.mode] };
       });

@@ -117,6 +117,24 @@ test('composition editing accepts natural lines and leaves confirmation explicit
   assert.match(state.sends.at(-1).text, /проверьте.*подтвердите/iu);
 });
 
+test('the failed phone message saves roses, ribbon and selling price together without inventing ribbon quantity', async () => {
+  const { handler, state } = fixture();
+  state.batch.state.drafts[0].productId = 79;
+  state.products.set(79, { id: 79, price: 0, isActive: false });
+  await handler(update(1, 'Изменить состав'));
+  assert.equal((await handler(update(2, 'Розы кустовые -9\nЛента атласная\nЦена : 7560'))).status, 'composition_saved');
+  const draft = state.batch.state.drafts[0];
+  assert.deepEqual(draft.compositionNotes, ['Лента атласная']);
+  assert.equal(state.recipes.get('recipe-a').lines[0].quantity, 9);
+  assert.equal(state.recipes.get('recipe-a').lines.length, 1);
+  assert.equal(state.products.get(79).price, 7560);
+  assert.equal(state.recipes.get('recipe-a').confirmedAt, null);
+  assert.match(state.sends.at(-1).text, /Лента атласная/);
+  await handler(update(3, 'Подтвердить состав'));
+  assert.match(state.products.get(79).description, /Лента атласная/);
+  assert.equal(state.products.get(79).isActive, false);
+});
+
 test('add photo records the worker handoff marker for the current card', async () => {
   const { handler, state } = fixture();
   assert.equal((await handler(update(1, 'Добавить фото'))).status, 'awaiting_photo');

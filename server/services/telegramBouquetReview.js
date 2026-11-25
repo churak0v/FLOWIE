@@ -47,7 +47,8 @@ function cardCaption({ draft, recipe, economics, photoCount, sellingPriceRubles 
   const fallback = confirmed.length || proposal.length ? [] : array(draft?.likely_flowers).map(cleanFlowerName).filter(Boolean);
   const lines = confirmed.length ? confirmed : (proposal.length ? proposal : fallback);
   return [`Название: ${title}`, '', `Состав${confirmed.length ? '' : ' — проверьте'}:`,
-    ...(lines.length ? lines.map((line) => `• ${line}`) : ['• не указан']), '',
+    ...(lines.length ? lines.map((line) => `• ${line}`) : ['• не указан']),
+    ...array(draft?.compositionNotes).map((note) => `• ${note}`), '',
     `Продажная цена: ${Number.isInteger(sellingPriceRubles) && sellingPriceRubles > 0 ? formatRubles(sellingPriceRubles * 100) : 'не указана'}`,
     `Закупка: ${formatRubles(economics?.totalPurchaseKopecks) || 'не рассчитана — уточните состав и закупку'}`,
     `Фото: ${photoCount}`].join('\n').slice(0, 1024);
