@@ -28,7 +28,7 @@ function createRegistrationGiftRouter({ prisma, env = process.env, now = () => n
   router.post('/exposure', requireSameOrigin, requireAuth, async (req, res) => {
     try {
       const placement = req.body?.placement ?? null;
-      if (placement !== null && !['home', 'product'].includes(placement)) {
+      if (placement !== null && !['home', 'product', 'product_details'].includes(placement)) {
         return res.status(400).json({ ok: false, error: 'BAD_PLACEMENT' });
       }
       const user = await prisma.user.findUnique({ where: { id: req.user.id } });

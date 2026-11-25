@@ -118,7 +118,7 @@ async function recordRegistrationGiftExposure({ prisma, user, placement = null, 
       offerTerms: config.campaign.terms,
       termsVersion: config.termsVersion,
       exposedAt: now(),
-      exposurePlacement: ['home', 'product'].includes(placement) ? placement : null,
+      exposurePlacement: ['home', 'product', 'product_details'].includes(placement) ? placement : null,
     },
   });
   return publicStatus(config, row, user);
