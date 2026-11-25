@@ -16,6 +16,7 @@ function embeddingConfig(env = process.env) {
     explicitlyEnabled,
     enabled: explicitlyEnabled && Boolean(apiKey),
     apiKey,
+    baseUrl: String(env.OPENAI_API_BASE_URL || 'https://api.openai.com').trim().replace(/\/+$/, ''),
     model,
     dimensions,
     timeoutMs,
@@ -54,7 +55,7 @@ function createOpenAIEmbeddingProvider({ env = process.env, fetchImpl = globalTh
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
       try {
-        const response = await fetchImpl('https://api.openai.com/v1/embeddings', {
+        const response = await fetchImpl(`${config.baseUrl}/v1/embeddings`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${config.apiKey}`,

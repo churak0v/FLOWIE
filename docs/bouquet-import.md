@@ -71,10 +71,15 @@ API recreation. Existing frontend/admin images can remain running.
   no dropped pending updates. Telegram reported zero pending updates and no error.
 - Real S3 PUT/GET readback succeeded for a 38-byte import connectivity probe in the
   approved backup bucket. Anonymous HEAD returned 403. No SPEKA media objects touched.
-- OpenAI is not active yet: server key empty; known FLOWIE/SPEKA saved keys return
-  HTTP 401 on free model-list checks. No paid batch submitted. Owner's logged-in
-  API billing UI showed $5.95 credit in Content Zavod Organization. A valid key is
-  required before AI work starts; photo intake and composition editing are deployed.
+- Owner created a dedicated restricted `FLOWIE bouquet import` key. It passes
+  authentication; the older saved keys return HTTP 401. The new key is stored
+  only in the protected server environment. Owner's API billing UI showed $5.95.
+- Direct requests from FLOWIE return `unsupported_country_region_territory`.
+  Production uses `OPENAI_API_BASE_URL=https://speka.tech/flowie-openai` for Batch
+  and embeddings. Caddy snippet: `ops/caddy/flowie-openai.caddy`. It accepts only
+  the FLOWIE VPS IP and required OpenAI paths, forwarding HTTPS to api.openai.com.
+  Both model access and Batch listing from the live FLOWIE container returned 200;
+  external access to the relay returned 403, and SPEKA health remained 200.
 - Full automated server suite after retry coverage: 183 passed, 3 infrastructure
-  tests skipped. A real florist photo → AI → review flow still needs a valid key
-  and a first archive; live verification above does not claim that flow passed.
+  tests skipped. A real florist photo → AI → review flow still needs a first
+  finalized archive; live verification above does not claim that flow passed.

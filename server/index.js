@@ -70,7 +70,8 @@ if (process.env.FLOWIE_BOUQUET_IMPORT_ENABLED === 'true') {
     if (process.env.OPENAI_API_KEY) {
         const { createOpenAIBatchProvider } = require('./services/bouquetImportBatch');
         const { startBouquetImportWorker } = require('./services/bouquetImportWorker');
-        startBouquetImportWorker({ prisma, storage, provider: createOpenAIBatchProvider({ apiKey: process.env.OPENAI_API_KEY }) });
+        const baseUrl = String(process.env.OPENAI_API_BASE_URL || 'https://api.openai.com').replace(/\/+$/, '');
+        startBouquetImportWorker({ prisma, storage, provider: createOpenAIBatchProvider({ apiKey: process.env.OPENAI_API_KEY, baseUrl }) });
     }
 }
 	app.use('/api/upload', uploadRoutes);

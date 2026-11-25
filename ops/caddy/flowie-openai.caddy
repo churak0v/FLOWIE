@@ -1,0 +1,22 @@
+  # FLOWIE API egress through the owner's Netherlands host.
+  @flowie_openai path /flowie-openai/*
+  handle @flowie_openai {
+    @flowie_openai_allowed {
+      remote_ip 168.113.209.147
+      method GET POST
+      path /flowie-openai/v1/files /flowie-openai/v1/files/* /flowie-openai/v1/batches /flowie-openai/v1/batches/* /flowie-openai/v1/models /flowie-openai/v1/models/* /flowie-openai/v1/embeddings /flowie-openai/v1/responses
+    }
+    handle @flowie_openai_allowed {
+      uri strip_prefix /flowie-openai
+      reverse_proxy https://api.openai.com {
+        header_up Host api.openai.com
+        header_up -Cookie
+        transport http {
+          tls_server_name api.openai.com
+          dial_timeout 10s
+          response_header_timeout 90s
+        }
+      }
+    }
+    respond "Forbidden" 403
+  }
