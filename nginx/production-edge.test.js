@@ -57,6 +57,7 @@ test('proxy route snapshot preserves each upstream boundary', () => {
         { location: '/uploads/', upstream: 'http://$flowie_api_host' },
         { location: '= /', upstream: 'http://$flowie_api_host' },
         { location: '= /mothers-day', upstream: 'http://$flowie_api_host' },
+        { location: '= /care', upstream: 'http://$flowie_api_host' },
         { location: '= /catalog', upstream: 'http://$flowie_api_host' },
         { location: '= /shop', upstream: 'http://$flowie_api_host' },
         { location: '^~ /product/', upstream: 'http://$flowie_api_host' },
