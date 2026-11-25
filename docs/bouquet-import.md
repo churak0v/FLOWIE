@@ -27,6 +27,10 @@ Import is limited to explicitly configured numeric Telegram chat/user IDs. Adeli
    **Изменить название**, **Добавить фото**, and **Объединить карточки** operate on
    the current card. The bot displays photos as an album and hides technical IDs
    and commands. Old slash commands remain accepted for compatibility.
+7. **Изменить цену** accepts the florist's selling price in whole rubles, for
+   example `4500` or `4 500 ₽`. The card shows **Продажная цена** separately from
+   procurement cost. The amount is saved to the selected product and retained
+   before product creation; entering a price does not publish a hidden draft.
 
 Imports create drafts. With `FLOWIE_IMPORT_MATERIALIZE_PRODUCTS=true`, grouped cards
 also become inactive products in the existing admin, with local WebP image galleries.

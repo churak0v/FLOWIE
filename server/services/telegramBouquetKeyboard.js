@@ -1,6 +1,7 @@
 const CARD_ACTIONS = Object.freeze({
   'Изменить состав': '/card_edit_composition',
   'Изменить название': '/card_edit_name',
+  'Изменить цену': '/card_edit_price',
   'Добавить фото': '/card_add_photo',
   'Объединить карточки': '/card_merge',
   'Подтвердить состав': '/card_confirm',
@@ -23,6 +24,7 @@ const LEGACY_ACTIONS = Object.freeze({
 const ACTIONS = Object.freeze({ ...LEGACY_ACTIONS, ...CARD_ACTIONS });
 const CARD_KEYBOARD_ROWS = Object.freeze([
   Object.freeze(['Изменить состав', 'Изменить название']),
+  Object.freeze(['Изменить цену']),
   Object.freeze(['Добавить фото', 'Объединить карточки']),
   Object.freeze(['Подтвердить состав', 'Дальше']),
   Object.freeze(['Посмотреть результат', 'Отмена']),

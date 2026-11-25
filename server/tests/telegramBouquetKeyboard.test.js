@@ -12,6 +12,7 @@ const {
 test('renders the polished product-card keyboard without commands or identifiers', () => {
   const expected = [
     ['Изменить состав', 'Изменить название'],
+    ['Изменить цену'],
     ['Добавить фото', 'Объединить карточки'],
     ['Подтвердить состав', 'Дальше'],
     ['Посмотреть результат', 'Отмена'],

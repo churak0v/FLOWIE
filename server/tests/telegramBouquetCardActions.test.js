@@ -10,7 +10,7 @@ function update(id, text) {
 
 function fixture() {
   const state = {
-    locks: [], sends: [], claims: new Set(),
+    locks: [], sends: [], claims: new Set(), products: new Map(),
     batch: { id: 'batch-1', chatId: '-100', userId: '1780687976', status: 'COLLECTING', state: {
       reviewCursor: 0,
       drafts: [
@@ -35,6 +35,10 @@ function fixture() {
         const recipe = state.recipes.get(where.id); Object.assign(recipe, structuredClone(data)); return recipe;
       },
     },
+    product: { update: async ({ where, data }) => {
+      const product = state.products.get(where.id);
+      assert.ok(product); Object.assign(product, structuredClone(data)); return product;
+    } },
   };
   const prisma = {
     bouquetImportBatch: { findMany: async () => [structuredClone(state.batch)] },
@@ -66,6 +70,42 @@ test('name editing uses current card state and natural text without exposing ide
   assert.equal(state.batch.state.cardEdit, undefined);
   assert.doesNotMatch(JSON.stringify(state.sends), /card-a|recipe-a|\//);
   assert.deepEqual(state.locks[0], ['SELECT pg_advisory_xact_lock(hashtext($1))', 'batch-1']);
+});
+
+test('selling price is entered in rubles and saved to the selected draft, product and recipe only', async () => {
+  const { handler, state } = fixture();
+  state.batch.state.drafts[0].productId = 79;
+  state.products.set(79, { id: 79, price: 0, isActive: false });
+  state.recipes.get('recipe-a').costs = { packagingCostKopecks: 20000 };
+  await handler(update(1, 'Изменить цену'));
+  assert.equal((await handler(update(2, '4 500 ₽'))).status, 'price_saved');
+  assert.equal(state.products.get(79).price, 4500);
+  assert.equal(state.products.get(79).isActive, false);
+  assert.equal(state.batch.state.drafts[0].sellingPriceRubles, 4500);
+  assert.equal(state.batch.state.drafts[1].sellingPriceRubles, undefined);
+  assert.deepEqual(state.recipes.get('recipe-a').costs, { packagingCostKopecks: 20000, sellingPriceKopecks: 450000 });
+  assert.equal(state.batch.state.cardEdit, undefined);
+});
+
+test('invalid prices leave the edit open without changing the product', async () => {
+  const { handler, state } = fixture();
+  await handler(update(1, 'Изменить цену'));
+  for (const [index, text] of ['0', '-4500', '45abc', '4500,50', '4 50', '2147483648'].entries()) {
+    assert.equal((await handler(update(index + 2, text))).status, 'invalid_price');
+    assert.equal(state.batch.state.cardEdit.mode, 'price');
+    assert.equal(state.batch.state.drafts[0].sellingPriceRubles, undefined);
+  }
+  await handler(update(20, 'Отмена'));
+  assert.equal(state.batch.state.cardEdit, undefined);
+});
+
+test('price input remains attached to the selected card even if the cursor changes', async () => {
+  const { handler, state } = fixture();
+  await handler(update(1, 'Изменить цену'));
+  state.batch.state.reviewCursor = 1;
+  assert.equal((await handler(update(2, '5500 рублей'))).status, 'price_saved');
+  assert.equal(state.batch.state.drafts[0].sellingPriceRubles, 5500);
+  assert.equal(state.batch.state.drafts[1].sellingPriceRubles, undefined);
 });
 
 test('composition editing accepts natural lines and leaves confirmation explicit', async () => {

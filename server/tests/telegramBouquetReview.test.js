@@ -226,3 +226,9 @@ test('card cleans draft qualifiers and prefers an edited unconfirmed recipe over
   assert.doesNotMatch(caption, /Старая|предварительный вариант/iu);
   assert.match(caption, /проверьте/iu);
 });
+
+test('card displays a separate selling price and an unset price without treating it as free', () => {
+  assert.match(cardCaption({ draft: { sellingPriceRubles: 4500 }, photoCount: 1 }), /Продажная цена: 4 500 ₽/);
+  assert.match(cardCaption({ draft: { sellingPriceRubles: 4500 }, sellingPriceRubles: 5500, photoCount: 1 }), /Продажная цена: 5 500 ₽/);
+  assert.match(cardCaption({ draft: {}, sellingPriceRubles: 0, photoCount: 1 }), /Продажная цена: не указана/);
+});

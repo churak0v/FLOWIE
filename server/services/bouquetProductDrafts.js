@@ -97,7 +97,8 @@ async function materializeBouquetProductDrafts({ prisma, storage, importId, uplo
       })).filter((line) => line.name && line.quantity);
       const product = await tx.product.create({ data: {
         name: cleanName(draft.draft_name),
-        price: 0,
+        price: Number.isInteger(draft.sellingPriceRubles) && draft.sellingPriceRubles > 0 && draft.sellingPriceRubles <= 2147483647
+          ? draft.sellingPriceRubles : 0,
         discount: 0,
         image: plan.urls[0],
         description: descriptionFor(draft),

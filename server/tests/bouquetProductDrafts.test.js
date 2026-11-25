@@ -96,12 +96,14 @@ test('creates composition items only from a human-confirmed recipe', async (t) =
   t.after(() => fs.rm(uploadsDir, { recursive: true, force: true }));
   const state = {
     files: [{ id: 'p1', status: 'STORED', storageKey: 'private/one' }],
-    drafts: [{ customId: 'one', draft_name: 'Белые хризантемы', photoIds: ['p1'], compositionProposal: [{ name: 'Лилия', quantity: 20, unit: 'шт.' }], recipeId: 'r1' }],
+    drafts: [{ customId: 'one', draft_name: 'Белые хризантемы', sellingPriceRubles: 6500, photoIds: ['p1'], compositionProposal: [{ name: 'Лилия', quantity: 20, unit: 'шт.' }], recipeId: 'r1' }],
   };
   const recipes = [{ id: 'r1', confirmedAt: new Date(), productId: null, lines: [{ name: 'Хризантема', quantity: 5, unit: 'шт.' }] }];
   const prisma = prismaDouble(state, recipes);
   await materializeBouquetProductDrafts({ prisma, storage: { get: async () => ({ buffer: await photo('#ffffff') }) }, importId: 'import-1', uploadsDir });
   assert.deepEqual(prisma.products[0].composition.create, [{ name: 'Хризантема', quantity: '5 шт.', sort: 1 }]);
+  assert.equal(prisma.products[0].price, 6500);
+  assert.equal(prisma.products[0].isActive, false);
   assert.doesNotMatch(JSON.stringify(prisma.products[0]), /20/);
 });
 

@@ -38,7 +38,7 @@ function cleanFlowerName(value) {
     .replace(/\s*\((?:предварительный вариант|предположительно|черновик)\)\s*$/iu, '').trim();
 }
 
-function cardCaption({ draft, recipe, economics, photoCount }) {
+function cardCaption({ draft, recipe, economics, photoCount, sellingPriceRubles = draft?.sellingPriceRubles }) {
   const title = cleanFlowerName(draft?.draft_name || 'Букет без названия').slice(0, 240);
   const recipeLines = compositionLines(recipe?.lines);
   const confirmed = recipe?.confirmedAt ? recipeLines : [];
@@ -48,6 +48,7 @@ function cardCaption({ draft, recipe, economics, photoCount }) {
   const lines = confirmed.length ? confirmed : (proposal.length ? proposal : fallback);
   return [`Название: ${title}`, '', `Состав${confirmed.length ? '' : ' — проверьте'}:`,
     ...(lines.length ? lines.map((line) => `• ${line}`) : ['• не указан']), '',
+    `Продажная цена: ${Number.isInteger(sellingPriceRubles) && sellingPriceRubles > 0 ? formatRubles(sellingPriceRubles * 100) : 'не указана'}`,
     `Закупка: ${formatRubles(economics?.totalPurchaseKopecks) || 'не рассчитана — уточните состав и закупку'}`,
     `Фото: ${photoCount}`].join('\n').slice(0, 1024);
 }
@@ -127,7 +128,10 @@ function createTelegramBouquetReviewHandler({ prisma, env = process.env, fetchIm
         const recipe = plan.recipeId && prisma.bouquetRecipe?.findUnique
           ? await prisma.bouquetRecipe.findUnique({ where: { id: plan.recipeId } }) : null;
         const economics = recipe ? await getCardEconomics({ prisma, recipe }).catch(() => null) : null;
-        const caption = cardCaption({ draft: plan.draft, recipe, economics, photoCount: plan.fileIds.length });
+        const product = plan.draft.productId && prisma.product?.findUnique
+          ? await prisma.product.findUnique({ where: { id: plan.draft.productId }, select: { price: true } }) : null;
+        const caption = cardCaption({ draft: plan.draft, recipe, economics, photoCount: plan.fileIds.length,
+          sellingPriceRubles: product ? product.price : plan.draft.sellingPriceRubles });
         if (plan.fileIds.length === 1) await send('sendPhoto', { photo: plan.fileIds[0], caption });
         else if (plan.fileIds.length > 1) {
           for (let offset = 0; offset < plan.fileIds.length; offset += 10) {

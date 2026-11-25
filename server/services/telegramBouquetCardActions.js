@@ -20,6 +20,13 @@ function cleanCardName(value) {
     .replace(/\s*\((?:предварительный вариант|предположительно|черновик)\)\s*$/iu, '').trim().slice(0, 120);
 }
 
+function parseSellingPrice(text) {
+  const value = String(text || '').trim().replace(/\s*(?:₽|руб(?:\.|ля|лей)?|р\.?)$/iu, '').trim();
+  if (!/^(?:\d+|\d{1,3}(?:[ \u00a0\u202f]\d{3})+)$/.test(value)) return null;
+  const price = Number(value.replace(/[ \u00a0\u202f]/g, ''));
+  return Number.isSafeInteger(price) && price > 0 && price <= 2147483647 ? price : null;
+}
+
 function createTelegramBouquetCardActionsHandler({ prisma, env = process.env, fetchImpl = globalThis.fetch } = {}) {
   if (!prisma || typeof fetchImpl !== 'function') throw new TypeError('BOUQUET_CARD_ACTIONS_CONFIG');
   const config = getTelegramBouquetImportConfig(env);
@@ -50,7 +57,7 @@ function createTelegramBouquetCardActionsHandler({ prisma, env = process.env, fe
     const batch = array(rows).find((row) => visibleDrafts(row.state).length > 0);
     if (!batch) return { handled: false };
     const edit = batch.state?.cardEdit;
-    const consumesText = Boolean(text) && edit && ['name', 'composition', 'merge'].includes(edit.mode) && !commandOf(text);
+    const consumesText = Boolean(text) && edit && ['name', 'price', 'composition', 'merge'].includes(edit.mode) && !commandOf(text);
     if (!COMMANDS.has(mapped) && !consumesText) return { handled: false };
     if (['/next', '/review'].includes(mapped)) {
       if (edit) await prisma.$transaction(async (tx) => {
@@ -95,6 +102,11 @@ function createTelegramBouquetCardActionsHandler({ prisma, env = process.env, fe
           await tx.bouquetImportBatch.update({ where: { id: batch.id }, data: { state } });
           return { status: 'awaiting_composition', text: 'Напишите состав, например: Роза 9 шт, эвкалипт 2 ветки.' };
         }
+        if (mapped === '/card_edit_price') {
+          state.cardEdit = { mode: 'price', targetCustomId: currentId };
+          await tx.bouquetImportBatch.update({ where: { id: batch.id }, data: { state } });
+          return { status: 'awaiting_price', text: 'Напишите продажную цену в рублях, например: 4500 или 4 500 ₽.' };
+        }
         if (mapped === '/card_add_photo') {
           state.cardEdit = { mode: 'photo', targetCustomId: currentId };
           await tx.bouquetImportBatch.update({ where: { id: batch.id }, data: { state } });
@@ -133,6 +145,18 @@ function createTelegramBouquetCardActionsHandler({ prisma, env = process.env, fe
           edited.draft_name = text; delete state.cardEdit;
           if (edited.recipeId) await tx.bouquetRecipe.update({ where: { id: edited.recipeId }, data: { name: text } });
           if (edited.productId) await tx.product.update({ where: { id: edited.productId }, data: { name: text } });
+        } else if (pending.mode === 'price') {
+          const price = parseSellingPrice(text);
+          if (price == null) return { status: 'invalid_price', text: 'Укажите положительную сумму в целых рублях, например: 4500.' };
+          edited.sellingPriceRubles = price;
+          if (edited.productId) await tx.product.update({ where: { id: edited.productId }, data: { price } });
+          if (edited.recipeId) {
+            const recipe = await tx.bouquetRecipe.findUnique({ where: { id: edited.recipeId } });
+            if (recipe) await tx.bouquetRecipe.update({ where: { id: recipe.id }, data: {
+              costs: { ...(recipe.costs || {}), sellingPriceKopecks: price * 100 }, snapshot: null,
+            } });
+          }
+          delete state.cardEdit;
         } else if (pending.mode === 'composition') {
           const lines = parseNaturalComposition(text);
           if (!edited.recipeId) return { status: 'composition_missing', text: 'Состав пока нельзя сохранить. Попробуйте немного позже.' };
@@ -158,7 +182,7 @@ function createTelegramBouquetCardActionsHandler({ prisma, env = process.env, fe
           delete state.cardEdit;
         } else return { status: 'ignored' };
         await tx.bouquetImportBatch.update({ where: { id: batch.id }, data: { state } });
-        const messages = { name: 'Название обновлено.', composition: 'Состав обновлён. Проверьте его и подтвердите.',
+        const messages = { name: 'Название обновлено.', price: `Продажная цена: ${edited.sellingPriceRubles?.toLocaleString('ru-RU')} ₽. Сохранено.`, composition: 'Состав обновлён. Проверьте его и подтвердите.',
           merge: 'Карточки объединены.' };
         return { status: `${pending.mode}_saved`, text: messages[pending.mode] };
       });
@@ -177,4 +201,4 @@ function createTelegramBouquetCardActionsHandler({ prisma, env = process.env, fe
 }
 
 module.exports = { createTelegramBouquetCardActionsHandler,
-  _test: { cleanCardName, sameLines, targetId, visibleDrafts } };
+  _test: { cleanCardName, parseSellingPrice, sameLines, targetId, visibleDrafts } };
