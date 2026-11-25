@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { Surface } from './ui/Surface';
@@ -30,6 +30,7 @@ export function Home({ onLogin }) {
   const navigate = useNavigate();
   const { state, actions } = useAppState();
   const [activeOrders, setActiveOrders] = useState([]);
+  const heroRef = useRef(null);
   const [initialHeroSlides] = useState(() => {
     const cached = cachedHomeSlides();
     return cached.length ? cached : HERO_SLIDES;
@@ -37,6 +38,31 @@ export function Home({ onLogin }) {
   const [heroSlides, setHeroSlides] = useState(initialHeroSlides);
   const isAuthenticated = Boolean(state.auth.me?.phoneVerified);
   const mothersDayCampaignActive = isMothersDayCampaignActive();
+
+  useEffect(() => {
+    // Keep the image behind the rising sheet without an edge-attached fixed
+    // container. Safari extends the background of such containers into its UI.
+    let frame = 0;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => {
+      frame = 0;
+      const hero = heroRef.current;
+      if (!hero) return;
+      const offset = reducedMotion.matches ? 0 : Math.min(Math.max(window.scrollY, 0), hero.offsetHeight);
+      hero.style.transform = `translate3d(0, ${offset}px, 0)`;
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+    update();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    reducedMotion.addEventListener('change', schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      reducedMotion.removeEventListener('change', schedule);
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -94,25 +120,25 @@ export function Home({ onLogin }) {
 
   return (
     <AppShell style={{ padding: 0, '--app-content-inset-bottom': '0px' }}>
-      <main style={{ width: '100%', paddingBottom: `calc(var(--app-bottom-nav-space) + ${hasMiniCart ? '64px' : '0px'})` }}>
+      <main className="homeScene" style={{ position: 'relative', isolation: 'isolate', width: '100%', paddingBottom: `calc(var(--app-bottom-nav-space) + ${hasMiniCart ? '64px' : '0px'})` }}>
         <section
+          ref={heroRef}
           aria-label="Главные предложения"
           style={{
-            position: 'fixed',
+            position: 'absolute',
             zIndex: 0,
             top: 0,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 'min(100%, var(--app-max))',
-            height: 'clamp(280px, 40dvh, 360px)',
+            left: 0,
+            width: '100%',
+            height: 'var(--home-hero-height)',
             overflow: 'hidden',
-            background: 'var(--c-ink-14)',
+            willChange: 'transform',
           }}
         >
           <HeroBlock slides={slides} isAuthenticated={isAuthenticated} onLogin={onLogin} />
         </section>
 
-        <div aria-hidden="true" style={{ height: 'calc(clamp(280px, 40dvh, 360px) - 24px)', pointerEvents: 'none' }} />
+        <div aria-hidden="true" style={{ height: 'calc(var(--home-hero-height) - 28px)', pointerEvents: 'none' }} />
 
         <Surface variant="default" style={{ position: 'relative', zIndex: 1, minHeight: '65dvh', borderTopLeftRadius: 28, borderTopRightRadius: 28, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, boxShadow: '0 -14px 36px rgba(31, 15, 22, 0.14)', paddingTop: 'var(--sp-6)', paddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))', paddingRight: 'calc(var(--sp-4) + var(--app-inset-right))', paddingBottom: 'var(--sp-4)', background: 'var(--bg)' }}>
           {isAuthenticated ? <SubscriptionRow /> : null}

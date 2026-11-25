@@ -82,15 +82,6 @@ a[href^='sms:'] {
   background-image: inherit;
 }
 
-/* Extend the authored canvas behind iOS Safari safe areas instead of its white fallback. */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: var(--c-bg);
-  z-index: -1;
-}
-
 :root {
   color-scheme: light;
   --app-vh: 100vh;
@@ -113,6 +104,17 @@ body::before {
 
   /* Default iOS/Safari uses blue for range/checkbox/radio. Force orange accent. */
   accent-color: var(--accent);
+}
+
+.homeScene {
+  --home-hero-height: calc(55vh + 48px);
+}
+
+@supports (height: 100svh) {
+  .homeScene {
+    /* Stable browser-bar geometry keeps the sheet from jumping during scroll. */
+    --home-hero-height: calc(55svh + 48px);
+  }
 }
 
 @supports (height: 100dvh) {
@@ -460,9 +462,10 @@ body::before {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
-  padding-top: 8px;
-  padding-bottom: var(--app-nav-inset-bottom);
+  /* A floating pill must not attach a full-width fixed layer to Safari's edge. */
+  bottom: calc(8px + var(--app-nav-inset-bottom));
+  padding-top: 0;
+  padding-bottom: 0;
   padding-left: calc(10px + var(--app-inset-left));
   padding-right: calc(10px + var(--app-inset-right));
   pointer-events: auto;
