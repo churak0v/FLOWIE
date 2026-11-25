@@ -7,7 +7,7 @@ Import is limited to explicitly configured numeric Telegram chat/user IDs. Adeli
 ## Florist flow
 
 1. Send photos in as many Telegram albums as necessary. The first photo opens an
-   import automatically; `/import` or the bottom **Новая загрузка** button is optional.
+   import automatically.
 2. Write composition in the caption or reply to a specific photo. Unattached notes
    remain unassigned rather than being attached to an arbitrary bouquet.
 3. In default sync mode, each stored photo is picked up automatically. No upload
@@ -17,23 +17,21 @@ Import is limited to explicitly configured numeric Telegram chat/user IDs. Adeli
 4. A durable worker sends ordinary OpenAI Responses requests for stored photos,
    with two photos processed concurrently by default. Exact-byte
    duplicates cost one image request. Albums are transport groups, not bouquets.
-   Similar but non-identical photos are not automatically merged in this version.
+   A second bounded visual comparison groups different angles of the same physical
+   arrangement, with a high-confidence threshold and explicit manual correction.
 5. The bot sends a ready notification to the uploading chat. The bottom buttons
-   **Посмотреть результат** and **Следующее фото** open and navigate results;
+   **Посмотреть результат** and **Дальше** open and navigate product cards;
    `/review` and `/next` remain supported. Errors also generate a notice.
-6. Record composition:
+6. Press **Изменить состав** and write normal text such as
+   `Роза Пинк Флойд 9 шт, эвкалипт 2 ветки`, then **Подтвердить состав**.
+   **Изменить название**, **Добавить фото**, and **Объединить карточки** operate on
+   the current card. The bot displays photos as an album and hides technical IDs
+   and commands. Old slash commands remain accepted for compatibility.
 
-   ```text
-   /recipe RECIPE_ID
-   Роза Пинк Флойд; 9; шт
-   Эвкалипт; 2; ветка
-   ```
-
-   Optional fourth and fifth fields are procurement SKU and supplier ID. Without
-   a SKU, the name gets a stable draft ID awaiting mapping to a supplier price.
-   `/recipe_confirm RECIPE_ID` explicitly confirms composition.
-
-Imports create private drafts. They do not publish products or change availability.
+Imports create drafts. With `FLOWIE_IMPORT_MATERIALIZE_PRODUCTS=true`, grouped cards
+also become inactive products in the existing admin, with local WebP image galleries.
+The selling price remains unset (database zero) and products stay hidden until reviewed.
+Confirmed composition and manual names sync from Telegram to these product drafts.
 Every bouquet is a normal repeatable product once published; the florist controls
 availability. No “соберём похожий” classification is introduced.
 

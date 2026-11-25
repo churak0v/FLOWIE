@@ -28,6 +28,8 @@ function draftCount(row) { return Array.isArray(row?.state?.drafts) ? row.state.
 function completedAt(row) { return row?.state?.syncCompletedAt || row?.state?.aiBatch?.completedAt || null; }
 function eligible(row, now, leaseMs) {
   if (!row || !CANDIDATE_STATUSES.includes(row.status)) return false;
+  if (Object.values(row.state?.groupingAttempts || {}).some((attempt) => attempt?.status === 'RUNNING'
+    && dateMs(attempt.startedAt) > now.getTime() - leaseMs)) return false;
   const note = row.state?.reviewNotification;
   if (note?.status === 'SENDING' && dateMs(note.leaseAt) > now.getTime() - leaseMs) return false;
   if (note?.status === 'RETRY' && dateMs(note.nextAttemptAt) > now.getTime()) return false;
@@ -44,11 +46,12 @@ function eligible(row, now, leaseMs) {
   return false;
 }
 function notificationText(row) {
+  const cards = (row.state?.drafts || []).filter((draft) => !draft.mergedInto).length;
   if (row.status === 'COLLECTING') {
-    return `Готово результатов: ${draftCount(row)}. Нажмите «Посмотреть результат» внизу, чтобы проверить фотографии и составы.`;
+    return `Готово карточек: ${cards}. Нажмите «Посмотреть результат» внизу, чтобы проверить фотографии и составы.`;
   }
   if (READY_STATUSES.has(row.status)) {
-    const count = draftCount(row);
+    const count = cards;
     const lead = row.status === 'PARTIAL_REVIEW_REQUIRED' ? 'Разбор загрузки завершён частично.' : 'Разбор загрузки завершён.';
     return `${lead} Готово черновиков: ${count}. Нажмите «Посмотреть результат» внизу, чтобы проверить фотографии и составы.`;
   }

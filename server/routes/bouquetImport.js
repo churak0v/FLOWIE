@@ -5,6 +5,7 @@ const { bouquetKeyboard, normalizeBouquetUpdate } = require('../services/telegra
 const { createBouquetImportRepository } = require('../services/bouquetImportRepository');
 const { createTelegramBouquetRecipeHandler } = require('../services/telegramBouquetRecipe');
 const { createTelegramBouquetReviewHandler } = require('../services/telegramBouquetReview');
+const { createTelegramBouquetCardActionsHandler } = require('../services/telegramBouquetCardActions');
 
 function createBouquetImportRouter({
   prisma, storage, env = process.env, fetchImpl = fetch,
@@ -13,6 +14,7 @@ function createBouquetImportRouter({
   const router = express.Router();
   const recipeHandler = prisma ? createTelegramBouquetRecipeHandler({ prisma, env, fetchImpl }) : async () => ({ handled: false });
   const reviewHandler = prisma ? createTelegramBouquetReviewHandler({ prisma, env, fetchImpl }) : async () => ({ handled: false });
+  const cardActionsHandler = prisma ? createTelegramBouquetCardActionsHandler({ prisma, env, fetchImpl }) : async () => ({ handled: false });
   const repository = injectedRepository || createBouquetImportRepository(prisma);
   const service = injectedService || createTelegramBouquetImportService({ repository, storage, env, fetchImpl,
     // A separate worker consumes stored photos; legacy Batch mode uses QUEUED.
@@ -25,6 +27,13 @@ function createBouquetImportRouter({
     if (!secret || !crypto.timingSafeEqual(digest(actual), digest(secret))) return res.sendStatus(403);
     try {
       req.body = normalizeBouquetUpdate(req.body);
+      const cardAction = await cardActionsHandler(req.body);
+      if (cardAction.handled) {
+        if (cardAction.status === 'merge_saved' && env.FLOWIE_IMPORT_MATERIALIZE_PRODUCTS === 'true') {
+          await require('../services/bouquetProductDrafts').materializeBouquetProductDrafts({ prisma, storage, importId: cardAction.importId });
+        }
+        return res.json({ ok: true });
+      }
       if ((await recipeHandler(req.body)).handled) return res.json({ ok: true });
       if ((await reviewHandler(req.body)).handled) return res.json({ ok: true });
       const result = await service.handleUpdate(req.body);

@@ -57,6 +57,19 @@ function createPrisma() {
 
 const clock = new Date('2026-11-25T12:00:00.000Z');
 
+test('the next uploaded angle is attached to the selected card and consumes the action once', async () => {
+  const prisma = createPrisma();
+  const repository = createBouquetImportRepository(prisma, { now: () => clock });
+  const batch = await repository.createImport({ chatId: -100, userId: 7 });
+  batch.state.drafts = [{ customId: 'card-a' }];
+  batch.state.cardEdit = { mode: 'photo', targetCustomId: 'card-a' };
+  const file = await repository.reserveFile({ importId: batch.id, messageId: 1, fileUniqueId: 'angle-a' });
+  assert.equal(file.attachToCustomId, 'card-a');
+  assert.equal(batch.state.cardEdit, undefined);
+  const next = await repository.reserveFile({ importId: batch.id, messageId: 2, fileUniqueId: 'other-a' });
+  assert.equal(next.attachToCustomId, undefined);
+});
+
 test('claims Telegram updates once using the unique update row', async () => {
   const prisma = createPrisma();
   const repository = createBouquetImportRepository(prisma);

@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { DEFAULT_MODEL, prepareBouquetImportBatch } = require('./bouquetImportBatch');
 const { isImportSettled } = require('./bouquetImportRepository');
 const { getTelegramBouquetImportConfig } = require('./telegramBouquetImport');
+const { applyVisualGroups, buildGroupingBody, groupingDigest, parseGroupingResponse } = require('./bouquetVisualGrouping');
 
 const ACTIVE_STATUSES = ['PREPARING', 'SUBMITTING', 'POLLING', 'PROCESSING_SYNC'];
 const PROVIDER_PENDING = new Set(['validating', 'in_progress', 'finalizing', 'cancelling']);
@@ -68,9 +69,12 @@ function validateDraft(value) {
   if (!Array.isArray(value.palette) || !value.palette.every((item) => typeof item === 'string')) return null;
   if (!Array.isArray(value.likely_flowers) || !value.likely_flowers.every((item) => typeof item === 'string')) return null;
   return {
-    draft_name: value.draft_name.slice(0, 240),
+    draft_name: value.draft_name.replace(/\b(черновик|предположительно)\b/gi, '').replace(/\s{2,}/g, ' ').trim().slice(0, 240) || 'Букет',
     palette: value.palette.slice(0, 8).map((item) => item.slice(0, 80)),
     likely_flowers: value.likely_flowers.slice(0, 16).map((item) => item.slice(0, 120)),
+    compositionProposal: Array.isArray(value.compositionProposal) ? value.compositionProposal.slice(0, 30)
+      .filter((item) => item && typeof item.name === 'string' && (item.quantity == null || (typeof item.quantity === 'number' && item.quantity > 0)) && typeof item.unit === 'string')
+      .map((item) => ({ name: item.name.slice(0, 120), quantity: item.quantity ?? null, unit: item.unit.slice(0, 40) })) : [],
     notes: value.notes.slice(0, 2000),
   };
 }
@@ -288,6 +292,17 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
       const existing = new Map(state.drafts.map((draft) => [draft.customId, draft]));
       const newDrafts = [];
       for (const draft of parsed.drafts) {
+        const attachedFile = (state.files || []).find((file) => draft.photoIds.includes(String(file.id)) && file.attachToCustomId);
+        const attachedTarget = attachedFile ? existing.get(attachedFile.attachToCustomId) : null;
+        if (attachedTarget) {
+          attachedTarget.photoIds = [...new Set([...(attachedTarget.photoIds || []), ...draft.photoIds])];
+          attachedTarget.angleSuggestions = [...(attachedTarget.angleSuggestions || []), {
+            customId: draft.customId, compositionProposal: draft.compositionProposal || [], notes: draft.notes,
+          }];
+          draft.mergedInto = attachedTarget.customId;
+          state.drafts.push(draft); existing.set(draft.customId, draft);
+          continue;
+        }
         const prior = existing.get(draft.customId);
         if (prior) {
           prior.photoIds = [...new Set([...(prior.photoIds || []), ...draft.photoIds])];
@@ -352,6 +367,58 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
 
     const parsed = parseBatchOutput(await provider.downloadOutput(providerBatch.output_file_id), state.aiBatch.manifest || []);
     return persistParsed(row, parsed, { mode: 'batch', outputFileId: providerBatch.output_file_id });
+  }
+
+  async function groupImport(importId, preferredCustomIds = [], preparedEntries = []) {
+    const row = await prisma.bouquetImportBatch.findUnique({ where: { id: importId } });
+    if (!row) throw new Error('BOUQUET_IMPORT_NOT_FOUND');
+    const drafts = (row.state?.drafts || []).filter((draft) => !draft.mergedInto && Array.isArray(draft.photoIds) && draft.photoIds.length);
+    const preferred = new Set(preferredCustomIds);
+    const selected = [...drafts.filter((draft) => preferred.has(draft.customId)), ...drafts.filter((draft) => !preferred.has(draft.customId)).slice(-20)]
+      .filter((draft, index, all) => all.findIndex((item) => item.customId === draft.customId) === index).slice(0, 20);
+    if (selected.length < 2) return { status: 'SKIPPED', groups: 0 };
+    const digest = groupingDigest(selected.flatMap((draft) => draft.photoIds));
+    const claimed = await mutateState(importId, (state) => {
+      state.groupingAttempts ||= {};
+      if (state.groupingAttempts[digest]) return false;
+      state.groupingAttempts[digest] = { status: 'RUNNING', customIds: selected.map((draft) => draft.customId), startedAt: now().toISOString() };
+      return true;
+    });
+    if (!claimed.result) return { status: 'SKIPPED', groups: 0 };
+    try {
+      const normalizedByCustom = new Map(preparedEntries.map((entry) => [entry.request.custom_id, entry.normalized]));
+      const candidates = [];
+      for (const draft of selected) {
+        let normalized = normalizedByCustom.get(draft.customId);
+        if (!normalized) {
+          const representative = (row.state.files || []).find((file) => draft.photoIds.includes(String(file.id)) && file.storageKey);
+          if (!representative) continue;
+          const prepared = await prepareBouquetImportBatch({ importId, state: 'FINALIZED', storage,
+            photos: [{ id: representative.id, storageKey: representative.storageKey }], model: String(env.FLOWIE_IMPORT_BATCH_MODEL || DEFAULT_MODEL).trim() });
+          normalized = prepared.entries[0].normalized;
+        }
+        candidates.push({ customId: draft.customId, imageDataUrl: `data:image/jpeg;base64,${normalized.toString('base64')}` });
+      }
+      if (candidates.length < 2) throw Object.assign(new Error('GROUPING_IMAGES_UNAVAILABLE'), { status: 422 });
+      const response = await provider.respond({
+        body: buildGroupingBody(candidates, String(env.FLOWIE_IMPORT_BATCH_MODEL || DEFAULT_MODEL).trim()),
+        idempotencyKey: `bouquet-group:${importId}:${digest}`,
+      });
+      const groups = parseGroupingResponse(response, candidates.map((item) => item.customId));
+      const applied = await mutateState(importId, async (state, _latest, tx) => {
+        const recipes = await tx.bouquetRecipe.findMany({ where: { importId } });
+        const merged = applyVisualGroups(state, groups, { recipes });
+        state.groupingAttempts[digest] = { ...state.groupingAttempts[digest], status: 'DONE', groups, merged, usage: response?.usage || null, finishedAt: now().toISOString() };
+        return merged;
+      });
+      return { status: 'DONE', groups: applied.result.length };
+    } catch (error) {
+      const explicitHttp = Number.isInteger(error?.status) && error.status >= 400;
+      await mutateState(importId, (state) => {
+        state.groupingAttempts[digest] = { ...state.groupingAttempts[digest], status: explicitHttp ? 'DONE' : 'UNCERTAIN', groups: [], error: safeError(error), finishedAt: now().toISOString() };
+      });
+      return { status: explicitHttp ? 'DONE' : 'UNCERTAIN', groups: 0 };
+    }
   }
 
   async function processSync(row) {
@@ -468,7 +535,16 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
         lines.push(JSON.stringify({ custom_id: item.customId, error: { code: 'sync_request_failed' } }));
       }
     }
-    return persistParsed(row, parseBatchOutput(lines.join('\n'), manifest), { mode: 'sync', continuous: row.continuous, manifest });
+    const saved = await persistParsed(row, parseBatchOutput(lines.join('\n'), manifest), { mode: 'sync', continuous: row.continuous, manifest });
+    await groupImport(row.id, manifest.map((item) => item.customId), prepared.entries);
+    if (env.FLOWIE_IMPORT_MATERIALIZE_PRODUCTS === 'true') {
+      try {
+        await require('./bouquetProductDrafts').materializeBouquetProductDrafts({ prisma, storage, importId: row.id });
+      } catch (error) {
+        await mutateState(row.id, (state) => { state.productDraftError = safeError(error); });
+      }
+    }
+    return saved;
   }
 
   async function runOnce() {
@@ -521,7 +597,7 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
     }
   }
 
-  return { runOnce };
+  return { runOnce, groupImport };
 }
 
 function startBouquetImportWorker(options = {}) {
@@ -551,8 +627,13 @@ function startBouquetImportWorker(options = {}) {
   };
 }
 
+async function groupBouquetImport(options, importId) {
+  return createBouquetImportWorker(options).groupImport(importId);
+}
+
 module.exports = {
   createBouquetImportWorker,
+  groupBouquetImport,
   startBouquetImportWorker,
   parseBatchOutput,
   confirmedLinesFor,

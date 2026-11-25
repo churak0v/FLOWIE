@@ -35,11 +35,23 @@ function responseSchema() {
     schema: {
       type: 'object',
       additionalProperties: false,
-      required: ['draft_name', 'palette', 'likely_flowers', 'notes'],
+      required: ['draft_name', 'palette', 'likely_flowers', 'compositionProposal', 'notes'],
       properties: {
         draft_name: { type: 'string' },
         palette: { type: 'array', items: { type: 'string' }, maxItems: 8 },
         likely_flowers: { type: 'array', items: { type: 'string' }, maxItems: 16 },
+        compositionProposal: {
+          type: 'array', maxItems: 30,
+          items: {
+            type: 'object', additionalProperties: false,
+            required: ['name', 'quantity', 'unit'],
+            properties: {
+              name: { type: 'string' },
+              quantity: { type: ['number', 'null'] },
+              unit: { type: 'string' },
+            },
+          },
+        },
         notes: { type: 'string' },
       },
     },
@@ -82,7 +94,7 @@ async function prepareBouquetImportBatch({ importId, state, photos, storage, mod
       body: {
         model,
         reasoning: { effort: 'none' },
-        max_output_tokens: 500,
+        max_output_tokens: 900,
         input: [{
           role: 'user',
           content: [
@@ -90,7 +102,7 @@ async function prepareBouquetImportBatch({ importId, state, photos, storage, mod
               type: 'input_text',
               text: JSON.stringify({
                 photo_ids: item.photoIds,
-                task: 'Respond in Russian. Create a cautious catalog draft from the photo. Name likely flowers but do not assert exact quantities. Treat every identification as unconfirmed.',
+                task: 'Respond in Russian. Create a clean customer-facing product name without words like "черновик" or "предположительно". Suggest likely flowers and compositionProposal. Never invent an exact quantity: use null unless the count is clearly visible. Treat identifications as unconfirmed.',
               }),
             },
             { type: 'input_image', detail: 'low', image_url: `data:image/jpeg;base64,${item.normalized.toString('base64')}` },

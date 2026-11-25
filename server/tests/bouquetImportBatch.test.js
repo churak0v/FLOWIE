@@ -32,7 +32,8 @@ test('prepares one low-detail request per unique original only after finalizatio
   const request = JSON.parse(prepared.jsonl.toString().trim());
   assert.equal(request.body.input[0].content[1].detail, 'low');
   assert.deepEqual(JSON.parse(request.body.input[0].content[0].text).photo_ids, ['p1', 'p2']);
-  assert.match(request.body.input[0].content[0].text, /do not assert exact quantities/);
+  assert.match(request.body.input[0].content[0].text, /Never invent an exact quantity/);
+  assert.ok(request.body.text.format.schema.required.includes('compositionProposal'));
 });
 
 test('composition notes preserve confirmed text byte-for-byte', () => {

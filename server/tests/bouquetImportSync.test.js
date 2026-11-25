@@ -28,7 +28,10 @@ function prismaDouble(row) {
   };
   const prisma = {
     bouquetImportBatch: batch,
-    bouquetRecipe: { async create({ data }) { const value = { id: `recipe-${recipes.length + 1}`, ...data }; recipes.push(value); return value; } },
+    bouquetRecipe: {
+      async create({ data }) { const value = { id: `recipe-${recipes.length + 1}`, ...data }; recipes.push(value); return value; },
+      async findMany() { return recipes; },
+    },
     async $queryRawUnsafe() { return [{ locked: true }]; },
     async $executeRawUnsafe() { return 1; },
     async $transaction(callback) {
@@ -70,11 +73,14 @@ function response(name) {
   };
 }
 
+function groupingResponse() { return { output_text: JSON.stringify({ groups: [] }), usage: { input_tokens: 5, output_tokens: 2 } }; }
+
 test('sync is the default, runs at concurrency two, and never calls batch submit', async () => {
   const row = queuedRow(3); const prisma = prismaDouble(row); const bytes = await images(3);
   let active = 0; let maximum = 0; let submitted = 0; const calls = [];
   const provider = {
     async respond({ body, idempotencyKey }) {
+      if (body?.text?.format?.name === 'bouquet_visual_groups') return groupingResponse();
       active++; maximum = Math.max(maximum, active); calls.push({ body, idempotencyKey });
       await new Promise((resolve) => setTimeout(resolve, 5)); active--;
       return response(`Draft ${calls.length}`);
@@ -149,11 +155,11 @@ test('finalize gate prevents every provider request', async () => {
 
 test('continuous intake processes each newly stored photo while keeping the import COLLECTING', async () => {
   const row = queuedRow(1); row.status = 'COLLECTING'; row.state.finalizeRequested = false;
-  const prisma = prismaDouble(row); const bytes = await images(2); let calls = 0; const reads = new Map();
+  const prisma = prismaDouble(row); const bytes = await images(2); let calls = 0; let groupCalls = 0; const reads = new Map();
   const worker = createBouquetImportWorker({
     prisma,
     storage: { get: async (key) => { reads.set(key, (reads.get(key) || 0) + 1); return { buffer: bytes[Number(key.match(/(\d+)\.jpg$/)[1]) - 1] }; } },
-    provider: { async respond() { calls++; row.state.notes.push({ text: `Concurrent note ${calls}` }); return response(`Auto ${calls}`); } },
+    provider: { async respond({ body }) { if (body?.text?.format?.name === 'bouquet_visual_groups') { groupCalls++; return groupingResponse(); } calls++; row.state.notes.push({ text: `Concurrent note ${calls}` }); return response(`Auto ${calls}`); } },
     now: () => clock,
   });
   assert.equal((await worker.runOnce()).status, 'COLLECTING');
@@ -170,8 +176,11 @@ test('continuous intake processes each newly stored photo while keeping the impo
   assert.equal(row.state.drafts.length, 2);
   assert.equal(prisma.recipes.length, 2);
   assert.deepEqual(row.state.syncKnownPhotoIds, ['photo-1', 'photo-2']);
-  assert.equal(reads.get('flowie-import/sync/1.jpg'), 1);
+  assert.equal(reads.get('flowie-import/sync/1.jpg'), 2); // one classification + one bounded grouping representative read
   assert.equal(reads.get('flowie-import/sync/2.jpg'), 1);
+  assert.equal(groupCalls, 1);
+  await worker.groupImport(row.id);
+  assert.equal(groupCalls, 1);
   assert.equal((await worker.runOnce()).status, 'IDLE');
 });
 
@@ -182,7 +191,7 @@ test('a later-resolved earlier file cannot steal an existing result identity', a
   const worker = createBouquetImportWorker({
     prisma,
     storage: { get: async (key) => { reads.push(key); return { buffer: bytes[Number(key.match(/(\d+)\.jpg$/)[1]) - 1] }; } },
-    provider: { async respond() { calls++; return response(`Delayed ${calls}`); } }, now: () => clock,
+    provider: { async respond({ body }) { if (body?.text?.format?.name === 'bouquet_visual_groups') return groupingResponse(); calls++; return response(`Delayed ${calls}`); } }, now: () => clock,
   });
   await worker.runOnce();
   const firstCustomId = row.state.drafts[0].customId;
@@ -193,7 +202,7 @@ test('a later-resolved earlier file cannot steal an existing result identity', a
   assert.equal(row.state.drafts.length, 2);
   assert.equal(row.state.drafts.find((draft) => draft.customId === firstCustomId).photoIds[0], 'photo-2');
   assert.equal(new Set(row.state.drafts.map((draft) => draft.customId)).size, 2);
-  assert.deepEqual(reads, ['flowie-import/sync/2.jpg', 'flowie-import/sync/1.jpg']);
+  assert.deepEqual(reads, ['flowie-import/sync/2.jpg', 'flowie-import/sync/1.jpg', 'flowie-import/sync/2.jpg']);
 });
 
 test('an exact duplicate upload reuses the existing result and only expands photo membership', async () => {

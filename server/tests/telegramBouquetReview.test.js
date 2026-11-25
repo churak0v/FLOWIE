@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createTelegramBouquetReviewHandler } = require('../services/telegramBouquetReview');
+const { cardCaption, createTelegramBouquetReviewHandler } = require('../services/telegramBouquetReview');
 
 function telegramUpdate(updateId, text, overrides = {}) {
   return { update_id: updateId, message: {
@@ -99,16 +99,17 @@ test('/start guides only an authorized user to current FLOWIE domains and import
   assert.equal(state.sends.length, 1);
 });
 
-test('/review uses Telegram fileId, includes only related notes, and never exposes private storage', async () => {
+test('/review uses Telegram fileId and renders a clean product card without private storage or commands', async () => {
   const { handler, state } = fixture();
   const result = await handler(telegramUpdate(10, '/review'));
   assert.deepEqual(result, { handled: true, status: 'shown', cursor: 0, recipeId: 'recipe-1' });
   assert.equal(state.sends[0].photo, 'telegram-private-1');
-  assert.match(state.sends[0].caption, /11 стеблей/);
-  assert.match(state.sends[0].caption, /Без упаковки/);
-  assert.doesNotMatch(state.sends[0].caption, /Чужая заметка/);
+  assert.match(state.sends[0].caption, /Название: Первый/);
+  assert.match(state.sends[0].caption, /Состав — проверьте/);
+  assert.match(state.sends[0].caption, /Закупка: не рассчитана/);
+  assert.match(state.sends[0].caption, /Фото: 1/);
   assert.equal(JSON.stringify(state.sends).includes('private/one.jpg'), false);
-  assert.match(state.sends[1].text, /\/recipe recipe-1/);
+  assert.doesNotMatch(JSON.stringify(state.sends), /\/recipe|recipe-1/);
   assert.equal(state.batch.state.reviewCursor, 0);
   assert.deepEqual(state.locks[0], ['SELECT pg_advisory_xact_lock(hashtext($1))', 'batch-1']);
 });
@@ -153,13 +154,13 @@ test('transient send failure releases dedup claim and does not advance the curso
   assert.equal(state.batch.state.reviewCursor, 0);
 });
 
-test('missing recipe id never produces an impossible recipe command', async () => {
+test('missing recipe id still renders one clean card without a technical follow-up', async () => {
   const { handler, state } = fixture();
   delete state.batch.state.drafts[0].recipeId;
   const result = await handler(telegramUpdate(50, '/review'));
   assert.equal(result.recipeId, null);
   assert.equal(JSON.stringify(state.sends).includes('/recipe undefined'), false);
-  assert.match(state.sends[1].text, /рецепт ещё не создан/);
+  assert.equal(state.sends.length, 1);
 });
 
 test('/review accepts COLLECTING drafts and writes cursor under the bare batch-id lock', async () => {
@@ -182,4 +183,46 @@ test('newest empty COLLECTING batch does not hide an older usable result and lat
   assert.deepEqual(state.locks[0], ['SELECT pg_advisory_xact_lock(hashtext($1))', 'batch-1']);
   assert.deepEqual(state.batch.state.syncKnownPhotoIds, ['photo-concurrent']);
   assert.equal(state.batch.state.reviewCursor, 0);
+});
+
+test('multiple unique photos are sent as a media group with the card caption only on the first item', async () => {
+  const { handler, state } = fixture();
+  state.batch.state.drafts[0].photoIds = ['photo-1', 'photo-2'];
+  await handler(telegramUpdate(80, '/review'));
+  assert.equal(state.sends[0].media.length, 2);
+  assert.equal(state.sends[0].media[0].media, 'telegram-private-1');
+  assert.match(state.sends[0].media[0].caption, /Фото: 2/);
+  assert.equal(state.sends[0].media[1].caption, undefined);
+  assert.equal(state.sends[1].text, 'Изменить карточку можно кнопками внизу.');
+  assert.equal(state.sends[1].reply_markup.keyboard[0][0].text, 'Изменить состав');
+});
+
+test('single-photo cards replace an old persistent keyboard with the polished actions', async () => {
+  const { handler, state } = fixture();
+  await handler(telegramUpdate(81, '/review'));
+  assert.equal(state.sends[0].photo, 'telegram-private-1');
+  assert.equal(state.sends[0].reply_markup.keyboard[0][0].text, 'Изменить состав');
+});
+
+test('confirmed composition and purchase cost render without uncertainty or internal ids', () => {
+  const caption = cardCaption({
+    draft: { draft_name: 'Розовый букет', likely_flowers: ['розы — предположительно'] },
+    recipe: { confirmedAt: new Date(), lines: [{ ingredientId: 'secret', name: 'Роза', quantity: 9, unit: 'шт' }] },
+    economics: { totalPurchaseKopecks: 123450 }, photoCount: 3,
+  });
+  assert.match(caption, /• Роза — 9 шт/);
+  assert.match(caption, /Закупка: 1 234,5 ₽/);
+  assert.doesNotMatch(caption, /проверьте|предположительно|secret/iu);
+});
+
+test('card cleans draft qualifiers and prefers an edited unconfirmed recipe over an old AI proposal', () => {
+  const caption = cardCaption({
+    draft: { draft_name: 'Корзина (предварительный вариант)', compositionProposal: ['Старая роза'] },
+    recipe: { confirmedAt: null, lines: [{ name: 'Новая роза', quantity: 7, unit: 'шт' }] },
+    economics: null, photoCount: 1,
+  });
+  assert.match(caption, /Название: Корзина/);
+  assert.match(caption, /Новая роза — 7 шт/);
+  assert.doesNotMatch(caption, /Старая|предварительный вариант/iu);
+  assert.match(caption, /проверьте/iu);
 });

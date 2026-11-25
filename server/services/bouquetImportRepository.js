@@ -57,6 +57,11 @@ function createBouquetImportRepository(prisma, options = {}) {
       if (state.files.length >= 2000) throw new Error('IMPORT_FILE_LIMIT');
       const pendingAt = iso(file.createdAt || now());
       const record = { ...file, createdAt: pendingAt, pendingAt, id: crypto.randomUUID(), status: 'PENDING' };
+      if (state.cardEdit?.mode === 'photo' && state.cardEdit.targetCustomId) {
+        const target = (state.drafts || []).find((draft) => draft.customId === state.cardEdit.targetCustomId && !draft.mergedInto);
+        if (target) record.attachToCustomId = target.customId;
+        delete state.cardEdit;
+      }
       state.files.push(record);
       state.intakeRevision = (state.intakeRevision || 0) + 1;
       state.intakeLastActivityAt = pendingAt;
