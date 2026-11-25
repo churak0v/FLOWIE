@@ -57,6 +57,8 @@ const META_LIMITS = {
   yclid: 256,
   mt_click_id: 256,
   referrerHost: 255,
+  trafficChannel: 32,
+  trafficSource: 255,
   bannerId: 32,
   sectionKey: 48,
   elementKey: 48,
@@ -68,7 +70,7 @@ const META_LIMITS = {
   tierCoverage: 8,
 };
 
-const ATTRIBUTION_KEYS = ['path', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'yclid', 'mt_click_id', 'referrerHost'];
+const ATTRIBUTION_KEYS = ['path', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'yclid', 'mt_click_id', 'referrerHost', 'trafficChannel', 'trafficSource'];
 const EVENT_META_KEYS = {
   page_view: new Set(ATTRIBUTION_KEYS),
   home_banner_click: new Set([...ATTRIBUTION_KEYS, 'bannerId']),
@@ -145,6 +147,19 @@ function privacySafeQuery(value) {
   return boundedString(value, META_LIMITS.query)
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[email]')
     .replace(/(?:\+?\d[\s().-]*){7,}/g, '[phone] ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function privacySafeAttributionDimension(key, value, source = '') {
+  const bounded = boundedString(value, META_LIMITS[key]);
+  const trustedVkNumeric = ['utm_campaign', 'utm_content'].includes(key)
+    && String(source).trim().toLowerCase() === 'vk_ads'
+    && /^\d{1,10}$/.test(bounded);
+  if (trustedVkNumeric) return bounded;
+  return bounded
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[email]')
+    .replace(/(?:\+?\d[\s().-]*){7,}/g, '[phone]')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -309,17 +324,36 @@ export function extractAnalyticsAttribution(locationLike = globalThis.location, 
   const campaign = {};
   try {
     const params = new URLSearchParams(locationLike?.search || '');
-    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'yclid', 'mt_click_id']) {
-      const value = boundedString(params.get(key) || '', META_LIMITS[key]);
+    const rawSource = params.get('utm_source') || '';
+    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']) {
+      const value = privacySafeAttributionDimension(key, params.get(key) || '', rawSource);
       if (value) campaign[key] = value;
+    }
+    for (const key of ['yclid', 'mt_click_id']) {
+      const value = boundedString(params.get(key) || '', META_LIMITS[key]);
+      if (/^[A-Za-z0-9._:-]+$/.test(value)) campaign[key] = value;
     }
     if (!campaign.mt_click_id) {
       const legacyVkClick = boundedString(params.get('vk_click_id') || '', META_LIMITS.mt_click_id);
-      if (legacyVkClick) campaign.mt_click_id = legacyVkClick;
+      if (/^[A-Za-z0-9._:-]+$/.test(legacyVkClick)) campaign.mt_click_id = legacyVkClick;
     }
     if (Object.keys(campaign).length) {
       for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'yclid', 'mt_click_id']) delete meta[key];
       Object.assign(meta, campaign);
+      const medium = String(campaign.utm_medium || '').toLowerCase();
+      const source = String(campaign.utm_source || '').toLowerCase();
+      const socialSource = /(^|[_.:-])(vk|telegram|tg|social)([_.:-]|$)/.test(source);
+      meta.trafficChannel = campaign.mt_click_id || /^(paid_social|paidsocial)$/.test(medium) || (/^(cpc|paid)$/.test(medium) && socialSource)
+        ? 'paid_social'
+        : campaign.yclid || /^(cpc|ppc|paid_search|paidsearch)$/.test(medium)
+          ? 'paid_search'
+          : /^(email)$/.test(medium)
+            ? 'email'
+            : /^(social|social_network)$/.test(medium)
+              ? 'organic_social'
+              : 'campaign';
+      meta.trafficSource = (campaign.utm_source || (campaign.yclid ? 'yandex' : campaign.mt_click_id ? 'vk' : 'campaign'))
+        .toLowerCase().replace(/[^a-z0-9_.:-]+/g, '_').replace(/^_+|_+$/g, '') || 'campaign';
     }
   } catch {
     // Ignore malformed URLs.
@@ -327,11 +361,19 @@ export function extractAnalyticsAttribution(locationLike = globalThis.location, 
   try {
     const host = boundedString(new URL(referrer).hostname, META_LIMITS.referrerHost);
     const currentHost = boundedString(locationLike?.hostname || '', META_LIMITS.referrerHost);
-    if (host && host !== currentHost) meta.referrerHost = host;
+    if (host && host !== currentHost && !Object.keys(campaign).length && !meta.utm_source && !meta.yclid && !meta.mt_click_id) {
+      meta.referrerHost = host;
+      meta.trafficChannel = /(^|\.)(yandex\.|google\.|bing\.|duckduckgo\.|mail\.ru$)/i.test(host) ? 'organic_search' : 'referral';
+      meta.trafficSource = host;
+    }
   } catch {
     // Referrer may be absent or invalid.
   }
-  if (Object.keys(campaign).length) {
+  if (!meta.trafficChannel) {
+    meta.trafficChannel = 'direct_or_unknown';
+    meta.trafficSource = 'direct_or_unknown';
+  }
+  if (Object.keys(campaign).length || !Object.keys(stored).length || meta.referrerHost !== stored.referrerHost) {
     try {
       storage?.setItem(ANALYTICS_ATTRIBUTION_KEY, JSON.stringify(meta));
     } catch {

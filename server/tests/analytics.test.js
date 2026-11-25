@@ -45,6 +45,8 @@ test('client event normalization keeps only allowlisted, bounded attribution', (
       utm_campaign: 'november',
       utm_content: 'rose-video',
       referrerHost: 'https://t.me/something/private',
+      trafficChannel: 'referral',
+      trafficSource: 't.me',
     },
   }));
   assert.equal(normalized.event, 'page_view');
@@ -53,6 +55,8 @@ test('client event normalization keeps only allowlisted, bounded attribution', (
   assert.equal(normalized.meta.referrerHost, 't.me');
   assert.equal(normalized.meta.utm_source, 'telegram');
   assert.equal(normalized.meta.utm_content, 'rose-video');
+  assert.equal(normalized.meta.trafficChannel, 'referral');
+  assert.equal(normalized.meta.trafficSource, 't.me');
   assert.equal(JSON.stringify(normalized).includes('private'), false);
 });
 

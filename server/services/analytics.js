@@ -37,7 +37,7 @@ const CLIENT_EVENTS = new Set([
 const SERVER_EVENTS = new Set(['order_created', 'payment_success']);
 const TOP_LEVEL_FIELDS = new Set(['event', 'eventId', 'sessionId', 'pageViewId', 'routeKey', 'productId', 'orderId', 'meta']);
 const crypto = require('crypto');
-const COMMON_ATTRIBUTION_FIELDS = new Set(['path', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'yclid', 'mt_click_id', 'referrerHost']);
+const COMMON_ATTRIBUTION_FIELDS = new Set(['path', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'yclid', 'mt_click_id', 'referrerHost', 'trafficChannel', 'trafficSource']);
 const EVENT_META_FIELDS = {
   page_view: COMMON_ATTRIBUTION_FIELDS,
   home_banner_click: new Set([...COMMON_ATTRIBUTION_FIELDS, 'bannerId']),
@@ -270,6 +270,10 @@ function normalizeMeta(event, input, sessionId) {
     out[`${key}Hash`] = crypto.createHash('sha256').update(`${key}:${clickId}`).digest('hex');
   }
   if (meta.referrerHost != null) out.referrerHost = normalizeHost(meta.referrerHost);
+  if (meta.trafficChannel != null) out.trafficChannel = fixedToken(meta.trafficChannel, new Set(['paid_search', 'paid_social', 'organic_search', 'organic_social', 'email', 'campaign', 'referral', 'direct_or_unknown']), 'BAD_TRAFFIC_CHANNEL');
+  if (meta.trafficSource != null) out.trafficSource = ['organic_search', 'referral'].includes(meta.trafficChannel)
+    ? normalizeHost(meta.trafficSource)
+    : fixedToken(meta.trafficSource, new Set([String(meta.trafficSource)]), 'BAD_TRAFFIC_SOURCE');
 
   if (event === 'ref_open' || event === 'write_access_requested') {
     const tag = referralTag(meta.tag);

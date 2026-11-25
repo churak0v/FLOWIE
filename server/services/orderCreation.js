@@ -4,6 +4,7 @@ const { resolveDeliveryPrice, DeliveryZoneError } = require('./deliveryZones');
 const MAX_ITEMS = 50;
 const MAX_QUANTITY = 99;
 const CHECKOUT_KEY_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const TRAFFIC_CHANNELS = new Set(['paid_search', 'paid_social', 'organic_search', 'organic_social', 'email', 'campaign', 'referral', 'direct_or_unknown']);
 
 class OrderCreationError extends Error {
     constructor(code, status = 400) {
@@ -92,16 +93,18 @@ function normalizeAnalytics(value) {
     if (!/^[A-Za-z0-9][A-Za-z0-9:_-]{7,95}$/.test(sessionId)) throw new OrderCreationError('BAD_ANALYTICS_SESSION');
     const source = value.attribution && typeof value.attribution === 'object' && !Array.isArray(value.attribution) ? value.attribution : {};
     const attribution = {};
-    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'referrerHost']) {
+    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'referrerHost', 'trafficChannel', 'trafficSource']) {
         const item = String(source[key] || '').trim();
         if (!item) continue;
         const hasControlCharacter = [...item].some((character) => {
             const codePoint = character.codePointAt(0);
             return codePoint <= 31 || codePoint === 127;
         });
-        if (item.length > (key === 'referrerHost' ? 255 : 80) || hasControlCharacter) throw new OrderCreationError('BAD_ANALYTICS_ATTRIBUTION');
+        if (item.length > (['referrerHost', 'trafficSource'].includes(key) ? 255 : 80) || hasControlCharacter) throw new OrderCreationError('BAD_ANALYTICS_ATTRIBUTION');
         attribution[key] = item;
     }
+    if (attribution.trafficChannel && !TRAFFIC_CHANNELS.has(attribution.trafficChannel)) throw new OrderCreationError('BAD_ANALYTICS_ATTRIBUTION');
+    if (attribution.trafficSource && !/^[A-Za-z0-9_.:-]+$/.test(attribution.trafficSource)) throw new OrderCreationError('BAD_ANALYTICS_ATTRIBUTION');
     for (const key of ['yclid', 'mt_click_id']) {
         const item = String(source[key] || '').trim();
         if (!item) continue;

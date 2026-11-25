@@ -16,9 +16,9 @@ const range = {
 
 test('report keeps event counts, session cohorts and confirmed money as separate facts', () => {
   const events = [
-    { userId: 1, event: 'page_view', meta: { sessionId: 'session-001', utmSource: 'telegram' } },
-    { userId: 1, event: 'page_view', meta: { sessionId: 'session-001', utmSource: 'telegram' } },
-    { userId: 2, event: 'page_view', meta: { utmSource: 'direct' } },
+    { userId: 1, event: 'page_view', meta: { sessionId: 'session-001', utmSource: 'telegram', trafficChannel: 'campaign', trafficSource: 'telegram' } },
+    { userId: 1, event: 'page_view', meta: { sessionId: 'session-001', utmSource: 'telegram', trafficChannel: 'campaign', trafficSource: 'telegram' } },
+    { userId: 2, event: 'page_view', meta: { trafficChannel: 'direct_or_unknown', trafficSource: 'direct_or_unknown' } },
     { userId: 1, event: 'product_view', productId: 10, meta: { sessionId: 'session-001' } },
     { userId: 1, event: 'product_view', productId: 10, meta: { sessionId: 'session-001' } },
     { userId: 1, event: 'favorite_add', productId: 10, meta: { sessionId: 'session-001' } },
@@ -37,7 +37,7 @@ test('report keeps event counts, session cohorts and confirmed money as separate
     { userId: 99, event: 'page_view', meta: { sessionId: 'staff-session' } },
   ];
   const orders = [
-    { userId: 1, totalPrice: 5_000, user: { staffRole: null }, referralLink: { tag: 'tg_november' }, analyticsAttribution: { utm_source: 'vk_ads', utm_campaign: '42', utm_content: '7' } },
+    { userId: 1, totalPrice: 5_000, user: { staffRole: null }, referralLink: { tag: 'tg_november' }, analyticsAttribution: { trafficChannel: 'paid_social', trafficSource: 'vk_ads', utm_source: 'vk_ads', utm_campaign: '42', utm_content: '7' } },
     { userId: 2, totalPrice: 3_000, user: { staffRole: null }, referralLink: null },
     { userId: 99, totalPrice: 99_000, user: { staffRole: 'admin' }, referralLink: { tag: 'internal' } },
   ];
@@ -78,7 +78,8 @@ test('report keeps event counts, session cohorts and confirmed money as separate
   assert.equal(report.behavior.scroll.find((row) => row.percent === 50).sessions, 1);
   assert.deepEqual(report.behavior.sections, [{ key: 'hero', count: 1 }]);
   assert.equal(report.behavior.banners[0].ctr, 1);
-  assert.deepEqual(report.paidAttribution.campaigns[0], { source: 'vk_ads', campaign: '42', content: '7', orders: 1, revenue: 5_000 });
+  assert.deepEqual(report.paidAttribution.campaigns[0], { channel: 'paid_social', source: 'vk_ads', campaign: '42', content: '7', orders: 1, revenue: 5_000 });
+  assert.deepEqual(report.channels, [{ channel: 'campaign', count: 2 }, { channel: 'direct_or_unknown', count: 1 }]);
   assert.equal(Object.hasOwn(report.funnel, 'conversion'), false);
 });
 
@@ -95,7 +96,8 @@ test('report uses only narrow safe meta fields and provides explicit unknown buc
   });
 
   assert.deepEqual(report.traffic, { visits: 1, uniqueKnownSessions: 0, visitsWithoutSession: 1 });
-  assert.deepEqual(report.sources, [{ source: 'unknown', count: 1, sessions: 0 }]);
+  assert.deepEqual(report.sources, [{ source: 'direct_or_unknown', count: 1, sessions: 0 }]);
+  assert.deepEqual(report.channels, [{ channel: 'direct_or_unknown', count: 1 }]);
   assert.deepEqual(report.searches, [{ query: 'Белые розы', count: 2, emptyResults: 1 }]);
   assert.deepEqual(report.checkoutErrors, [
     { code: 'PAYMENT_TIMEOUT', count: 1 },
