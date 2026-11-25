@@ -16,6 +16,7 @@ const READY_STATUSES = new Set(['REVIEW_REQUIRED', 'PARTIAL_REVIEW_REQUIRED']);
 const DEFAULT_LEASE_MS = 2 * 60_000;
 const MAX_CANDIDATES = 25;
 const MAX_BACKOFF_MS = 15 * 60_000;
+const CANDIDATE_STATUSES = ['COLLECTING', ...TERMINAL_STATUSES];
 
 function clone(value) { return JSON.parse(JSON.stringify(value || {})); }
 function dateMs(value) { const n = new Date(value || 0).getTime(); return Number.isFinite(n) ? n : 0; }
@@ -23,17 +24,31 @@ function safeError(error, token) {
   const raw = String(error?.message || error || 'notification failed');
   return (token ? raw.replaceAll(token, '[REDACTED]') : raw).slice(0, 300);
 }
+function draftCount(row) { return Array.isArray(row?.state?.drafts) ? row.state.drafts.length : 0; }
+function completedAt(row) { return row?.state?.syncCompletedAt || row?.state?.aiBatch?.completedAt || null; }
 function eligible(row, now, leaseMs) {
-  if (!row || !TERMINAL_STATUSES.includes(row.status)) return false;
+  if (!row || !CANDIDATE_STATUSES.includes(row.status)) return false;
   const note = row.state?.reviewNotification;
-  if (note?.status === 'SENT') return false;
   if (note?.status === 'SENDING' && dateMs(note.leaseAt) > now.getTime() - leaseMs) return false;
   if (note?.status === 'RETRY' && dateMs(note.nextAttemptAt) > now.getTime()) return false;
-  return true;
+  const count = draftCount(row);
+  const sentCount = Math.max(0, Number(row.state?.sentDraftCount ?? note?.sentDraftCount) || 0);
+  if (row.status === 'COLLECTING') return count > sentCount;
+  if (note?.status !== 'SENT') return true;
+  if (note.notifiedStatus && note.notifiedStatus !== row.status) return true;
+  if (note?.notifiedStatus && count > sentCount && READY_STATUSES.has(row.status)) return true;
+  const completion = completedAt(row);
+  // Legacy SENT records did not identify the phase. A later successful completion
+  // must be announced even if an earlier failure notification was already sent.
+  if (completion && dateMs(completion) > dateMs(note.notifiedCompletedAt || note.sentAt)) return true;
+  return false;
 }
 function notificationText(row) {
+  if (row.status === 'COLLECTING') {
+    return `Готово результатов: ${draftCount(row)}. Нажмите «Посмотреть результат» внизу, чтобы проверить фотографии и составы.`;
+  }
   if (READY_STATUSES.has(row.status)) {
-    const count = Array.isArray(row.state?.drafts) ? row.state.drafts.length : 0;
+    const count = draftCount(row);
     const lead = row.status === 'PARTIAL_REVIEW_REQUIRED' ? 'Разбор загрузки завершён частично.' : 'Разбор загрузки завершён.';
     return `${lead} Готово черновиков: ${count}. Нажмите «Посмотреть результат» внизу, чтобы проверить фотографии и составы.`;
   }
@@ -48,8 +63,19 @@ function createBouquetImportNotifications({ prisma, env = process.env, fetchImpl
   async function candidateIds() {
     const rows = await prisma.$queryRawUnsafe(`
       SELECT "id" FROM "BouquetImportBatch"
-      WHERE "status" IN ('REVIEW_REQUIRED','PARTIAL_REVIEW_REQUIRED','PREPARE_FAILED','PROVIDER_FAILED','PROVIDER_EXPIRED','PROVIDER_CANCELLED','UNCERTAIN')
-        AND COALESCE("state" #>> '{reviewNotification,status}', '') <> 'SENT'
+      WHERE "status" IN ('COLLECTING','REVIEW_REQUIRED','PARTIAL_REVIEW_REQUIRED','PREPARE_FAILED','PROVIDER_FAILED','PROVIDER_EXPIRED','PROVIDER_CANCELLED','UNCERTAIN')
+        AND ("status" <> 'COLLECTING' OR
+          jsonb_array_length(CASE WHEN jsonb_typeof("state"->'drafts') = 'array' THEN "state"->'drafts' ELSE '[]'::jsonb END)
+            > CASE WHEN COALESCE("state"->>'sentDraftCount', "state" #>> '{reviewNotification,sentDraftCount}', '') ~ '^[0-9]+$'
+              THEN COALESCE("state"->>'sentDraftCount', "state" #>> '{reviewNotification,sentDraftCount}')::int ELSE 0 END)
+        AND (COALESCE("state" #>> '{reviewNotification,status}', '') <> 'SENT'
+          OR ("status" = 'COLLECTING' AND jsonb_array_length(CASE WHEN jsonb_typeof("state"->'drafts') = 'array' THEN "state"->'drafts' ELSE '[]'::jsonb END)
+            > CASE WHEN COALESCE("state"->>'sentDraftCount', "state" #>> '{reviewNotification,sentDraftCount}', '') ~ '^[0-9]+$'
+              THEN COALESCE("state"->>'sentDraftCount', "state" #>> '{reviewNotification,sentDraftCount}')::int ELSE 0 END)
+          OR COALESCE(NULLIF("state" #>> '{syncCompletedAt}', '')::timestamptz,
+            NULLIF("state" #>> '{aiBatch,completedAt}', '')::timestamptz, to_timestamp(0))
+            > COALESCE(NULLIF("state" #>> '{reviewNotification,notifiedCompletedAt}', '')::timestamptz,
+              NULLIF("state" #>> '{reviewNotification,sentAt}', '')::timestamptz, to_timestamp(0)))
         AND (COALESCE("state" #>> '{reviewNotification,status}', '') <> 'SENDING'
           OR COALESCE(NULLIF("state" #>> '{reviewNotification,leaseAt}', '')::timestamptz, to_timestamp(0)) <= now() - interval '2 minutes')
         AND (COALESCE("state" #>> '{reviewNotification,status}', '') <> 'RETRY'
@@ -61,7 +87,7 @@ function createBouquetImportNotifications({ prisma, env = process.env, fetchImpl
 
   async function claim(id) {
     return prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `bouquet-notification:${id}`);
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', id);
       const row = await tx.bouquetImportBatch.findUnique({ where: { id } });
       const claimedAt = now();
       if (!eligible(row, claimedAt, leaseMs)) return null;
@@ -70,17 +96,21 @@ function createBouquetImportNotifications({ prisma, env = process.env, fetchImpl
       state.reviewNotification = { status: 'SENDING', attempts: Math.max(0, Number(previous.attempts) || 0) + 1,
         leaseAt: claimedAt.toISOString() };
       await tx.bouquetImportBatch.update({ where: { id }, data: { state } });
-      return { ...row, state, notificationText: notificationText({ ...row, state }) };
+      return { ...row, state, notificationDraftCount: draftCount(row),
+        notificationCompletedAt: completedAt(row), notificationText: notificationText({ ...row, state }) };
     });
   }
 
   async function mergeNotification(id, build) {
     return prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `bouquet-notification:${id}`);
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', id);
       const latest = await tx.bouquetImportBatch.findUnique({ where: { id } });
       if (!latest) return null;
       const state = clone(latest.state);
       state.reviewNotification = build(state.reviewNotification || {});
+      if (Number.isFinite(state.reviewNotification.sentDraftCount)) {
+        state.sentDraftCount = Math.max(Number(state.sentDraftCount) || 0, state.reviewNotification.sentDraftCount);
+      }
       return tx.bouquetImportBatch.update({ where: { id }, data: { state } });
     });
   }
@@ -105,7 +135,9 @@ function createBouquetImportNotifications({ prisma, env = process.env, fetchImpl
         await send(row);
         const sentAt = now().toISOString();
         await mergeNotification(id, (latest) => ({ status: 'SENT',
-          attempts: Math.max(row.state.reviewNotification.attempts, Number(latest.attempts) || 0), sentAt }));
+          attempts: Math.max(row.state.reviewNotification.attempts, Number(latest.attempts) || 0), sentAt,
+          notifiedStatus: row.status, notifiedCompletedAt: row.notificationCompletedAt,
+          sentDraftCount: Math.max(Number(latest.sentDraftCount) || 0, row.notificationDraftCount) }));
         return { status: 'SENT', id };
       } catch (error) {
         const failedAt = now();
@@ -145,4 +177,4 @@ function startBouquetImportNotifications(options = {}) {
 }
 
 module.exports = { createBouquetImportNotifications, startBouquetImportNotifications,
-  _test: { eligible, notificationText, safeError } };
+  _test: { completedAt, draftCount, eligible, notificationText, safeError } };

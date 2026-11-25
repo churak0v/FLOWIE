@@ -15,7 +15,7 @@ function createBouquetImportRouter({
   const reviewHandler = prisma ? createTelegramBouquetReviewHandler({ prisma, env, fetchImpl }) : async () => ({ handled: false });
   const repository = injectedRepository || createBouquetImportRepository(prisma);
   const service = injectedService || createTelegramBouquetImportService({ repository, storage, env, fetchImpl,
-    // QUEUED is the durable outbox. A separate worker consumes it after finalization.
+    // A separate worker consumes stored photos; legacy Batch mode uses QUEUED.
     analysisQueue: { enqueue: async () => {} },
   });
   const secret = String(env.TELEGRAM_BOUQUET_IMPORT_WEBHOOK_SECRET || '');
@@ -49,6 +49,17 @@ function createBouquetImportRouter({
         retrying_files: 'Повторяем загрузку файлов с ошибками.',
         nothing_to_retry: 'Файлов для повторной загрузки нет.',
       };
+      if (String(env.FLOWIE_IMPORT_AI_MODE || 'sync').toLowerCase() !== 'batch') {
+        Object.assign(texts, {
+          started: 'Присылайте фотографии букетов. Каждый снимок разбирается автоматически после сохранения, подтверждать окончание загрузки не нужно. Состав можно указать в подписи или ответом на фото.',
+          already_active: 'Присылайте ещё фотографии и составы. Каждый новый снимок разбирается автоматически.',
+          continue_upload: 'Присылайте ещё. Разбор новых фотографий начнётся автоматически.',
+          confirmation_stale: 'Подтверждать загрузку не нужно. Новые фотографии разбираются автоматически.',
+          waiting_for_files: 'Фотографии сохраняются и разбираются автоматически. Результат появится внизу по кнопке «Посмотреть результат».',
+          queued: 'Фотографии разбираются. Результат появится внизу по кнопке «Посмотреть результат».',
+          automatic_processing: 'Подтверждать загрузку не нужно. Каждый снимок разбирается автоматически после сохранения; можно присылать ещё.',
+        });
+      }
       const telegramAllowed = !['unauthorized', 'disabled', 'unsupported'].includes(result.ignored);
       if (callbackId && telegramAllowed) {
         await telegramRequest('answerCallbackQuery', {

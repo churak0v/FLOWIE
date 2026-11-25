@@ -10,13 +10,11 @@ Import is limited to explicitly configured numeric Telegram chat/user IDs. Adeli
    import automatically; `/import` or the bottom **Новая загрузка** button is optional.
 2. Write composition in the caption or reply to a specific photo. Unattached notes
    remain unassigned rather than being attached to an arbitrary bouquet.
-3. After 60 seconds of inactivity, the bot asks whether all photos are uploaded.
-   Confirm with **Все фото загружены** on Telegram's persistent bottom keyboard,
-   or press **Добавлю ещё** to continue. New photos invalidate any older question;
-   confirmation requires the current intake revision. Failed downloads block
-   analysis; `/import_retry` retries failed/stale downloads. Old inline callbacks
-   remain accepted for compatibility but new inline action buttons are not sent.
-4. A durable worker sends ordinary OpenAI Responses requests only after finalization,
+3. In default sync mode, each stored photo is picked up automatically. No upload
+   completion confirmation is required; more photos may arrive while analysis runs.
+   `/import_retry` retries failed/stale downloads. Legacy Batch mode retains the
+   60-second idle question and explicit confirmation. New inline action buttons are not sent.
+4. A durable worker sends ordinary OpenAI Responses requests for stored photos,
    with two photos processed concurrently by default. Exact-byte
    duplicates cost one image request. Albums are transport groups, not bouquets.
    Similar but non-identical photos are not automatically merged in this version.
@@ -52,8 +50,8 @@ Supplier price files will be parsed separately when supplied by the owner.
 
 Required environment is in compose.production.yml and bouquet-import-storage.md.
 `FLOWIE_BOUQUET_IMPORT_ENABLED` mounts the webhook, and
-`FLOWIE_IMPORT_AI_MODE=sync` selects fast ordinary requests after the florist's finish
-confirmation. `FLOWIE_IMPORT_AI_CONCURRENCY` defaults to 2 and is capped at 3.
+`FLOWIE_IMPORT_AI_MODE=sync` selects automatic ordinary requests as photos arrive.
+`FLOWIE_IMPORT_AI_CONCURRENCY` defaults to 2 and is capped at 3.
 Legacy Batch submission requires both mode `batch` and
 `BOUQUET_IMPORT_AI_BATCH_ENABLED=true`. `OPENAI_API_KEY` and backup S3 credentials are server-only.
 
@@ -68,6 +66,18 @@ uncertain requests are locked for manual reconciliation instead of being submitt
 again automatically. Legacy Batch completion can take up to 24 hours. Partial results and
 failed conversions are explicit states. Prisma's additive migration must precede
 API recreation. Existing frontend/admin images can remain running.
+
+## Fast-mode verification — 25 November 2026
+
+- The original eight-photo Batch was cancelled with zero completed requests.
+- All eight original photos were processed successfully through ordinary Responses
+  requests via the Netherlands relay; processing took 18.35 seconds.
+- Eight private drafts/recipes were saved. Ready notification delivery to the
+  uploader was confirmed after completion.
+- Continuous intake retains `COLLECTING`, uses hash-based result identities, and
+  processes only newly stored photos. Exact duplicates reuse existing responses.
+- Token usage is recorded per response (first eight photos: 2,873 input and 1,196
+  output tokens); exact composition remains subject to human confirmation.
 
 ## Deployment verification — 25 November 2026
 

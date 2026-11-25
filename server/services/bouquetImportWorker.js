@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const { DEFAULT_MODEL, prepareBouquetImportBatch } = require('./bouquetImportBatch');
 const { isImportSettled } = require('./bouquetImportRepository');
 const { getTelegramBouquetImportConfig } = require('./telegramBouquetImport');
@@ -37,12 +38,18 @@ function manifestOf(prepared) {
   }));
 }
 
-function photosFrom(row) {
+function stableSyncCustomId(importId, originalSha256) {
+  const safeImport = String(importId).replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 40);
+  return `bouquet-${safeImport}-sha-${String(originalSha256).slice(0, 24)}`;
+}
+
+function photosFrom(row, { requireFinalized = true } = {}) {
   const files = Array.isArray(row.state?.files) ? row.state.files : [];
-  if (!row.state?.finalizeRequested || files.length === 0 || files.some((file) => file.status !== 'STORED' || !file.storageKey)) {
+  const stored = files.filter((file) => file.status === 'STORED' && file.storageKey);
+  if ((requireFinalized && (!row.state?.finalizeRequested || stored.length !== files.length)) || stored.length === 0) {
     throw Object.assign(new Error('BOUQUET_IMPORT_WORKER_NOT_FINALIZED'), { code: 'BOUQUET_IMPORT_WORKER_NOT_FINALIZED' });
   }
-  return files.map((file) => ({ id: file.id, storageKey: file.storageKey }));
+  return stored.map((file) => ({ id: file.id, storageKey: file.storageKey }));
 }
 
 function extractOutputText(body) {
@@ -151,6 +158,42 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
         return { recovered: active.id, status: recovery };
       }
 
+      if (aiMode(env) === 'sync') {
+        const candidates = await tx.bouquetImportBatch.findMany({
+          where: { status: 'COLLECTING' }, orderBy: { updatedAt: 'asc' }, take: 50,
+        });
+        for (const candidate of candidates) {
+          await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', candidate.id);
+          const latest = await tx.bouquetImportBatch.findUnique({ where: { id: candidate.id } });
+          if (!latest || latest.status !== 'COLLECTING') continue;
+          const state = clone(latest.state);
+          const known = new Set((state.syncKnownPhotoIds || []).map(String));
+          const storedIds = (state.files || []).filter((file) => file.status === 'STORED' && file.storageKey).map((file) => String(file.id));
+          const leaseAt = state.syncLease?.heartbeatAt || state.syncLease?.startedAt;
+          const leaseAge = leaseAt ? now().getTime() - new Date(leaseAt).getTime() : Infinity;
+          if (state.syncLease && leaseAge < SYNC_STALE_PHASE_MS) return null;
+          const interrupted = state.syncLease && leaseAge >= SYNC_STALE_PHASE_MS;
+          if (interrupted) {
+            state.syncResponses ||= {};
+            for (const response of Object.values(state.syncResponses)) {
+              if (response?.status === 'RUNNING') {
+                response.status = 'UNCERTAIN'; response.error = 'WORKER_INTERRUPTED'; response.finishedAt = now().toISOString();
+              }
+            }
+          }
+          const hasNew = storedIds.some((id) => !known.has(id));
+          if (interrupted && !hasNew) {
+            delete state.syncLease;
+            await tx.bouquetImportBatch.update({ where: { id: latest.id }, data: { state } });
+            return { recovered: latest.id, status: 'COLLECTING' };
+          }
+          if (!hasNew) continue;
+          state.syncLease = { token: crypto.randomUUID(), startedAt: now().toISOString(), heartbeatAt: now().toISOString() };
+          await tx.bouquetImportBatch.update({ where: { id: latest.id }, data: { state } });
+          return { ...latest, state, continuous: true, status: 'PROCESSING_SYNC' };
+        }
+      }
+
       if (canPromote) {
         const collecting = await tx.bouquetImportBatch.findFirst({ where: {
           status: 'COLLECTING', updatedAt: { lte: new Date(now().getTime() - 15000) },
@@ -183,7 +226,7 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
 
   async function mutateState(id, callback) {
     return prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `bouquet-import:${id}`);
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', id);
       const latest = await tx.bouquetImportBatch.findUnique({ where: { id } });
       if (!latest) throw new Error('BOUQUET_IMPORT_NOT_FOUND');
       const state = clone(latest.state);
@@ -236,23 +279,39 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
   }
 
   async function persistParsed(row, parsed, details = {}) {
-    const status = parsed.complete ? 'REVIEW_REQUIRED' : 'PARTIAL_REVIEW_REQUIRED';
     return prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `bouquet-import:${row.id}`);
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', row.id);
       const latest = await tx.bouquetImportBatch.findUnique({ where: { id: row.id } });
       if (!latest) throw new Error('BOUQUET_IMPORT_NOT_FOUND');
       const state = clone(latest.state);
-      state.drafts = parsed.drafts;
+      state.drafts = Array.isArray(state.drafts) ? state.drafts : [];
+      const existing = new Map(state.drafts.map((draft) => [draft.customId, draft]));
+      const newDrafts = [];
+      for (const draft of parsed.drafts) {
+        const prior = existing.get(draft.customId);
+        if (prior) {
+          prior.photoIds = [...new Set([...(prior.photoIds || []), ...draft.photoIds])];
+        } else {
+          state.drafts.push(draft); existing.set(draft.customId, draft); newDrafts.push(draft);
+        }
+      }
       if (details.mode === 'sync') {
         state.syncCompletedAt = now().toISOString();
-        state.syncErrors = parsed.errors;
+        state.syncErrors = [...(state.syncErrors || []), ...parsed.errors];
+        if (details.continuous) {
+          state.syncKnownPhotoIds = [...new Set([
+            ...(state.syncKnownPhotoIds || []).map(String),
+            ...(details.manifest || []).flatMap((item) => item.photoIds.map(String)),
+          ])];
+          delete state.syncLease;
+        }
       } else {
         state.aiBatch ||= {};
         state.aiBatch.outputFileId = details.outputFileId;
         state.aiBatch.outputErrors = parsed.errors;
         state.aiBatch.completedAt = now().toISOString();
       }
-      for (const draft of parsed.drafts) {
+      for (const draft of newDrafts) {
         const lines = confirmedLinesFor(state, draft.photoIds);
         draft.needsComposition = lines.length === 0;
         const recipe = await tx.bouquetRecipe.create({ data: {
@@ -264,8 +323,9 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
         } });
         draft.recipeId = recipe.id;
       }
+      const status = details.continuous ? latest.status : (parsed.complete ? 'REVIEW_REQUIRED' : 'PARTIAL_REVIEW_REQUIRED');
       await tx.bouquetImportBatch.update({ where: { id: row.id }, data: { status, state } });
-      return { status, id: row.id, drafts: parsed.drafts.length };
+      return { status, id: row.id, drafts: newDrafts.length };
     });
   }
 
@@ -295,19 +355,49 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
   }
 
   async function processSync(row) {
+    const knownPhotoIds = new Set((row.state?.syncKnownPhotoIds || []).map(String));
+    const availablePhotos = photosFrom(row, { requireFinalized: !row.continuous });
+    const photos = row.continuous
+      ? availablePhotos.filter((photo) => !knownPhotoIds.has(String(photo.id)))
+      : availablePhotos;
+    if (!photos.length && row.continuous) {
+      await mutateState(row.id, (state) => { delete state.syncLease; });
+      return { status: 'COLLECTING', id: row.id, drafts: 0 };
+    }
     const prepared = await prepareBouquetImportBatch({
       importId: row.id,
       state: 'FINALIZED',
-      photos: photosFrom(row),
+      photos,
       storage,
       model: String(env.FLOWIE_IMPORT_BATCH_MODEL || DEFAULT_MODEL).trim(),
     });
+    if (row.continuous) {
+      const responseManifest = Object.entries(row.state?.syncResponses || {}).map(([customId, value]) => ({
+        customId, originalSha256: value?.originalSha256,
+      }));
+      const prior = [...(row.state?.syncManifest || []), ...(row.state?.aiBatch?.manifest || []), ...responseManifest];
+      const priorByHash = new Map(prior.filter((item) => item?.originalSha256 && item?.customId)
+        .map((item) => [item.originalSha256, item.customId]));
+      for (const entry of prepared.entries) {
+        entry.request.custom_id = priorByHash.get(entry.originalSha256)
+          || stableSyncCustomId(row.id, entry.originalSha256);
+      }
+    }
     const manifest = manifestOf(prepared);
     await mutateState(row.id, (state) => {
       state.syncModel = prepared.model;
-      state.syncManifest = manifest;
+      if (row.continuous) {
+        const combined = new Map((state.syncManifest || []).map((item) => [item.customId, item]));
+        for (const item of manifest) {
+          const prior = combined.get(item.customId);
+          if (prior) prior.photoIds = [...new Set([...(prior.photoIds || []), ...item.photoIds])];
+          else combined.set(item.customId, clone(item));
+        }
+        state.syncManifest = [...combined.values()];
+      } else state.syncManifest = manifest;
       state.syncStartedAt ||= now().toISOString();
       state.syncResponses ||= {};
+      if (row.continuous && state.syncLease) state.syncLease.heartbeatAt = now().toISOString();
       for (const response of Object.values(state.syncResponses)) {
         if (response?.status === 'RUNNING') {
           response.status = 'UNCERTAIN';
@@ -331,6 +421,7 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
             originalSha256: entry.originalSha256,
             startedAt: now().toISOString(),
           };
+          if (row.continuous && state.syncLease) state.syncLease.heartbeatAt = now().toISOString();
           return true;
         });
         if (!claimResult.result) continue;
@@ -347,6 +438,7 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
               usage: response?.usage || null,
               finishedAt: now().toISOString(),
             };
+            if (row.continuous && state.syncLease) state.syncLease.heartbeatAt = now().toISOString();
           });
         } catch (error) {
           const explicitHttp = Number.isInteger(error?.status) && error.status >= 400;
@@ -358,6 +450,7 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
               ...(explicitHttp ? { httpStatus: error.status } : {}),
               finishedAt: now().toISOString(),
             };
+            if (row.continuous && state.syncLease) state.syncLease.heartbeatAt = now().toISOString();
           });
         }
       }
@@ -375,7 +468,7 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
         lines.push(JSON.stringify({ custom_id: item.customId, error: { code: 'sync_request_failed' } }));
       }
     }
-    return persistParsed(row, parseBatchOutput(lines.join('\n'), manifest), { mode: 'sync' });
+    return persistParsed(row, parseBatchOutput(lines.join('\n'), manifest), { mode: 'sync', continuous: row.continuous, manifest });
   }
 
   async function runOnce() {
@@ -397,6 +490,14 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
         try {
           return await processSync(row);
         } catch (error) {
+          if (row.continuous) {
+            await mutateState(row.id, (state) => {
+              delete state.syncLease;
+              state.syncLastError = safeError(error);
+              state.syncLastErrorAt = now().toISOString();
+            });
+            return { status: 'COLLECTING', id: row.id, error: 'SYNC_PREPARE_FAILED' };
+          }
           const latest = await prisma.bouquetImportBatch.findUnique({ where: { id: row.id } });
           const state = clone(latest?.state || row.state);
           state.syncPrepareError = safeError(error);

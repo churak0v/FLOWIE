@@ -12,7 +12,7 @@ function telegramUpdate(updateId, text, overrides = {}) {
 
 function fixture({ failSendAt = null } = {}) {
   const state = {
-    claims: new Set(), sends: [], sendAttempts: 0, updates: [],
+    claims: new Set(), sends: [], sendAttempts: 0, updates: [], locks: [],
     batch: {
       id: 'batch-1', chatId: '-100', userId: '1780687976', status: 'REVIEW_REQUIRED',
       state: {
@@ -32,7 +32,30 @@ function fixture({ failSendAt = null } = {}) {
       },
     },
   };
+  state.batches = [state.batch];
+  const tx = {
+    $executeRawUnsafe: async (...args) => { state.locks.push(args); return 1; },
+    bouquetImportBatch: {
+      findUnique: async ({ where }) => {
+        state.onFindUnique?.();
+        const row = state.batches.find((item) => item.id === where.id);
+        return row ? structuredClone(row) : null;
+      },
+      update: async ({ data }) => {
+        const row = state.batches.find((item) => item.id === state.lockedBatchId) || state.batch;
+        row.state = structuredClone(data.state);
+        state.updates.push(structuredClone(data.state));
+        return structuredClone(row);
+      },
+    },
+  };
   const prisma = {
+    $transaction: async (callback) => callback({
+      ...tx,
+      $executeRawUnsafe: async (...args) => {
+        state.locks.push(args); state.lockedBatchId = args[1]; return 1;
+      },
+    }),
     bouquetImportUpdate: {
       create: async ({ data }) => {
         if (state.claims.has(data.updateId)) throw Object.assign(new Error('duplicate'), { code: 'P2002' });
@@ -41,13 +64,8 @@ function fixture({ failSendAt = null } = {}) {
       delete: async ({ where }) => { state.claims.delete(where.updateId); },
     },
     bouquetImportBatch: {
-      findFirst: async ({ where }) => state.batch.chatId === where.chatId && state.batch.userId === where.userId
-        && where.status.in.includes(state.batch.status) ? state.batch : null,
-      update: async ({ data }) => {
-        state.batch.state = data.state;
-        state.updates.push(data.state);
-        return state.batch;
-      },
+      findMany: async ({ where }) => state.batches.filter((row) => row.chatId === where.chatId
+        && row.userId === where.userId && where.status.in.includes(row.status)).map((row) => structuredClone(row)),
     },
   };
   const handler = createTelegramBouquetReviewHandler({
@@ -71,7 +89,8 @@ test('/start guides only an authorized user to current FLOWIE domains and import
   const { handler, state } = fixture();
   const welcome = await handler(telegramUpdate(1, '/start'));
   assert.equal(welcome.status, 'welcome');
-  assert.match(state.sends[0].text, /\/import/);
+  assert.match(state.sends[0].text, /автоматически/);
+  assert.doesNotMatch(state.sends[0].text, /минут/);
   assert.match(state.sends[0].text, /https:\/\/flowie\.art/);
   assert.match(state.sends[0].text, /https:\/\/admin\.flowie\.art/);
 
@@ -91,6 +110,7 @@ test('/review uses Telegram fileId, includes only related notes, and never expos
   assert.equal(JSON.stringify(state.sends).includes('private/one.jpg'), false);
   assert.match(state.sends[1].text, /\/recipe recipe-1/);
   assert.equal(state.batch.state.reviewCursor, 0);
+  assert.deepEqual(state.locks[0], ['SELECT pg_advisory_xact_lock(hashtext($1))', 'batch-1']);
 });
 
 test('/next starts at the first draft when no cursor exists and duplicate updates never advance twice', async () => {
@@ -140,4 +160,26 @@ test('missing recipe id never produces an impossible recipe command', async () =
   assert.equal(result.recipeId, null);
   assert.equal(JSON.stringify(state.sends).includes('/recipe undefined'), false);
   assert.match(state.sends[1].text, /рецепт ещё не создан/);
+});
+
+test('/review accepts COLLECTING drafts and writes cursor under the bare batch-id lock', async () => {
+  const { handler, state } = fixture();
+  state.batch.status = 'COLLECTING';
+  const result = await handler(telegramUpdate(60, '/review'));
+  assert.equal(result.status, 'shown');
+  assert.deepEqual(state.locks[0], ['SELECT pg_advisory_xact_lock(hashtext($1))', 'batch-1']);
+});
+
+test('newest empty COLLECTING batch does not hide an older usable result and latest state is merged', async () => {
+  const { handler, state } = fixture();
+  state.batches.unshift({
+    id: 'batch-empty', chatId: '-100', userId: '1780687976', status: 'COLLECTING',
+    state: { drafts: [] },
+  });
+  state.onFindUnique = () => { state.batch.state.syncKnownPhotoIds = ['photo-concurrent']; };
+  const result = await handler(telegramUpdate(70, '/review'));
+  assert.equal(result.status, 'shown');
+  assert.deepEqual(state.locks[0], ['SELECT pg_advisory_xact_lock(hashtext($1))', 'batch-1']);
+  assert.deepEqual(state.batch.state.syncKnownPhotoIds, ['photo-concurrent']);
+  assert.equal(state.batch.state.reviewCursor, 0);
 });

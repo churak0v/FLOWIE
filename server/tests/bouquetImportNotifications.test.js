@@ -127,3 +127,26 @@ test('expired and cancelled provider batches are terminal notification candidate
     assert.equal(_test.eligible({ status, state: {} }, now, 120000), true);
   }
 });
+
+test('COLLECTING batches notify once per completed draft wave and use the shared bare-id lock', async () => {
+  const { service, state } = fixture({ status: 'COLLECTING' });
+  assert.equal((await service.runOnce()).status, 'SENT');
+  assert.equal(state.row.state.sentDraftCount, 3);
+  assert.deepEqual(state.queries.find((entry) => entry[0].includes('pg_advisory_xact_lock')),
+    ['SELECT pg_advisory_xact_lock(hashtext($1))', 'batch-1']);
+  assert.equal((await service.runOnce()).status, 'IDLE');
+  state.row.state.drafts.push({});
+  assert.equal((await service.runOnce()).status, 'SENT');
+  assert.equal(state.row.state.sentDraftCount, 4);
+  assert.equal(state.sends.length, 2);
+  assert.match(state.sends[1].text, /4/);
+});
+
+test('a successful completion can notify after an earlier legacy failure SENT record', async () => {
+  const { service, state } = fixture({ status: 'REVIEW_REQUIRED' });
+  state.row.state.reviewNotification = { status: 'SENT', sentAt: '2026-11-25T11:00:00.000Z' };
+  state.row.state.syncCompletedAt = '2026-11-25T11:01:00.000Z';
+  assert.equal((await service.runOnce()).status, 'SENT');
+  assert.equal(state.row.state.reviewNotification.notifiedStatus, 'REVIEW_REQUIRED');
+  assert.equal(state.row.state.reviewNotification.notifiedCompletedAt, '2026-11-25T11:01:00.000Z');
+});

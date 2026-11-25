@@ -166,7 +166,7 @@ test('completed partial output persists successful drafts and empty recipe lines
     response: { status_code: 200, body: { output: [{ content: [{ type: 'output_text', text: JSON.stringify({ draft_name: 'Pink', palette: ['pink'], likely_flowers: ['rose'], notes: 'Possible rose.' }) }] }] } },
   }) + '\n' + JSON.stringify({ custom_id: 'c2', error: { code: 'failed' } }) + '\n';
   const worker = createBouquetImportWorker({
-    prisma, storage: {}, now: () => clock,
+    prisma, storage: {}, now: () => clock, env: { FLOWIE_IMPORT_AI_MODE: 'batch' },
     provider: {
       retrieve: async () => ({ status: 'completed', output_file_id: 'out-1', request_counts: { total: 2, completed: 1, failed: 1 } }),
       downloadOutput: async () => output,

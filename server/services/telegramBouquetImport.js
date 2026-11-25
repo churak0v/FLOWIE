@@ -262,6 +262,9 @@ function createTelegramBouquetImportService(options) {
       return { importId: active.id, status: 'continue_upload' };
     }
     if (message && commandOf(message.text) === '/import_done') {
+      if (String(env.FLOWIE_IMPORT_AI_MODE || 'sync').toLowerCase() !== 'batch') {
+        return { importId: active.id, status: 'automatic_processing' };
+      }
       await repository.requestFinalize({ importId: active.id, requestedAt: now(), requirePrompt: true });
       await maybeQueue(active.id);
       return { importId: active.id, status: 'waiting_for_files' };
@@ -277,6 +280,9 @@ function createTelegramBouquetImportService(options) {
     if (callbackImportId) {
       if (String(callbackImportId) !== String(active.id)) {
         return { importId: active.id, status: 'stale_callback' };
+      }
+      if (String(env.FLOWIE_IMPORT_AI_MODE || 'sync').toLowerCase() !== 'batch') {
+        return { importId: active.id, status: 'automatic_processing' };
       }
       await repository.requestFinalize({ importId: active.id, requestedAt: now() });
       const queued = await maybeQueue(active.id);

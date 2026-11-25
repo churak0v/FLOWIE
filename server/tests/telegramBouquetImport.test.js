@@ -103,9 +103,11 @@ function createFixture(overrides = {}) {
     storage: { async put(value) { stored.push(value); } },
     analysisQueue: { async enqueue(value) { queued.push(value); } },
     env: {
+      FLOWIE_IMPORT_AI_MODE: 'batch',
       TELEGRAM_ORDER_BOT_TOKEN: 'secret-token',
       TELEGRAM_BOUQUET_IMPORT_CHAT_IDS: '-100',
       TELEGRAM_BOUQUET_IMPORT_USER_IDS: '7',
+      ...overrides.env,
     },
     fetchImpl: overrides.fetchImpl || (async (url) => {
       if (url.endsWith('/getFile')) return new Response(JSON.stringify({ ok: true, result: { file_path: 'photos/a.jpg' } }), {
@@ -116,6 +118,15 @@ function createFixture(overrides = {}) {
   });
   return { service, repository, queued, stored };
 }
+
+test('sync mode ignores the old finish command and keeps intake open', async () => {
+  const fixture = createFixture({ env: { FLOWIE_IMPORT_AI_MODE: 'sync' } });
+  await fixture.service.handleUpdate(messageUpdate(1, { text: '/import' }));
+  const result = await fixture.service.handleUpdate(messageUpdate(2, { text: '/import_done' }));
+  assert.equal(result.status, 'automatic_processing');
+  assert.equal(fixture.repository.state.imports[0].finalizeRequested, false);
+  assert.equal(fixture.queued.length, 0);
+});
 
 test('does not start paid analysis while import is active', async () => {
   const fixture = createFixture();
