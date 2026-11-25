@@ -21,6 +21,8 @@ export function CheckoutFooterCTA({ total, disabled, loading = false, onClick })
         type="button"
         onClick={disabled ? undefined : onClick}
         disabled={disabled}
+        data-analytics-element="checkout_submit"
+        data-analytics-placement="checkout"
         style={{
           width: '100%',
           height: 56,

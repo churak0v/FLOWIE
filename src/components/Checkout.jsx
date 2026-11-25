@@ -450,7 +450,7 @@ export function Checkout() {
           </div>
         </div>
 
-        <div style={{ marginTop: 'var(--sp-6)', display: 'grid', gap: 16 }}>
+        <div data-analytics-section="checkout_form" data-analytics-placement="checkout" style={{ marginTop: 'var(--sp-6)', display: 'grid', gap: 16 }}>
           <CheckoutItemsPreview items={state.cart.items} productsById={productsById} />
 
           <div className="ym-hide-content">

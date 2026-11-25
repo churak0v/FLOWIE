@@ -624,7 +624,7 @@ export function PaymentManual() {
     return (
       <AppShell className="ym-hide-content" style={{ '--app-shell-bottom-space': '0px', '--app-content-inset-bottom': '0px' }}>
         <Text variant="title">Оплата</Text>
-        <div style={{ marginTop: 'var(--sp-6)' }}>
+        <div data-analytics-section="payment_status" data-analytics-placement="payment" style={{ marginTop: 'var(--sp-6)' }}>
           <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
             <Text variant="subtitle">Загрузка...</Text>
           </Surface>
@@ -642,7 +642,7 @@ export function PaymentManual() {
           </IconButton>
           <Text variant="title">Оплата</Text>
         </div>
-        <div style={{ marginTop: 'var(--sp-6)' }}>
+        <div data-analytics-section="payment_status" data-analytics-placement="payment" style={{ marginTop: 'var(--sp-6)' }}>
           <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
             <Text variant="subtitle">Ошибка</Text>
             <div style={{ marginTop: 6 }}>
@@ -676,7 +676,7 @@ export function PaymentManual() {
           <Text variant="title">Заказ #{order?.id}</Text>
         </div>
 
-        <div style={{ marginTop: 16 }}>
+        <div data-analytics-section="payment_status" data-analytics-placement="payment" style={{ marginTop: 16 }}>
           <OrderStatusTimeline current={current} />
         </div>
 
@@ -887,7 +887,7 @@ export function PaymentManual() {
         <DetailLine label="К оплате" value={formatMoney(amount)} strong />
       </Surface>
 
-      <div style={{ marginTop: 'var(--sp-8)', display: 'grid', gap: 10 }}>
+      <div data-analytics-section="payment_status" data-analytics-placement="payment" style={{ marginTop: 'var(--sp-8)', display: 'grid', gap: 10 }}>
         {paymentStatus === 'CONFIRMED' ? (
           <button
             type="button"
@@ -916,6 +916,8 @@ export function PaymentManual() {
               type="button"
               disabled={gatewayBusy || !alfaPayment.enabled}
               onClick={payWithAlfa}
+              data-analytics-element="payment_retry"
+              data-analytics-placement="payment"
               style={{
                 height: 54,
                 borderRadius: 'var(--r-lg)',

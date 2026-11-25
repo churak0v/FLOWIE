@@ -25,6 +25,8 @@ export function MiniCartBar({ count, sum, bottom = 'calc(108px + var(--app-nav-i
           type="button"
           onClick={() => navigate('/cart')}
           aria-label={`Корзина, товаров: ${count}, ${formatMoney(sum)}`}
+          data-analytics-element="mini_cart"
+          data-analytics-placement="floating"
           style={{
             marginLeft: 'auto',
             width: 'auto',
@@ -73,6 +75,8 @@ export function MiniCartBar({ count, sum, bottom = 'calc(108px + var(--app-nav-i
     <button
       type="button"
       onClick={() => navigate('/cart')}
+      data-analytics-element="mini_cart"
+      data-analytics-placement="floating"
       style={{
         position: 'fixed',
         left: '50%',

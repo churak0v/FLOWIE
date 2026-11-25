@@ -11,7 +11,7 @@ const ICONS = {
   login: User,
 };
 
-function Tab({ to, label, icon: Icon, onSelect }) {
+function Tab({ to, label, icon: Icon, onSelect, analyticsElement }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isActive = Boolean(to) && (to === '/' ? location.pathname === '/' : location.pathname.startsWith(to));
@@ -22,6 +22,8 @@ function Tab({ to, label, icon: Icon, onSelect }) {
       className={isActive ? 'ui-bottomNavLink ui-bottomNavLink--active' : 'ui-bottomNavLink'}
       aria-current={isActive ? 'page' : undefined}
       aria-label={label}
+      data-analytics-element={analyticsElement}
+      data-analytics-placement="bottom_nav"
     >
       <Icon size={22} />
       <span className="ui-bottomNavLabel">{label}</span>
@@ -31,6 +33,14 @@ function Tab({ to, label, icon: Icon, onSelect }) {
 
 export function BottomNav({ user, onLogin }) {
   const items = bottomNavItems(user);
+  const analyticsElements = {
+    home: 'nav_home',
+    catalog: 'nav_catalog',
+    favorites: 'nav_favorites',
+    recipients: 'nav_recipients',
+    account: 'nav_account',
+    login: 'nav_account',
+  };
   return (
     <nav className="ui-bottomNav" aria-label="Навигация">
       <div className="ui-bottomNavInner">
@@ -41,6 +51,7 @@ export function BottomNav({ user, onLogin }) {
             label={item.label}
             icon={ICONS[item.key]}
             onSelect={item.key === 'login' ? onLogin : undefined}
+            analyticsElement={analyticsElements[item.key]}
           />
         ))}
       </div>

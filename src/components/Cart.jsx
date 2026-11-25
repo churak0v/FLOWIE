@@ -71,7 +71,7 @@ export function Cart() {
           </Surface>
         </div>
 
-        <div style={{ marginTop: 'var(--sp-4)' }}>
+        <div data-analytics-section="cart_items" data-analytics-placement="cart" style={{ marginTop: 'var(--sp-4)' }}>
           <CartItemsList
             items={state.cart.items}
             productsById={productsById}

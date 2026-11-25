@@ -20,6 +20,8 @@ export function CartFooterCTA({ total, disabled, onClick, label }) {
         type="button"
         onClick={disabled ? undefined : onClick}
         disabled={disabled}
+        data-analytics-element="cart_checkout"
+        data-analytics-placement="cart"
         style={{
           width: '100%',
           height: 56,
