@@ -61,6 +61,18 @@ app.use('/api/delivery', deliveryRoutes);
 app.use('/api/delivery', require('./routes/deliveryMaps'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/gift-picker', require('./routes/giftPicker'));
+app.use('/api/admin/bouquet-economics', require('./routes/bouquetEconomics').createBouquetEconomicsRouter({ prisma }));
+if (process.env.FLOWIE_BOUQUET_IMPORT_ENABLED === 'true') {
+    const { createBouquetImportStorage } = require('./services/bouquetImportStorage');
+    const { createBouquetImportRouter } = require('./routes/bouquetImport');
+    const storage = createBouquetImportStorage();
+    app.use('/api/bouquet-import', createBouquetImportRouter({ prisma, storage }));
+    if (process.env.OPENAI_API_KEY) {
+        const { createOpenAIBatchProvider } = require('./services/bouquetImportBatch');
+        const { startBouquetImportWorker } = require('./services/bouquetImportWorker');
+        startBouquetImportWorker({ prisma, storage, provider: createOpenAIBatchProvider({ apiKey: process.env.OPENAI_API_KEY }) });
+    }
+}
 	app.use('/api/upload', uploadRoutes);
 	app.use('/api/chats', chatsRoutes);
 	app.use('/api/recipients', recipientsRoutes);

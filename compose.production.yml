@@ -27,7 +27,7 @@ services:
     stop_grace_period: 60s
 
   migrate:
-    image: flowie-api:${RELEASE_TAG:?Set an immutable RELEASE_TAG}
+    image: flowie-api:${API_RELEASE_TAG:-${RELEASE_TAG:?Set an immutable RELEASE_TAG}}
     build:
       context: ./server
       dockerfile: Dockerfile.production
@@ -84,6 +84,18 @@ services:
       TELEGRAM_ORDER_CHAT_IDS: ${TELEGRAM_ORDER_CHAT_IDS:-}
       TELEGRAM_ORDER_ADMIN_URL: ${TELEGRAM_ORDER_ADMIN_URL:-https://admin.flowie.art}
       TELEGRAM_ORDER_API_BASE: ${TELEGRAM_ORDER_API_BASE:-https://api.telegram.org}
+      FLOWIE_BOUQUET_IMPORT_ENABLED: ${FLOWIE_BOUQUET_IMPORT_ENABLED:-false}
+      BOUQUET_IMPORT_AI_BATCH_ENABLED: ${BOUQUET_IMPORT_AI_BATCH_ENABLED:-false}
+      TELEGRAM_BOUQUET_IMPORT_CHAT_IDS: ${TELEGRAM_BOUQUET_IMPORT_CHAT_IDS:-}
+      TELEGRAM_BOUQUET_IMPORT_USER_IDS: ${TELEGRAM_BOUQUET_IMPORT_USER_IDS:-}
+      TELEGRAM_BOUQUET_IMPORT_WEBHOOK_SECRET: ${TELEGRAM_BOUQUET_IMPORT_WEBHOOK_SECRET:-}
+      FLOWIE_IMPORT_S3_BUCKET: ${FLOWIE_IMPORT_S3_BUCKET:-}
+      FLOWIE_IMPORT_S3_ENDPOINT: ${FLOWIE_IMPORT_S3_ENDPOINT:-}
+      FLOWIE_IMPORT_S3_REGION: ${FLOWIE_IMPORT_S3_REGION:-}
+      FLOWIE_IMPORT_S3_ACCESS_KEY_ID: ${FLOWIE_IMPORT_S3_ACCESS_KEY_ID:-}
+      FLOWIE_IMPORT_S3_SECRET_ACCESS_KEY: ${FLOWIE_IMPORT_S3_SECRET_ACCESS_KEY:-}
+      FLOWIE_IMPORT_S3_SESSION_TOKEN: ${FLOWIE_IMPORT_S3_SESSION_TOKEN:-}
+      FLOWIE_IMPORT_BATCH_MODEL: ${FLOWIE_IMPORT_BATCH_MODEL:-gpt-6-luna}
     command: ["node", "./node_modules/prisma/build/index.js", "migrate", "deploy"]
     depends_on:
       db:
@@ -93,7 +105,7 @@ services:
 
   api:
     <<: *service-defaults
-    image: flowie-api:${RELEASE_TAG:?Set an immutable RELEASE_TAG}
+    image: flowie-api:${API_RELEASE_TAG:-${RELEASE_TAG:?Set an immutable RELEASE_TAG}}
     build:
       context: ./server
       dockerfile: Dockerfile.production

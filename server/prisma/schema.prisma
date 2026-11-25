@@ -8,6 +8,52 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Private import state; never included in public product serializers.
+model BouquetImportBatch {
+  id        String   @id @default(cuid())
+  chatId    String
+  userId    String
+  status    String   @default("COLLECTING")
+  state     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([chatId, userId, status])
+}
+
+model BouquetImportUpdate {
+  updateId  String   @id
+  createdAt DateTime @default(now())
+}
+
+model FlowerPurchasePrice {
+  id            String   @id @default(cuid())
+  supplierId    String
+  ingredientId  String
+  name          String
+  unit          String
+  priceKopecks  Int
+  effectiveAt   DateTime
+  source        String
+  confirmed     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([supplierId, ingredientId, unit, effectiveAt])
+}
+
+model BouquetRecipe {
+  id          String   @id @default(cuid())
+  productId   Int?     @unique
+  importId    String?
+  name        String
+  lines       Json
+  costs       Json
+  snapshot    Json?
+  confirmedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 enum StaffRole {
   admin
   moderator

@@ -1,0 +1,293 @@
+'use strict';
+
+const { DEFAULT_MODEL, prepareBouquetImportBatch } = require('./bouquetImportBatch');
+
+const ACTIVE_STATUSES = ['PREPARING', 'SUBMITTING', 'POLLING'];
+const PROVIDER_PENDING = new Set(['validating', 'in_progress', 'finalizing', 'cancelling']);
+const PROVIDER_TERMINAL_FAILURE = new Set(['failed', 'expired', 'cancelled']);
+// Normalizing a finalized import can legitimately take several minutes for a large
+// set. Keep the crash lease comfortably above provider and image-operation bounds.
+const DEFAULT_STALE_PHASE_MS = 30 * 60_000;
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value || {}));
+}
+
+function safeError(error) {
+  return String(error?.code || error?.message || error || 'unknown').slice(0, 300);
+}
+
+function manifestOf(prepared) {
+  return prepared.entries.map((entry) => ({
+    originalSha256: entry.originalSha256,
+    photoIds: [...entry.photoIds],
+    customId: entry.request.custom_id,
+  }));
+}
+
+function photosFrom(row) {
+  const files = Array.isArray(row.state?.files) ? row.state.files : [];
+  if (!row.state?.finalizeRequested || files.length === 0 || files.some((file) => file.status !== 'STORED' || !file.storageKey)) {
+    throw Object.assign(new Error('BOUQUET_IMPORT_WORKER_NOT_FINALIZED'), { code: 'BOUQUET_IMPORT_WORKER_NOT_FINALIZED' });
+  }
+  return files.map((file) => ({ id: file.id, storageKey: file.storageKey }));
+}
+
+function extractOutputText(body) {
+  if (typeof body?.output_text === 'string') return body.output_text;
+  for (const output of body?.output || []) {
+    for (const content of output?.content || []) {
+      if (typeof content?.text === 'string' && (!content.type || content.type === 'output_text')) return content.text;
+    }
+  }
+  return null;
+}
+
+function validateDraft(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (typeof value.draft_name !== 'string' || typeof value.notes !== 'string') return null;
+  if (!Array.isArray(value.palette) || !value.palette.every((item) => typeof item === 'string')) return null;
+  if (!Array.isArray(value.likely_flowers) || !value.likely_flowers.every((item) => typeof item === 'string')) return null;
+  return {
+    draft_name: value.draft_name.slice(0, 240),
+    palette: value.palette.slice(0, 8).map((item) => item.slice(0, 80)),
+    likely_flowers: value.likely_flowers.slice(0, 16).map((item) => item.slice(0, 120)),
+    notes: value.notes.slice(0, 2000),
+  };
+}
+
+function parseBatchOutput(text, manifest) {
+  const expected = new Map(manifest.map((item) => [item.customId, item]));
+  const drafts = [];
+  const errors = [];
+  const seen = new Set();
+  for (const rawLine of String(text || '').split('\n')) {
+    if (!rawLine.trim()) continue;
+    let line;
+    try { line = JSON.parse(rawLine); } catch { errors.push({ code: 'INVALID_JSONL_LINE' }); continue; }
+    const item = expected.get(line.custom_id);
+    if (!item || seen.has(line.custom_id)) { errors.push({ code: 'UNKNOWN_OR_DUPLICATE_CUSTOM_ID', customId: line.custom_id || null }); continue; }
+    seen.add(line.custom_id);
+    if (line.error || Number(line.response?.status_code || 0) >= 400) {
+      errors.push({ code: 'PROVIDER_REQUEST_FAILED', customId: line.custom_id });
+      continue;
+    }
+    const rawDraft = extractOutputText(line.response?.body);
+    let parsed;
+    try { parsed = validateDraft(JSON.parse(rawDraft)); } catch { parsed = null; }
+    if (!parsed) { errors.push({ code: 'INVALID_DRAFT', customId: line.custom_id }); continue; }
+    drafts.push({ customId: line.custom_id, photoIds: [...item.photoIds], ...parsed, needsComposition: true });
+  }
+  for (const item of manifest) if (!seen.has(item.customId)) errors.push({ code: 'MISSING_RESULT', customId: item.customId });
+  return { drafts, errors, complete: errors.length === 0 && drafts.length === manifest.length };
+}
+
+function confirmedLinesFor(state, photoIds) {
+  const sets = Array.isArray(state.confirmedCompositions) ? state.confirmedCompositions : [];
+  const match = sets.find((entry) => entry?.source === 'HUMAN' && entry?.status === 'CONFIRMED'
+    && Array.isArray(entry.photoIds) && entry.photoIds.some((id) => photoIds.includes(String(id))));
+  if (!match || !Array.isArray(match.lines)) return [];
+  const valid = match.lines.every((line) => line && typeof line.ingredientId === 'string' && typeof line.name === 'string'
+    && typeof line.unit === 'string' && Number.isFinite(line.quantity) && line.quantity > 0);
+  return valid ? clone(match.lines) : [];
+}
+
+function createBouquetImportWorker({ prisma, storage, provider, env = process.env, now = () => new Date(), stalePhaseMs = DEFAULT_STALE_PHASE_MS }) {
+  if (!prisma || !storage || !provider) throw new TypeError('BOUQUET_IMPORT_WORKER_CONFIG');
+  let running = false;
+
+  async function claim() {
+    return prisma.$transaction(async (tx) => {
+      const locks = await tx.$queryRawUnsafe('SELECT pg_try_advisory_xact_lock(hashtext($1)) AS locked', 'flowie-bouquet-import-worker');
+      if (Array.isArray(locks) && locks[0] && locks[0].locked === false) return null;
+      const active = await tx.bouquetImportBatch.findFirst({ where: { status: { in: ACTIVE_STATUSES } }, orderBy: { updatedAt: 'asc' } });
+      if (active) {
+        const age = now().getTime() - new Date(active.updatedAt || 0).getTime();
+        if (age < stalePhaseMs) return null;
+        const recovery = active.status === 'SUBMITTING' ? 'UNCERTAIN'
+          : active.status === 'POLLING' ? 'WAITING_PROVIDER' : 'QUEUED';
+        const state = clone(active.state);
+        state.workerRecovery = { from: active.status, at: now().toISOString() };
+        if (active.status === 'SUBMITTING') {
+          state.aiBatch ||= {};
+          state.aiBatch.submissionState = 'UNCERTAIN';
+        }
+        await tx.bouquetImportBatch.update({ where: { id: active.id }, data: { status: recovery, state } });
+        return { recovered: active.id, status: recovery };
+      }
+
+      let row = await tx.bouquetImportBatch.findFirst({ where: { status: 'QUEUED' }, orderBy: { createdAt: 'asc' } });
+      let nextStatus = 'PREPARING';
+      if (!row && env.BOUQUET_IMPORT_AI_BATCH_ENABLED === 'true') {
+        row = await tx.bouquetImportBatch.findFirst({ where: { status: 'PREPARED' }, orderBy: { createdAt: 'asc' } });
+      }
+      if (!row) {
+        row = await tx.bouquetImportBatch.findFirst({ where: { status: 'WAITING_PROVIDER' }, orderBy: { updatedAt: 'asc' } });
+        nextStatus = 'POLLING';
+      }
+      if (!row) return null;
+      const claimedFrom = row.status;
+      const snapshot = { ...row, state: clone(row.state) };
+      const updated = await tx.bouquetImportBatch.updateMany({ where: { id: row.id, status: claimedFrom }, data: { status: nextStatus } });
+      return updated.count === 1 ? { ...snapshot, claimedFrom, status: nextStatus } : null;
+    });
+  }
+
+  async function persist(id, status, state) {
+    return prisma.bouquetImportBatch.update({ where: { id }, data: { status, state } });
+  }
+
+  async function prepare(row, forSubmission) {
+    const prepared = await prepareBouquetImportBatch({
+      importId: row.id,
+      state: 'FINALIZED',
+      photos: photosFrom(row),
+      storage,
+      model: String(env.FLOWIE_IMPORT_BATCH_MODEL || DEFAULT_MODEL).trim(),
+    });
+    const state = clone(row.state);
+    state.aiBatch = {
+      ...(state.aiBatch || {}),
+      model: prepared.model,
+      jsonlSha256: prepared.sha256,
+      requestCount: prepared.requestCount,
+      manifest: manifestOf(prepared),
+      preparedAt: state.aiBatch?.preparedAt || now().toISOString(),
+    };
+    if (!forSubmission) {
+      await persist(row.id, 'PREPARED', state);
+      return { status: 'PREPARED', id: row.id };
+    }
+    if (row.state?.aiBatch?.jsonlSha256 !== prepared.sha256) {
+      state.aiBatch.submissionState = 'BLOCKED_DIGEST_MISMATCH';
+      await persist(row.id, 'BLOCKED', state);
+      return { status: 'BLOCKED', id: row.id };
+    }
+    state.aiBatch.submissionState = 'SUBMITTING';
+    state.aiBatch.submissionStartedAt = now().toISOString();
+    await persist(row.id, 'SUBMITTING', state);
+    try {
+      const result = await provider.submit({ jsonl: prepared.jsonl, idempotencyKey: prepared.sha256, importId: row.id });
+      state.aiBatch = { ...state.aiBatch, ...result, submissionState: 'SUBMITTED', submittedAt: now().toISOString() };
+      await persist(row.id, 'WAITING_PROVIDER', state);
+      return { status: 'WAITING_PROVIDER', id: row.id };
+    } catch (error) {
+      state.aiBatch.submissionState = 'UNCERTAIN';
+      state.aiBatch.submissionError = safeError(error);
+      await persist(row.id, 'UNCERTAIN', state);
+      return { status: 'UNCERTAIN', id: row.id };
+    }
+  }
+
+  async function finish(row, providerBatch) {
+    const state = clone(row.state);
+    state.aiBatch ||= {};
+    state.aiBatch.providerStatus = providerBatch.status;
+    state.aiBatch.providerRequestCounts = providerBatch.request_counts || null;
+    state.aiBatch.lastPolledAt = now().toISOString();
+    if (PROVIDER_PENDING.has(providerBatch.status)) {
+      await persist(row.id, 'WAITING_PROVIDER', state);
+      return { status: 'WAITING_PROVIDER', id: row.id };
+    }
+    if (PROVIDER_TERMINAL_FAILURE.has(providerBatch.status)) {
+      state.aiBatch.terminalReason = providerBatch.status;
+      await persist(row.id, `PROVIDER_${providerBatch.status.toUpperCase()}`, state);
+      return { status: `PROVIDER_${providerBatch.status.toUpperCase()}`, id: row.id };
+    }
+    if (providerBatch.status !== 'completed' || !providerBatch.output_file_id) {
+      state.aiBatch.terminalReason = 'INVALID_PROVIDER_STATE';
+      await persist(row.id, 'PROVIDER_FAILED', state);
+      return { status: 'PROVIDER_FAILED', id: row.id };
+    }
+
+    const parsed = parseBatchOutput(await provider.downloadOutput(providerBatch.output_file_id), state.aiBatch.manifest || []);
+    state.drafts = parsed.drafts;
+    state.aiBatch.outputFileId = providerBatch.output_file_id;
+    state.aiBatch.outputErrors = parsed.errors;
+    state.aiBatch.completedAt = now().toISOString();
+    const status = parsed.complete ? 'REVIEW_REQUIRED' : 'PARTIAL_REVIEW_REQUIRED';
+    await prisma.$transaction(async (tx) => {
+      for (const draft of parsed.drafts) {
+        const lines = confirmedLinesFor(state, draft.photoIds);
+        draft.needsComposition = lines.length === 0;
+        const recipe = await tx.bouquetRecipe.create({ data: {
+          importId: row.id,
+          name: draft.draft_name || 'Bouquet draft',
+          lines,
+          costs: {},
+          confirmedAt: null,
+        } });
+        draft.recipeId = recipe.id;
+      }
+      await tx.bouquetImportBatch.update({ where: { id: row.id }, data: { status, state } });
+    });
+    return { status, id: row.id, drafts: parsed.drafts.length };
+  }
+
+  async function runOnce() {
+    if (running) return { status: 'BUSY' };
+    running = true;
+    try {
+      const row = await claim();
+      if (!row) return { status: 'IDLE' };
+      if (row.recovered) return { status: row.status, recovered: row.recovered };
+      if (row.status === 'POLLING') {
+        try { return await finish(row, await provider.retrieve(row.state.aiBatch.providerBatchId)); }
+        catch (error) {
+          const state = clone(row.state); state.aiBatch ||= {}; state.aiBatch.pollError = safeError(error);
+          await persist(row.id, 'WAITING_PROVIDER', state);
+          return { status: 'WAITING_PROVIDER', id: row.id };
+        }
+      }
+      try {
+        return await prepare(row, row.claimedFrom === 'PREPARED');
+      } catch (error) {
+        const state = clone(row.state);
+        state.aiBatch ||= {};
+        state.aiBatch.prepareError = safeError(error);
+        state.aiBatch.prepareFailedAt = now().toISOString();
+        await persist(row.id, 'PREPARE_FAILED', state);
+        return { status: 'PREPARE_FAILED', id: row.id };
+      }
+    } finally {
+      running = false;
+    }
+  }
+
+  return { runOnce };
+}
+
+function startBouquetImportWorker(options = {}) {
+  const worker = createBouquetImportWorker(options);
+  const intervalMs = Number.isSafeInteger(options.intervalMs) && options.intervalMs >= 1_000
+    ? options.intervalMs : 15_000;
+  const logger = options.logger || console;
+  let stopped = false;
+  let ticking = false;
+  async function tick() {
+    if (stopped || ticking) return;
+    ticking = true;
+    try {
+      await worker.runOnce();
+    } catch (error) {
+      logger.error?.('Bouquet import worker tick failed:', safeError(error));
+    } finally {
+      ticking = false;
+    }
+  }
+  const timer = setInterval(tick, intervalMs);
+  timer.unref?.();
+  if (options.runImmediately !== false) queueMicrotask(tick);
+  return {
+    runOnce: worker.runOnce,
+    stop() { stopped = true; clearInterval(timer); },
+  };
+}
+
+module.exports = {
+  createBouquetImportWorker,
+  startBouquetImportWorker,
+  parseBatchOutput,
+  confirmedLinesFor,
+  DEFAULT_STALE_PHASE_MS,
+};
