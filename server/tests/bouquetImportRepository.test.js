@@ -128,13 +128,28 @@ test('finalize is idempotent and analysis is claimed only after every file is st
   await repository.requestFinalize({ importId: batch.id, requestedAt: clock });
   await repository.requestFinalize({ importId: batch.id, requestedAt: new Date(clock.getTime() + 1000) });
   assert.equal(batch.state.finalizeRequestedAt, clock.toISOString());
-  assert.deepEqual(await repository.getFinalizeState(batch.id), { finalizeRequested: true, unresolvedFiles: 1 });
+  assert.deepEqual(await repository.getFinalizeState(batch.id), { finalizeRequested: true, unresolvedFiles: 1, settled: false, schedulerRequired: true });
   assert.equal(await repository.claimAnalysis(batch.id), false);
 
   await repository.markFileStored({ fileId: file.id, storageKey: file.storageKey, storedAt: clock });
-  assert.equal(await repository.claimAnalysis(batch.id), true);
+  assert.equal(await repository.claimAnalysis(batch.id), false);
+  const settledRepository = createBouquetImportRepository(prisma, { now: () => new Date(clock.getTime() + 15000) });
+  assert.equal(await settledRepository.claimAnalysis(batch.id), true);
   assert.equal(await repository.claimAnalysis(batch.id), false);
   assert.equal(batch.status, 'QUEUED');
+});
+
+test('accepts delayed pre-confirmation photos and deduplicates retries after finish', async () => {
+  const prisma = createPrisma();
+  const repository = createBouquetImportRepository(prisma, { now: () => clock });
+  const batch = await repository.createImport({ chatId: -100, userId: 7 });
+  await repository.requestFinalize({ importId: batch.id, requestedAt: clock });
+  const photo = { importId: batch.id, messageId: 10, fileUniqueId: 'delayed', createdAt: clock,
+    sentAt: new Date(clock.getTime() - 1000).toISOString() };
+  assert.ok(await repository.reserveFile(photo));
+  assert.equal(await repository.reserveFile(photo), null);
+  await assert.rejects(repository.reserveFile({ ...photo, messageId: 11, fileUniqueId: 'new',
+    sentAt: new Date(clock.getTime() + 1000).toISOString() }), /IMPORT_ALREADY_FINALIZED/);
 });
 
 test('explicit retry reclaims failed and stale PENDING files after a process crash', async () => {

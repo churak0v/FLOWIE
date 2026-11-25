@@ -146,7 +146,7 @@ function createTelegramBouquetImportService(options) {
 
   async function maybeQueue(importId) {
     const state = await repository.getFinalizeState(importId);
-    if (!state?.finalizeRequested || Number(state.unresolvedFiles) !== 0) return false;
+    if (!state?.finalizeRequested || state.schedulerRequired || state.settled === false || Number(state.unresolvedFiles) !== 0) return false;
     if (!await repository.claimAnalysis(importId)) return false;
     await analysisQueue.enqueue({ importId });
     return true;
@@ -281,6 +281,7 @@ function createTelegramBouquetImportService(options) {
         ...image,
         storageKey: key,
         createdAt: now(),
+        sentAt: Number.isSafeInteger(message.date) ? new Date(message.date * 1000).toISOString() : null,
       });
       if (reserved) trackDownload(downloadAndStore(active, reserved, image));
     }
@@ -288,6 +289,7 @@ function createTelegramBouquetImportService(options) {
     if (String(text || '').trim()) await saveText(active, message, text);
     return { importId: active.id, status: reserved ? 'file_pending' : 'captured' };
     } catch (error) {
+      if (error.message === 'IMPORT_ALREADY_FINALIZED') return { status: 'closed_import' };
       await repository.releaseUpdate(update.update_id);
       throw error;
     }

@@ -1,6 +1,8 @@
 'use strict';
 
 const { DEFAULT_MODEL, prepareBouquetImportBatch } = require('./bouquetImportBatch');
+const { isImportSettled } = require('./bouquetImportRepository');
+const { getTelegramBouquetImportConfig } = require('./telegramBouquetImport');
 
 const ACTIVE_STATUSES = ['PREPARING', 'SUBMITTING', 'POLLING'];
 const PROVIDER_PENDING = new Set(['validating', 'in_progress', 'finalizing', 'cancelling']);
@@ -92,18 +94,30 @@ function confirmedLinesFor(state, photoIds) {
   return valid ? clone(match.lines) : [];
 }
 
-function createBouquetImportWorker({ prisma, storage, provider, env = process.env, now = () => new Date(), stalePhaseMs = DEFAULT_STALE_PHASE_MS }) {
+function createBouquetImportWorker({ prisma, storage, provider, env = process.env, now = () => new Date(), stalePhaseMs = DEFAULT_STALE_PHASE_MS, telegramFetchImpl = globalThis.fetch }) {
   if (!prisma || !storage || !provider) throw new TypeError('BOUQUET_IMPORT_WORKER_CONFIG');
   let running = false;
 
-  async function claim() {
+  async function telegramBacklogEmpty() {
+    const config = getTelegramBouquetImportConfig(env);
+    if (!config.token) return true;
+    try {
+      const response = await telegramFetchImpl(`${config.apiBase}/bot${config.token}/getWebhookInfo`, { signal: AbortSignal.timeout(5000) });
+      const payload = await response.json();
+      return response.ok && payload.ok && payload.result?.pending_update_count === 0;
+    } catch { return false; }
+  }
+
+  async function claim(canPromote) {
     return prisma.$transaction(async (tx) => {
       const locks = await tx.$queryRawUnsafe('SELECT pg_try_advisory_xact_lock(hashtext($1)) AS locked', 'flowie-bouquet-import-worker');
       if (Array.isArray(locks) && locks[0] && locks[0].locked === false) return null;
       const active = await tx.bouquetImportBatch.findFirst({ where: { status: { in: ACTIVE_STATUSES } }, orderBy: { updatedAt: 'asc' } });
       if (active) {
         const age = now().getTime() - new Date(active.updatedAt || 0).getTime();
-        if (age < stalePhaseMs) return null;
+        const leaseMs = active.status === 'PREPARING' ? stalePhaseMs
+          : Math.min(stalePhaseMs, active.status === 'POLLING' ? 90000 : 120000);
+        if (age < leaseMs) return null;
         const recovery = active.status === 'SUBMITTING' ? 'UNCERTAIN'
           : active.status === 'POLLING' ? 'WAITING_PROVIDER' : 'QUEUED';
         const state = clone(active.state);
@@ -116,6 +130,15 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
         return { recovered: active.id, status: recovery };
       }
 
+      if (canPromote) {
+        const collecting = await tx.bouquetImportBatch.findFirst({ where: {
+          status: 'COLLECTING', updatedAt: { lte: new Date(now().getTime() - 15000) },
+          state: { path: ['finalizeRequested'], equals: true },
+        }, orderBy: { updatedAt: 'asc' } });
+        if (collecting && isImportSettled(collecting.state, now().getTime())) {
+          await tx.bouquetImportBatch.updateMany({ where: { id: collecting.id, status: 'COLLECTING' }, data: { status: 'QUEUED' } });
+        }
+      }
       let row = await tx.bouquetImportBatch.findFirst({ where: { status: 'QUEUED' }, orderBy: { createdAt: 'asc' } });
       let nextStatus = 'PREPARING';
       if (!row && env.BOUQUET_IMPORT_AI_BATCH_ENABLED === 'true') {
@@ -228,7 +251,7 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
     if (running) return { status: 'BUSY' };
     running = true;
     try {
-      const row = await claim();
+      const row = await claim(await telegramBacklogEmpty());
       if (!row) return { status: 'IDLE' };
       if (row.recovered) return { status: row.status, recovered: row.recovered };
       if (row.status === 'POLLING') {

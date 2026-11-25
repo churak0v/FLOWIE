@@ -15,7 +15,8 @@ Import is limited to explicitly configured numeric Telegram chat/user IDs. Adeli
 4. A durable worker prepares an OpenAI Batch only after finalization. Exact-byte
    duplicates cost one image request. Albums are transport groups, not bouquets.
    Similar but non-identical photos are not automatically merged in this version.
-5. Send `/review` once results are ready. `/next` shows the next photo/draft.
+5. The bot sends a ready notification to the uploading chat. Send `/review` to
+   open results; `/next` shows the next photo/draft. Errors also generate a notice.
 6. Record composition:
 
    ```text
@@ -83,3 +84,16 @@ API recreation. Existing frontend/admin images can remain running.
 - Full automated server suite including relay coverage: 185 passed, 3 infrastructure
   tests skipped. A real florist photo → AI → review flow still needs a first
   finalized archive; live verification above does not claim that flow passed.
+
+## First live import and delayed Telegram delivery
+
+The first eight-photo archive exposed an ordering race: Telegram delivered the
+finish callback while older photo updates were awaiting retries. All eight updates
+were recovered without resending photos, saved to the private import prefix, and
+submitted in one Batch. Pending updates were acknowledged only after durable save.
+
+Pre-confirmation photos arriving late are accepted by their Telegram message time;
+duplicate retries remain idempotent. Finalized uploads enter analysis only after
+15 seconds without file changes and after Telegram's pending update count reaches
+zero. Background notification delivery uses a persistent lease/retry record and
+merges the latest review state instead of overwriting the review cursor.

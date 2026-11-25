@@ -57,6 +57,22 @@ async function image() {
   return sharp({ create: { width: 12, height: 12, channels: 3, background: '#ee8899' } }).png().toBuffer();
 }
 
+test('promotes settled finalized uploads only after the Telegram backlog drains', async () => {
+  const row = batchRow('COLLECTING');
+  row.state.finalizeRequestedAt = new Date(clock.getTime() - 30000).toISOString();
+  row.state.files.forEach((file) => { file.storedAt = new Date(clock.getTime() - 20000).toISOString(); });
+  let pending = 8;
+  const bytes = await image();
+  const worker = createBouquetImportWorker({ prisma: fakePrisma([row]), storage: { get: async () => ({ buffer: bytes }) },
+    provider: {}, now: () => clock, env: { TELEGRAM_ORDER_BOT_TOKEN: 'test', TELEGRAM_ORDER_API_BASE: 'https://telegram.test' },
+    telegramFetchImpl: async () => Response.json({ ok: true, result: { pending_update_count: pending } }),
+  });
+  assert.equal((await worker.runOnce()).status, 'IDLE');
+  assert.equal(row.status, 'COLLECTING');
+  pending = 0;
+  assert.equal((await worker.runOnce()).status, 'PREPARED');
+});
+
 test('atomically prepares a finalized queue row, deduplicates originals, and stores no base64', async () => {
   const row = batchRow();
   const prisma = fakePrisma([row]);
@@ -122,6 +138,14 @@ test('preparation failure is explicit and is not silently retried', async () => 
   assert.equal(row.status, 'PREPARE_FAILED');
   assert.match(row.state.aiBatch.prepareError, /private object unavailable/);
   assert.equal((await worker.runOnce()).status, 'IDLE');
+});
+
+test('recovers interrupted polling promptly without waiting for the image preparation lease', async () => {
+  const row = batchRow('POLLING');
+  row.updatedAt = new Date(clock.getTime() - 100000);
+  const worker = createBouquetImportWorker({ prisma: fakePrisma([row]), storage: {}, provider: {}, now: () => clock });
+  assert.equal((await worker.runOnce()).status, 'WAITING_PROVIDER');
+  assert.equal(row.status, 'WAITING_PROVIDER');
 });
 
 test('completed partial output persists successful drafts and empty recipe lines without human confirmation', async () => {

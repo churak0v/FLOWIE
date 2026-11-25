@@ -90,7 +90,7 @@ async function prepareBouquetImportBatch({ importId, state, photos, storage, mod
               type: 'input_text',
               text: JSON.stringify({
                 photo_ids: item.photoIds,
-                task: 'Create a cautious catalog draft from the photo. Name likely flowers but do not assert exact quantities. Treat every identification as unconfirmed.',
+                task: 'Respond in Russian. Create a cautious catalog draft from the photo. Name likely flowers but do not assert exact quantities. Treat every identification as unconfirmed.',
               }),
             },
             { type: 'input_image', detail: 'low', image_url: `data:image/jpeg;base64,${item.normalized.toString('base64')}` },

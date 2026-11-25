@@ -5,6 +5,13 @@ function iso(value) {
   return (value instanceof Date ? value : new Date(value)).toISOString();
 }
 
+function isImportSettled(state, at = Date.now(), settleMs = 15000) {
+  if (!state?.finalizeRequested || !state.files?.length || state.files.some((f) => f.status !== 'STORED')) return false;
+  const timestamps = [state.finalizeRequestedAt, ...state.files.map((f) => f.storedAt || f.createdAt)]
+    .filter(Boolean).map((v) => new Date(v).getTime());
+  return timestamps.every(Number.isFinite) && Number(at) - Math.max(0, ...timestamps) >= settleMs;
+}
+
 function createBouquetImportRepository(prisma, options = {}) {
   const now = options.now || (() => new Date());
   const stalePendingMs = options.stalePendingMs ?? DEFAULT_STALE_PENDING_MS;
@@ -41,9 +48,12 @@ function createBouquetImportRepository(prisma, options = {}) {
       } });
     }),
     reserveFile: (file) => mutate(file.importId, (state) => {
-      if (state.finalizeRequested) throw new Error('IMPORT_ALREADY_FINALIZED');
       if (state.files.some((item) => item.fileUniqueId === file.fileUniqueId
         || String(item.messageId) === String(file.messageId))) return null;
+      // Telegram may retry older photos after delivering the finish callback.
+      const sentAt = file.sentAt ? new Date(file.sentAt).getTime() : Infinity;
+      const finishedAt = state.finalizeRequestedAt ? new Date(state.finalizeRequestedAt).getTime() : -Infinity;
+      if (state.finalizeRequested && !(sentAt <= finishedAt)) throw new Error('IMPORT_ALREADY_FINALIZED');
       if (state.files.length >= 2000) throw new Error('IMPORT_FILE_LIMIT');
       const pendingAt = iso(file.createdAt || now());
       const record = { ...file, createdAt: pendingAt, pendingAt, id: crypto.randomUUID(), status: 'PENDING' };
@@ -94,11 +104,12 @@ function createBouquetImportRepository(prisma, options = {}) {
       const row = await prisma.bouquetImportBatch.findUnique({ where: { id: importId } });
       if (!row) throw new Error('IMPORT_NOT_FOUND');
       return { finalizeRequested: row.state.finalizeRequested,
+        schedulerRequired: true,
+        settled: isImportSettled(row.state, now().getTime()),
         unresolvedFiles: row.state.files.filter((file) => file.status !== 'STORED').length };
     },
     claimAnalysis: (id) => mutate(id, (state, row) => {
-      if (row.status !== 'COLLECTING' || !state.finalizeRequested || !state.files.length
-        || state.files.some((file) => file.status !== 'STORED')) return false;
+      if (row.status !== 'COLLECTING' || !isImportSettled(state, now().getTime())) return false;
       row.status = 'QUEUED';
       return true;
     }),
@@ -116,4 +127,4 @@ function createBouquetImportRepository(prisma, options = {}) {
   };
 }
 
-module.exports = { createBouquetImportRepository, DEFAULT_STALE_PENDING_MS };
+module.exports = { createBouquetImportRepository, DEFAULT_STALE_PENDING_MS, isImportSettled };
