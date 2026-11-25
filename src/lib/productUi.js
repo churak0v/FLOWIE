@@ -36,9 +36,3 @@ export function toUiSize(width, height) {
   if (w <= 0 || h <= 0) return '';
   return `${w}×${h}`;
 }
-
-export function formatUiSizeLabel(value) {
-  const raw = String(value ?? '').trim().replace(/\s*[xх×]\s*/i, '×');
-  if (!/^\d+(?:[.,]\d+)?×\d+(?:[.,]\d+)?$/.test(raw)) return '';
-  return `${raw} см`;
-}

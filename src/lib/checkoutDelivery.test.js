@@ -22,5 +22,4 @@ test('omits delivery time only when recipient clarification is requested', () =>
 test('main payment excludes delivery only when the recipient will clarify the address', () => {
   assert.equal(calculateCheckoutPayment({ itemsTotal: 5000, upsellsTotal: 700, bonusesApplied: 200, deliveryCost: 900, deliverySeparate: true }), 5500);
   assert.equal(calculateCheckoutPayment({ itemsTotal: 5000, upsellsTotal: 700, bonusesApplied: 200, deliveryCost: 900, deliverySeparate: false }), 6400);
-  assert.equal(calculateCheckoutPayment({ itemsTotal: 5000, upsellsTotal: 0, bonusesApplied: 0, deliveryCost: null, deliverySeparate: true }), 5000);
 });

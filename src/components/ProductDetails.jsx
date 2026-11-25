@@ -135,7 +135,7 @@ export function ProductDetails() {
 
   return (
     <>
-      <AppShell data-analytics-section="product_details" style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '140px' }}>
+      <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '140px' }}>
         <div style={{ position: 'relative' }}>
           <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10 }}>
             <IconButton onClick={() => navigate(-1)} aria-label="Назад">

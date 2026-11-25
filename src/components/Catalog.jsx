@@ -208,7 +208,7 @@ export function Catalog() {
         </div>
 
         <div style={{ marginTop: 18 }}>
-          {shown.length ? <FrequentlyOrderedSection products={shown} view={view} analyticsPlacement={view === 'list' ? 'catalog_list' : 'catalog_grid'} /> : <Surface variant="soft" style={{ padding: '28px 18px', borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', textAlign: 'center' }}><Text variant="title">Ничего не найдено</Text><Text variant="body" muted style={{ marginTop: 7 }}>Измените цветы, цену или подборку.</Text><button type="button" onClick={resetAll} style={{ marginTop: 16, minHeight: 44, padding: '0 18px', border: 0, borderRadius: 14, background: 'var(--accent)', color: 'var(--c-accent-contrast)', fontWeight: 900, cursor: 'pointer' }}>Сбросить всё</button></Surface>}
+          {shown.length ? <FrequentlyOrderedSection products={shown} view={view} /> : <Surface variant="soft" style={{ padding: '28px 18px', borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', textAlign: 'center' }}><Text variant="title">Ничего не найдено</Text><Text variant="body" muted style={{ marginTop: 7 }}>Измените цветы, цену или подборку.</Text><button type="button" onClick={resetAll} style={{ marginTop: 16, minHeight: 44, padding: '0 18px', border: 0, borderRadius: 14, background: 'var(--accent)', color: 'var(--c-accent-contrast)', fontWeight: 900, cursor: 'pointer' }}>Сбросить всё</button></Surface>}
         </div>
       </AppShell>
 

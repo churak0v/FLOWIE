@@ -10,11 +10,11 @@ function Row({ label, value, strong }) {
   );
 }
 
-export function PriceBreakdown({ itemsTotal, upsellsTotal, deliveryCost, bonusesApplied, deliverySeparate = false, deliveryPending = false }) {
+export function PriceBreakdown({ itemsTotal, upsellsTotal, deliveryCost, bonusesApplied, deliverySeparate = false }) {
   const subtotal = itemsTotal + upsellsTotal + (deliverySeparate ? 0 : Number(deliveryCost || 0));
   const total = Math.max(0, subtotal - bonusesApplied);
   const showUpsells = upsellsTotal > 0;
-  const showDelivery = deliverySeparate || deliveryPending || deliveryCost != null;
+  const showDelivery = deliverySeparate || deliveryCost != null;
 
   return (
     <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)' }}>
@@ -25,12 +25,12 @@ export function PriceBreakdown({ itemsTotal, upsellsTotal, deliveryCost, bonuses
         {showDelivery ? (
           <Row
             label="Доставка"
-            value={deliverySeparate ? 'Отдельным счётом' : deliveryPending ? 'Рассчитаем по адресу' : formatMoney(deliveryCost)}
+            value={deliverySeparate ? 'Уточним адрес' : formatMoney(deliveryCost)}
           />
         ) : null}
         {bonusesApplied ? <Row label="Скидка" value={`- ${formatMoney(bonusesApplied)}`} /> : null}
         <div style={{ height: 1, background: 'var(--border)', margin: '6px 0' }} />
-        <Row label={deliverySeparate || deliveryPending ? 'Товары сейчас' : 'Итого'} value={formatMoney(total)} strong />
+        <Row label="Итого" value={formatMoney(total)} strong />
       </div>
     </Surface>
   );

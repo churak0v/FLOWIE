@@ -1,166 +1,39 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { Surface } from './ui/Surface';
 import { HeroBlock } from './domain/HeroBlock';
-import { AppImage } from './ui/AppImage';
 import { SubscriptionRow } from './domain/SubscriptionRow';
 import { ActiveOrderCard } from './domain/ActiveOrderCard';
-import { FrequentlyOrderedSection } from './domain/FrequentlyOrderedSection';
 import { Text } from './ui/Text';
 import { HERO_SLIDES } from '../data/mock';
 import { api } from '../api';
 import { useAppState } from '../state/AppState';
 import { buildActiveOrderPreview } from '../lib/orderPreview';
 import { readCacheEntry, writeCacheEntry } from '../lib/persistedCache';
-import { MothersDayPreorder } from './domain/MothersDayPreorder';
-import { isMothersDayCampaignActive, MOTHERS_DAY_CATALOG_HREF, pickMothersDayPromoProduct } from '../lib/mothersDayCampaign';
+import { isMothersDayCampaignActive, MOTHERS_DAY_CATALOG_HREF } from '../lib/mothersDayCampaign';
+import { buildHomeFeed } from '../lib/homeFeed';
+import { HomeFeedSection } from './domain/HomeFeedSection';
+import { HomeStoryBanner } from './domain/HomeStoryBanner';
+import { HomeBudgetExplorer } from './domain/HomeBudgetExplorer';
+import { HomeCareGuide } from './domain/HomeCareGuide';
 
 const HOME_BANNERS_CACHE_KEY = 'home_banners_v2';
 const HOME_BANNERS_TIMEOUT_MS = 4_000;
 
 function cachedHomeSlides() {
   const cached = readCacheEntry(HOME_BANNERS_CACHE_KEY);
-  const slides = Array.isArray(cached?.data?.heroSlides) ? cached.data.heroSlides : [];
-  return slides;
+  return Array.isArray(cached?.data?.heroSlides) ? cached.data.heroSlides : [];
 }
 
-function PickTile({ title, subtitle, image, href, accent = false }) {
-  return (
-    <Link
-      data-analytics-element="quick_pick"
-      data-analytics-placement="home_quick_picks"
-      to={href}
-      style={{
-        position: 'relative',
-        minWidth: 156,
-        height: 126,
-        border: 0,
-        borderRadius: 18,
-        padding: 0,
-        overflow: 'hidden',
-        cursor: 'pointer',
-        textAlign: 'left',
-        textDecoration: 'none',
-        background: accent ? 'var(--c-text)' : 'var(--surface)',
-        boxShadow: 'var(--shadow-1)',
-        flex: '0 0 156px',
-      }}
-      aria-label={title}
-      data-href={href}
-    >
-      {image ? (
-        <AppImage
-          src={image}
-          alt=""
-          variant="tile"
-          loading="lazy"
-          decoding="async"
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            filter: 'saturate(1.04)',
-          }}
-        />
-      ) : null}
-      <span
-        aria-hidden="true"
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: accent
-            ? 'linear-gradient(180deg, rgba(13,13,13,0.16), rgba(13,13,13,0.74))'
-            : 'linear-gradient(180deg, rgba(13,13,13,0.03), rgba(13,13,13,0.58))',
-        }}
-      />
-      <span
-        style={{
-          position: 'absolute',
-          left: 12,
-          right: 12,
-          bottom: 12,
-          color: 'var(--c-white)',
-          display: 'grid',
-          gap: 3,
-        }}
-      >
-        <span style={{ fontSize: 15, fontWeight: 1000, lineHeight: 1.1 }}>{title}</span>
-        <span style={{ fontSize: 11, fontWeight: 850, opacity: 0.82, lineHeight: 1.15 }}>{subtitle}</span>
-      </span>
-    </Link>
-  );
-}
-
-function QuickPicks({ products }) {
-  const cards = [
-    {
-      title: 'Нежные',
-      subtitle: 'воздушные букеты',
-      href: '/catalog?scenario=easy-yes',
-      image: products[1]?.image || products[0]?.image,
-    },
-    {
-      title: 'Яркие',
-      subtitle: 'когда хочется вау',
-      href: '/catalog?scenario=make-it-special',
-      image: products[4]?.image || products[2]?.image,
-      accent: true,
-    },
-    {
-      title: 'До 5 000 ₽',
-      subtitle: 'красиво без перегруза',
-      href: '/catalog?scenario=under-5000',
-      image: products[2]?.image || products[0]?.image,
-    },
-    {
-      title: 'Большой жест',
-      subtitle: 'для важных дат',
-      href: '/catalog?scenario=big-gesture',
-      image: products[12]?.image || products[5]?.image,
-    },
-  ].filter((x) => x.image);
-
-  if (!cards.length) return null;
-
-  return (
-    <section data-analytics-section="quick_picks" style={{ marginTop: 18 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-        <Text variant="subtitle">Выбрать по настроению</Text>
-        <Text variant="caption" muted>без долгих поисков</Text>
-      </div>
-      <div
-        className="hide-scrollbar"
-        style={{
-          display: 'flex',
-          gap: 10,
-          overflowX: 'auto',
-          marginLeft: 'calc(0px - var(--sp-4) - var(--app-inset-left))',
-          marginRight: 'calc(0px - var(--sp-4) - var(--app-inset-right))',
-          paddingTop: 2,
-          paddingRight: 'calc(var(--sp-4) + var(--app-inset-right))',
-          paddingBottom: 8,
-          paddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))',
-          scrollPaddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))',
-          scrollPaddingRight: 'calc(var(--sp-4) + var(--app-inset-right))',
-        }}
-      >
-        {cards.map((card) => (
-          <PickTile key={card.title} {...card} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-export function Home() {
+export function Home({ onLogin }) {
   const navigate = useNavigate();
   const { state, actions } = useAppState();
   const [activeOrders, setActiveOrders] = useState([]);
-  const [initialHeroSlides] = useState(cachedHomeSlides);
+  const [initialHeroSlides] = useState(() => {
+    const cached = cachedHomeSlides();
+    return cached.length ? cached : HERO_SLIDES;
+  });
   const [heroSlides, setHeroSlides] = useState(initialHeroSlides);
   const isAuthenticated = Boolean(state.auth.me?.phoneVerified);
   const mothersDayCampaignActive = isMothersDayCampaignActive();
@@ -168,205 +41,99 @@ export function Home() {
   useEffect(() => {
     let alive = true;
     let timeoutId;
-
     const timeout = new Promise((_, reject) => {
       timeoutId = window.setTimeout(() => reject(new Error('HOME_BANNERS_TIMEOUT')), HOME_BANNERS_TIMEOUT_MS);
     });
-
-    Promise.race([api.getHomeBanners(), timeout])
-      .then((result) => {
-        if (!alive) return;
-        const nextSlides = Array.isArray(result?.heroSlides) ? result.heroSlides.filter(Boolean) : [];
-        if (!nextSlides.length) throw new Error('HOME_BANNERS_EMPTY');
-        writeCacheEntry(HOME_BANNERS_CACHE_KEY, { heroSlides: nextSlides });
-        setHeroSlides(nextSlides);
-      })
-      .catch(() => {
-        if (!alive || initialHeroSlides.length) return;
-        setHeroSlides(HERO_SLIDES);
-      })
-      .finally(() => window.clearTimeout(timeoutId));
-
-    return () => {
-      alive = false;
-      window.clearTimeout(timeoutId);
-    };
+    Promise.race([api.getHomeBanners(), timeout]).then((result) => {
+      if (!alive) return;
+      const nextSlides = Array.isArray(result?.heroSlides) ? result.heroSlides.filter(Boolean) : [];
+      if (!nextSlides.length) throw new Error('HOME_BANNERS_EMPTY');
+      writeCacheEntry(HOME_BANNERS_CACHE_KEY, { heroSlides: nextSlides });
+      setHeroSlides(nextSlides);
+    }).catch(() => {
+      if (!alive || initialHeroSlides.length) return;
+      setHeroSlides(HERO_SLIDES);
+    }).finally(() => window.clearTimeout(timeoutId));
+    return () => { alive = false; window.clearTimeout(timeoutId); };
   }, [initialHeroSlides]);
 
-  // Load active order details for the home cards.
   useEffect(() => {
     let cancelled = false;
-    const activeStatuses = 'PAYMENT_PENDING,PAID,ACCEPTED,ASSEMBLED,IN_DELIVERY';
-
     const loadActiveOrders = async () => {
       try {
-        const res = await api.getOrders({ statuses: activeStatuses });
-        const orders = Array.isArray(res) ? res : [];
+        const res = await api.getOrders({ statuses: 'PAYMENT_PENDING,PAID,ACCEPTED,ASSEMBLED,IN_DELIVERY' });
+        const previews = (Array.isArray(res) ? res : []).map(buildActiveOrderPreview).filter(Boolean);
         if (cancelled) return;
-
-        const previews = orders.map(buildActiveOrderPreview).filter(Boolean);
         setActiveOrders(previews);
-
         const first = previews[0] || null;
-        if (first?.id != null) {
-          actions.setActiveOrder(first.id, first.paymentExpiresAt || null, first);
-        } else {
-          actions.clearActiveOrder();
-        }
-      } catch {
-        // Keep the current UI on transient API failures.
-      }
+        if (first?.id != null) actions.setActiveOrder(first.id, first.paymentExpiresAt || null, first);
+        else actions.clearActiveOrder();
+      } catch { /* Keep the current UI on transient API failures. */ }
     };
-
     loadActiveOrders();
     const timer = window.setInterval(loadActiveOrders, 45_000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
+    return () => { cancelled = true; window.clearInterval(timer); };
   }, [actions]);
 
-  const slides = useMemo(
-    () => {
-      const out = [];
-      const seen = new Set();
-      for (const s of heroSlides || []) {
-        const media = s?.video || s?.image || '';
-        const key = String(s?.id ?? `${media}::${s?.caption || ''}`);
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        const isMothersDay = mothersDayCampaignActive && String(s?.id || '').toLowerCase() === 'mother';
-        out.push({
-          id: key,
-          image: s?.image,
-          video: s?.video,
-          imagePosition: s?.imagePosition,
-          caption: s?.caption,
-          subtitle: isMothersDay ? 'Предзаказ на 29 ноября · выбрать букет' : s?.subtitle,
-          href: isMothersDay ? MOTHERS_DAY_CATALOG_HREF : s?.href,
-        });
-      }
-      return out;
-    },
-    [heroSlides, mothersDayCampaignActive]
-  );
+  const slides = useMemo(() => {
+    const out = []; const seen = new Set();
+    for (const slide of heroSlides || []) {
+      const media = slide?.video || slide?.image || '';
+      const key = String(slide?.id ?? `${media}::${slide?.caption || ''}`);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const isMothersDay = mothersDayCampaignActive && String(slide?.id || '').toLowerCase() === 'mother';
+      out.push({ ...slide, id: key, subtitle: isMothersDay ? 'Предзаказ на 29 ноября · выбрать букет' : slide?.subtitle,
+        href: isMothersDay ? MOTHERS_DAY_CATALOG_HREF : slide?.href });
+    }
+    return out;
+  }, [heroSlides, mothersDayCampaignActive]);
 
-  const mothersDaySlide = useMemo(
-    () => heroSlides.find((slide) => String(slide?.id || '').toLowerCase() === 'mother') || null,
-    [heroSlides]
-  );
-  const mothersDayPromoProduct = useMemo(
-    () => pickMothersDayPromoProduct(state.products.items, mothersDaySlide?.image),
-    [mothersDaySlide?.image, state.products.items]
-  );
+  const feed = useMemo(() => buildHomeFeed(state.products.items), [state.products.items]);
+  const hasMiniCart = Boolean(state.cart.items.length);
 
   return (
-    <>
-      <AppShell style={{ padding: 0, '--app-content-inset-bottom': '0px' }}>
-        {/* Fixed HERO underlay */}
-        <div
+    <AppShell style={{ padding: 0, '--app-content-inset-bottom': '0px' }}>
+      <main style={{ width: '100%', paddingBottom: `calc(var(--app-bottom-nav-space) + ${hasMiniCart ? '64px' : '0px'})` }}>
+        <section
+          aria-label="Главные предложения"
           style={{
             position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: 'calc(55dvh + 48px)',
             zIndex: 0,
+            top: 0,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 'min(100%, var(--app-max))',
+            height: 'clamp(280px, 40dvh, 360px)',
+            overflow: 'hidden',
+            background: 'var(--c-ink-14)',
           }}
         >
-          <HeroBlock slides={slides} />
-        </div>
+          <HeroBlock slides={slides} isAuthenticated={isAuthenticated} onLogin={onLogin} />
+        </section>
 
-        {/* Scrollable content panel */}
-        <div style={{ position: 'relative', zIndex: 10, marginTop: '54dvh' }}>
-          <Surface
-            variant="default"
-            style={{
-              borderTopLeftRadius: 'var(--r-xl)',
-              borderTopRightRadius: 'var(--r-xl)',
-              borderBottomLeftRadius: 0,
-              borderBottomRightRadius: 0,
-              paddingTop: 'var(--sp-8)',
-              paddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))',
-              paddingRight: 'calc(var(--sp-4) + var(--app-inset-right))',
-              // Reserve only the visible BottomNav pill height (safe-area padding is transparent).
-              paddingBottom: 'calc(var(--sp-8) + var(--app-bottom-nav-space))',
-              background: 'var(--bg)',
-              boxShadow: '0 -10px 30px var(--c-ink-06)',
-            }}
-          >
-            <div
-              style={{
-                width: 44,
-                height: 5,
-                borderRadius: 'var(--r-pill)',
-                background: 'var(--c-ink-14)',
-                margin: '-18px auto var(--sp-6)',
-              }}
-            />
+        <div aria-hidden="true" style={{ height: 'calc(clamp(280px, 40dvh, 360px) - 24px)', pointerEvents: 'none' }} />
 
-            {isAuthenticated ? <SubscriptionRow /> : null}
+        <Surface variant="default" style={{ position: 'relative', zIndex: 1, minHeight: '65dvh', borderTopLeftRadius: 28, borderTopRightRadius: 28, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, boxShadow: '0 -14px 36px rgba(31, 15, 22, 0.14)', paddingTop: 'var(--sp-6)', paddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))', paddingRight: 'calc(var(--sp-4) + var(--app-inset-right))', paddingBottom: 'var(--sp-4)', background: 'var(--bg)' }}>
+          {isAuthenticated ? <SubscriptionRow /> : null}
 
-            {mothersDayCampaignActive ? (
-              <div style={{ marginTop: isAuthenticated ? 0 : -6 }}>
-                <MothersDayPreorder image={mothersDayPromoProduct?.image} imagePosition="center" />
-              </div>
-            ) : null}
-
-            <div style={{ marginTop: mothersDayCampaignActive ? 18 : (isAuthenticated ? 0 : -6) }}>
-              <QuickPicks products={state.products.items || []} />
+          {activeOrders.length ? <section style={{ marginTop: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+              <Text variant="title">Активные заказы</Text><Text variant="caption" muted>В работе: {activeOrders.length}</Text>
             </div>
+            <div style={{ display: 'grid', gap: 10 }}>{activeOrders.map((order) => <ActiveOrderCard key={order.id} order={order} onClick={() => navigate(`/pay/${encodeURIComponent(String(order.id))}`)} />)}</div>
+          </section> : null}
 
-            {activeOrders.length ? (
-              <div style={{ marginTop: 'var(--sp-6)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-                  <Text variant="title">Активные заказы</Text>
-                  <Text variant="caption" muted>В работе: {activeOrders.length}</Text>
-                </div>
-
-                <div style={{ display: 'grid', gap: 10 }}>
-                  {activeOrders.map((order) => (
-                    <ActiveOrderCard
-                      key={order.id}
-                      order={order}
-                      onClick={() => navigate(`/pay/${encodeURIComponent(String(order.id))}`)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <div style={{ marginTop: 'var(--sp-8)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 'var(--sp-4)' }}>
-                <Text variant="title">Цветы на сегодня</Text>
-                <button
-                  type="button"
-                  onClick={() => navigate('/shop')}
-                  style={{
-                    border: 0,
-                    background: 'transparent',
-                    color: 'var(--accent)',
-                    fontWeight: 1000,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    padding: 0,
-                  }}
-                >
-                  Каталог
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-              <FrequentlyOrderedSection products={state.products.items} limit={8} showMoreHref="/shop" showMoreLabel="Показать ещё букеты" />
-            </div>
-
-          </Surface>
-        </div>
-      </AppShell>
-
-    </>
+          <HomeFeedSection title="Выбрать букет" subtitle="Цветы для ваших людей" products={feed.opening} href="/catalog" marginTop={activeOrders.length || isAuthenticated ? 30 : 0} />
+          <HomeStoryBanner bannerId="home-photo-proof" eyebrow="Спокойнее выбирать" title="Сначала фото. Потом доставка." text="Перед отправкой пришлём фото готового букета." image={feed.photoBanner?.image || feed.photoBanner?.images?.[0]} href="/catalog" />
+          <HomeBudgetExplorer products={feed.budgetPool} />
+          <HomeStoryBanner bannerId="home-clear-price" eyebrow="Без сюрпризов в корзине" title="Красивый жест. Понятная цена." text="Стоимость доставки рассчитывается по адресу." image={feed.priceBanner?.image || feed.priceBanner?.images?.[0]} product={feed.priceBanner} href="/catalog" />
+          <HomeFeedSection title="Розы в разных характерах" subtitle="От спокойных до выразительных сочетаний" products={feed.roses} href="/catalog?search=Роза" />
+          <HomeCareGuide />
+          <HomeFeedSection title="Для большого жеста" subtitle="Крупные и выразительные букеты" products={feed.premium} href="/catalog?min=7000" />
+          <HomeFeedSection title="Ещё идеи" subtitle="Другие стили из актуального каталога" products={feed.more} href="/catalog" />
+        </Surface>
+      </main>
+    </AppShell>
   );
 }

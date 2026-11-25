@@ -1,13 +1,15 @@
-import { lazy, Suspense, useEffect, useMemo, useRef } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useReducer, useRef } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Home } from './components/Home';
 import { BottomNav } from './components/ui/BottomNav';
+import { BottomLoginSheet } from './components/BottomLoginSheet';
 import { MiniCartBar } from './components/domain/MiniCartBar';
 import { ActiveOrderFab } from './components/domain/ActiveOrderFab';
 import { api } from './api';
 import { AppStateProvider, useAppState } from './state/AppState';
 import { beginAnalyticsPageView, extractAnalyticsAttribution, markAnalyticsReady, trackAnalytics } from './lib/analytics';
 import { installBehaviorAnalytics } from './lib/behaviorAnalytics';
+import { initialLoginModalState, isVerifiedUser, loginModalReducer } from './lib/authUi';
 
 const lazyNamed = (loader, name) => lazy(() => loader().then((module) => ({ default: module[name] })));
 const ProductDetails = lazyNamed(() => import('./components/ProductDetails'), 'ProductDetails');
@@ -15,7 +17,6 @@ const Cart = lazyNamed(() => import('./components/Cart'), 'Cart');
 const Checkout = lazyNamed(() => import('./components/Checkout'), 'Checkout');
 const Catalog = lazyNamed(() => import('./components/Catalog'), 'Catalog');
 const MothersDayLanding = lazyNamed(() => import('./components/MothersDayLanding'), 'MothersDayLanding');
-const MothersDayGiftPicker = lazyNamed(() => import('./components/MothersDayGiftPicker'), 'MothersDayGiftPicker');
 const Favorites = lazyNamed(() => import('./components/Favorites'), 'Favorites');
 const Recipients = lazyNamed(() => import('./components/Recipients'), 'Recipients');
 const Account = lazyNamed(() => import('./components/Account'), 'Account');
@@ -71,6 +72,12 @@ function AppRoutes() {
     const navigate = useNavigate();
     const { pathname } = location;
     const analyticsLocationRef = useRef('');
+    const [loginModal, dispatchLoginModal] = useReducer(loginModalReducer, initialLoginModalState);
+    const verifiedUser = isVerifiedUser(state.auth.me);
+
+    useEffect(() => {
+        if (verifiedUser && loginModal.open) dispatchLoginModal({ type: 'SUCCESS' });
+    }, [loginModal.open, verifiedUser]);
 
     useEffect(() => {
         const analyticsLocation = `${pathname}${location.search}`;
@@ -144,8 +151,8 @@ function AppRoutes() {
         return (state.cart.items || []).reduce((acc, it) => acc + (productsById.get(String(it.productId))?.price || 0) * it.qty, 0);
     }, [productsById, state.cart.items]);
 
-    const showMiniCart = pathname === '/' || pathname === '/catalog' || pathname === '/shop' || pathname === '/mothers-day' || pathname === '/mothers-day/picker' || /^\/recipients\/\d+/.test(pathname);
-    const miniCartBottom = pathname === '/mothers-day' || pathname === '/mothers-day/picker' || /^\/recipients\/\d+/.test(pathname)
+    const showMiniCart = pathname === '/' || pathname === '/catalog' || pathname === '/shop' || pathname === '/mothers-day' || /^\/recipients\/\d+/.test(pathname);
+    const miniCartBottom = pathname === '/mothers-day' || /^\/recipients\/\d+/.test(pathname)
         ? 'calc(16px + var(--app-nav-inset-bottom))'
         : 'calc(108px + var(--app-nav-inset-bottom))';
 
@@ -173,14 +180,13 @@ function AppRoutes() {
             {/* Keep the route stack transform-free so fixed mobile controls stay stable. */}
             <Suspense fallback={<div style={{ minHeight: '100dvh', background: 'var(--bg)' }} />}>
             <Routes>
-                <Route path="/" element={<Home />} />
+                <Route path="/" element={<Home onLogin={() => dispatchLoginModal({ type: 'OPEN', intendedDestination: null })} />} />
                 <Route path="/product/:id" element={<ProductDetails />} />
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/catalog" element={<Catalog />} />
                 <Route path="/shop" element={<Catalog />} />
                 <Route path="/mothers-day" element={<MothersDayLanding />} />
-                <Route path="/mothers-day/picker" element={<MothersDayGiftPicker />} />
 
                 <Route path="/favorites" element={<Favorites />} />
                 <Route path="/recipients" element={<Recipients />} />
@@ -205,11 +211,29 @@ function AppRoutes() {
             </Routes>
             </Suspense>
 
-            {showBottomNav ? <BottomNav /> : null}
+            {showBottomNav ? (
+                <BottomNav
+                    user={state.auth.me}
+                    onLogin={() => dispatchLoginModal({ type: 'OPEN', intendedDestination: null })}
+                />
+            ) : null}
 
             {showMiniCart ? <MiniCartBar count={selectors.cartCount} sum={sum} bottom={miniCartBottom} floating /> : null}
 
             {showPaymentFab ? <ActiveOrderFab /> : null}
+
+            <BottomLoginSheet
+                open={loginModal.open}
+                initialPhone={state.auth.me?.phone || '+7'}
+                onClose={() => dispatchLoginModal({ type: 'CLOSE' })}
+                onSuccess={async () => {
+                    const user = await actions.loadMe();
+                    if (!isVerifiedUser(user)) return;
+                    const destination = loginModal.intendedDestination;
+                    dispatchLoginModal({ type: 'SUCCESS' });
+                    if (destination && destination !== pathname) navigate(destination);
+                }}
+            />
 
         </>
     );

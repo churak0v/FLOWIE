@@ -39,7 +39,7 @@ export function Cart() {
 
   return (
     <>
-      <AppShell data-analytics-section="cart_items" style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '140px' }}>
+      <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '140px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <IconButton onClick={() => navigate(-1)} aria-label="Назад">
             <ChevronLeft size={22} />
@@ -115,14 +115,14 @@ export function Cart() {
         </div>
 
         <div style={{ marginTop: 'var(--sp-6)' }}>
-          <PriceBreakdown itemsTotal={itemsTotal} upsellsTotal={upsellsTotal} deliveryCost={deliveryCost} bonusesApplied={bonusesApplied} deliveryPending />
+          <PriceBreakdown itemsTotal={itemsTotal} upsellsTotal={upsellsTotal} deliveryCost={deliveryCost} bonusesApplied={bonusesApplied} />
         </div>
       </AppShell>
 
       <CartFooterCTA
         total={total}
         disabled={!canContinue}
-        label="К оформлению · товары"
+        label="Продолжить"
         onClick={() => {
           trackAnalytics('checkout_start');
           navigate('/checkout');

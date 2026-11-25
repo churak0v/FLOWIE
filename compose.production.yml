@@ -134,7 +134,7 @@ services:
 
   web:
     <<: *service-defaults
-    image: flowie-web:${RELEASE_TAG:?Set an immutable RELEASE_TAG}
+    image: flowie-web:${WEB_RELEASE_TAG:-${RELEASE_TAG:?Set an immutable RELEASE_TAG}}
     build:
       context: .
       dockerfile: Dockerfile.production
@@ -144,7 +144,7 @@ services:
         VITE_RECIPIENT_IMAGE: ${VITE_RECIPIENT_IMAGE:-}
         VITE_YANDEX_METRICA_ID: ${VITE_YANDEX_METRICA_ID:-}
         VITE_VK_PIXEL_ID: ${VITE_VK_PIXEL_ID:-}
-        VITE_BUILD_SHA: ${RELEASE_TAG}
+        VITE_BUILD_SHA: ${WEB_RELEASE_TAG:-${RELEASE_TAG}}
     expose:
       - "8080"
     healthcheck:

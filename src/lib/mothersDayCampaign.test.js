@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getMothersDayPriceTiers,
+  getMothersDayPriceFilters,
+  filterMothersDayProductsByPrice,
   getMothersDayDeliveryDateSuggestion,
   hasMothersDayCampaignEnded,
   isMothersDayCampaignActive,
@@ -29,6 +31,7 @@ test('suggests 29 November only when the customer has not selected a date', () =
 test('starts with active value offers, then uses the curated collection and configured fallback ids', () => {
   const products = [
     { id: 75, title: 'Value offer', price: 3_000, image: '/75.jpg' },
+    { id: 58, title: 'Premium offer', price: 12_490, image: '/58.jpg' },
     { id: 70, title: 'Inactive value offer', price: 3_790, image: '/70.jpg', isActive: false },
     { id: 55, title: 'Fallback', price: 4_000, image: '/55.jpg' },
     { id: 3, title: 'Third', price: 7_000, image: '/3.jpg' },
@@ -38,14 +41,30 @@ test('starts with active value offers, then uses the curated collection and conf
   ];
   const collections = [{ slug: 'день-матери', productIds: [3, 2, 20] }];
 
-  assert.deepEqual(selectMothersDayProducts(products, collections, '/hero.jpg').map((product) => product.id), [75, 3, 55]);
+  assert.deepEqual(selectMothersDayProducts(products, collections, '/hero.jpg').map((product) => product.id), [75, 58, 3, 55]);
 });
 
-test('builds only populated price tiers from actual selected prices', () => {
+test('builds populated overlapping lower-bound tiers from actual selected prices', () => {
   assert.deepEqual(
-    getMothersDayPriceTiers([{ price: 4_999 }, { price: 5_000 }, { price: 6_000 }, { price: 7_000 }]).map(({ id, count }) => ({ id, count })),
-    [{ id: 'under-5000', count: 2 }, { id: '5001-6999', count: 1 }, { id: 'from-7000', count: 1 }]
+    getMothersDayPriceTiers([{ price: 2_999 }, { price: 3_000 }, { price: 5_000 }, { price: 7_000 }]).map(({ id, count }) => ({ id, count })),
+    [{ id: 'from-3000', count: 3 }, { id: 'from-5000', count: 2 }, { id: 'from-7000', count: 1 }]
   );
+});
+
+test('price filters expose inclusive lower bounds with no hidden maximum', () => {
+  const products = [
+    { id: 6, price: 7_000 }, { id: 1, price: 2_999 },
+    { id: 4, price: 5_000 }, { id: 2, price: 3_000 }, { id: 5, price: 6_999 }, { id: 3, price: 4_999 },
+  ];
+  assert.deepEqual(getMothersDayPriceFilters(products).map(({ id, count }) => ({ id, count })), [
+    { id: 'all', count: 6 }, { id: 'from-3000', count: 5 },
+    { id: 'from-5000', count: 3 }, { id: 'from-7000', count: 1 },
+  ]);
+  assert.deepEqual(filterMothersDayProductsByPrice(products, 'from-3000').map(({ id }) => id), [2, 3, 4, 5, 6]);
+  assert.deepEqual(filterMothersDayProductsByPrice(products, 'from-5000').map(({ id }) => id), [4, 5, 6]);
+  assert.deepEqual(filterMothersDayProductsByPrice(products, 'from-7000').map(({ id }) => id), [6]);
+  assert.equal(filterMothersDayProductsByPrice(products, 'all'), products);
+  assert.deepEqual(products.map(({ id }) => id), [6, 1, 4, 2, 5, 3]);
 });
 
 test('selects a distinct active catalog image for the secondary banner', () => {

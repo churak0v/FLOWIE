@@ -106,6 +106,20 @@ test('extracts only UTM values and external referrer hostname', () => {
   restoreSession();
 });
 
+test('preserves privacy-safe session and route context through the deployed API validator', () => {
+  beginAnalyticsPageView('/product/42');
+  const payload = sanitizeAnalyticsPayload('scroll_depth', { meta: { percent: 50 } });
+  assert.equal(payload.routeKey, '/product/:id');
+  assert.match(payload.pageViewId, /^[0-9a-f-]{36}$/i);
+  assert.equal(payload.meta.percent, 50);
+  const normalized = normalizeClientEvent(payload);
+  assert.equal(normalized.routeKey, payload.routeKey);
+  assert.equal(normalized.pageViewId, payload.pageViewId);
+  assert.equal(normalized.sessionId, payload.sessionId);
+  assert.equal(normalized.meta.percent, 50);
+  assert.doesNotThrow(() => normalizeClientEvent(sanitizeAnalyticsPayload('engagement_milestone', { meta: { seconds: 15 } })));
+});
+
 test('tracks the required funnel events and rejects unknown events', () => {
   const restoreStorage = replaceGlobal('localStorage', memoryStorage());
   const restoreNavigator = replaceGlobal('navigator', { doNotTrack: '0', globalPrivacyControl: false });
@@ -122,25 +136,6 @@ test('tracks the required funnel events and rejects unknown events', () => {
     restoreNavigator();
     restoreStorage();
   }
-});
-
-test('behavior payload includes stable page context and rejects arbitrary taxonomy', () => {
-  beginAnalyticsPageView('/product/42');
-  const accepted = sanitizeAnalyticsPayload('scroll_depth', { meta: { percent: 50 } });
-  assert.equal(accepted.routeKey, '/product/:id');
-  assert.match(accepted.pageViewId, /^[0-9a-f-]{36}$/i);
-  assert.equal(accepted.meta.percent, 50);
-  const rejectedDimension = sanitizeAnalyticsPayload('section_view', { meta: { sectionKey: 'customer name' } });
-  assert.equal(rejectedDimension.meta?.sectionKey, undefined);
-});
-
-test('gift picker events expose controlled dimensions only and validate on the server', () => {
-  const payload = sanitizeAnalyticsPayload('gift_picker_results_view', {
-    meta: { source: 'photo', styleCode: 'soft', resultCount: 6, tierCoverage: '3', filename: 'mother.jpg' },
-  });
-  assert.deepEqual(payload.meta, { source: 'photo', styleCode: 'soft', tierCoverage: '3', resultCount: 6 });
-  assert.equal(JSON.stringify(payload).includes('mother.jpg'), false);
-  assert.doesNotThrow(() => normalizeClientEvent(payload));
 });
 
 test('records a confirmed purchase once per order in the same browser', () => {

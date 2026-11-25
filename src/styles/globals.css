@@ -368,8 +368,10 @@ body::before {
   /* Edge-to-edge canvas with a calm, consistent mobile content gutter. */
   padding-top: calc(12px + var(--app-inset-top));
   padding-right: calc(18px + var(--app-inset-right));
+  /* BottomNav/fixed CTAs already describe their full reserved height. Keep only
+     one small content gutter instead of stacking another 32px spacer. */
   padding-bottom: calc(
-    var(--sp-8) + var(--app-content-inset-bottom) + var(--app-shell-bottom-space) +
+    var(--sp-4) + var(--app-content-inset-bottom) + var(--app-shell-bottom-space) +
       var(--app-shell-extra-bottom)
   );
   padding-left: calc(18px + var(--app-inset-left));

@@ -6,16 +6,15 @@ import { AppImage } from '../ui/AppImage';
 import { formatMoney } from '../../lib/money';
 import { useAppState } from '../../state/AppState';
 import { trackAnalytics } from '../../lib/analytics';
-import { formatUiSizeLabel } from '../../lib/productUi';
+import { getProductCardLayout } from '../../lib/productCardLayout';
 
-export function ProductCard({ id, title, price, image, images, size, composition, onAdd, onOpen, view = 'grid', analyticsPlacement, analyticsPosition }) {
+export function ProductCard({ id, title, price, image, images, onAdd, onOpen, view = 'grid' }) {
   const { state, actions } = useAppState();
   const isSaved = state.favorites.productIds.includes(id);
   const cartItem = state.cart.items.find((item) => String(item.productId) === String(id));
   const cartQty = Number(cartItem?.qty || 0);
   const isList = view === 'list';
-  const compositionPreview = Array.isArray(composition) ? composition.filter(Boolean).slice(0, 2).join(' · ') : '';
-  const sizeLabel = formatUiSizeLabel(size);
+  const layout = getProductCardLayout(view);
   const gallery = useMemo(() => {
     const seen = new Set();
     return [image, ...(Array.isArray(images) ? images : [])]
@@ -30,11 +29,6 @@ export function ProductCard({ id, title, price, image, images, size, composition
 
   return (
     <Surface
-      data-analytics-impression="product"
-      data-analytics-product={id}
-      data-analytics-placement={analyticsPlacement || (view === 'list' ? 'catalog_list' : 'catalog_grid')}
-      data-analytics-position={analyticsPosition}
-      data-analytics-element="product_card"
       className="productCard"
       style={{
         height: '100%',
@@ -62,9 +56,8 @@ export function ProductCard({ id, title, price, image, images, size, composition
         style={{
           position: 'relative',
           overflow: 'hidden',
-          width: isList ? 'clamp(140px, 44vw, 172px)' : 'auto',
+          ...layout.imageFrame,
           alignSelf: 'stretch',
-          minHeight: isList ? 'clamp(140px, 44vw, 172px)' : undefined,
           flexShrink: 0,
           background: 'var(--surface-2)',
           display: isList ? 'flex' : 'block',
@@ -78,12 +71,10 @@ export function ProductCard({ id, title, price, image, images, size, composition
           loading="lazy"
           fetchPriority="auto"
           variant="card"
+          width={640}
+          height={640}
           style={{
-            position: isList ? 'absolute' : undefined,
-            inset: isList ? 0 : undefined,
-            width: '100%',
-            height: isList ? '100%' : 'auto',
-            objectFit: 'cover',
+            ...layout.image,
             display: 'block',
           }}
         />
@@ -117,11 +108,6 @@ export function ProductCard({ id, title, price, image, images, size, composition
         >
           <Heart size={19} strokeWidth={2.5} fill={isSaved ? 'currentColor' : 'none'} />
         </button> : null}
-        {sizeLabel ? (
-          <span style={{ position: 'absolute', left: 10, bottom: 10, minHeight: 28, padding: '0 9px', borderRadius: 999, background: 'rgba(255,255,255,0.88)', color: 'var(--text)', display: 'inline-flex', alignItems: 'center', fontSize: 11, fontWeight: 1000, boxShadow: '0 8px 20px rgba(17,17,17,0.12)', backdropFilter: 'blur(8px)' }}>
-            {sizeLabel}
-          </span>
-        ) : null}
       </div>
 
       <div style={{ padding: isList ? 14 : 14, display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, background: 'var(--surface)' }}>
@@ -139,11 +125,9 @@ export function ProductCard({ id, title, price, image, images, size, composition
             variant="subtitle"
             style={{
               display: isList ? 'block' : '-webkit-box',
-              height: isList ? 'auto' : '3.48em',
+              ...layout.title,
               flex: isList ? 1 : undefined,
               flexShrink: 0,
-              WebkitLineClamp: isList ? undefined : 3,
-              WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               lineHeight: 1.16,
@@ -153,16 +137,8 @@ export function ProductCard({ id, title, price, image, images, size, composition
             {title}
           </Text>
 
-          {compositionPreview && !isList ? (
-            <Text variant="caption" muted style={{ marginTop: 7, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.25 }}>
-              {compositionPreview}
-            </Text>
-          ) : null}
-
           {isList ? (
             <button
-              data-analytics-element="product_add"
-              data-analytics-placement={analyticsPlacement || (view === 'list' ? 'catalog_list' : 'catalog_grid')}
               type="button"
               aria-label={isSaved ? 'Убрать из сохранённого' : 'Сохранить'}
               onClick={(event) => {

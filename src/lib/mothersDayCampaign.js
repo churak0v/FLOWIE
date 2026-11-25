@@ -2,13 +2,9 @@ export const MOTHERS_DAY_CATALOG_HREF = '/catalog?occasion=mothers-day';
 export const MOTHERS_DAY_DELIVERY_DATE = '2026-11-29';
 export const MOTHERS_DAY_COLLECTION_SLUG = 'день-матери';
 export const MOTHERS_DAY_VALUE_PRODUCT_IDS = [75, 70];
+export const MOTHERS_DAY_PREMIUM_PRODUCT_IDS = [58];
 export const MOTHERS_DAY_FALLBACK_PRODUCT_IDS = [55, 3, 2, 20, 35, 34, 33, 36, 32, 37, 57, 54, 41, 29, 7];
 export const MOTHERS_DAY_PRODUCT_LIMIT = 10;
-export const MOTHERS_DAY_PRICE_TIERS = [
-  { id: 'under-5000', label: 'до 5 000 ₽', min: 0, max: 5_000 },
-  { id: '5001-6999', label: '5 001–6 999 ₽', min: 5_001, max: 6_999 },
-  { id: 'from-7000', label: 'от 7 000 ₽', min: 7_000, max: Infinity },
-];
 
 function localDayNumber(now) {
   return (now.getFullYear() * 10_000) + ((now.getMonth() + 1) * 100) + now.getDate();
@@ -41,6 +37,7 @@ export function selectMothersDayProducts(products, collections, heroImage = '', 
   const collection = (collections || []).find((item) => String(item?.slug || '').toLowerCase() === MOTHERS_DAY_COLLECTION_SLUG);
   const configuredIds = [
     ...MOTHERS_DAY_VALUE_PRODUCT_IDS,
+    ...MOTHERS_DAY_PREMIUM_PRODUCT_IDS,
     ...(collection?.productIds || []),
     ...MOTHERS_DAY_FALLBACK_PRODUCT_IDS,
   ];
@@ -60,10 +57,40 @@ export function selectMothersDayProducts(products, collections, heroImage = '', 
 }
 
 export function getMothersDayPriceTiers(products) {
-  return MOTHERS_DAY_PRICE_TIERS.map((tier) => ({
+  const tiers = [
+    { id: 'from-3000', label: 'От 3 000 ₽', min: 3_000 },
+    { id: 'from-5000', label: 'От 5 000 ₽', min: 5_000 },
+    { id: 'from-7000', label: 'От 7 000 ₽', min: 7_000 },
+  ];
+
+  return tiers.map((tier) => ({
     ...tier,
-    count: (products || []).filter((product) => Number(product?.price) >= tier.min && Number(product?.price) <= tier.max).length,
+    count: (products || []).filter((product) => Number(product?.price) >= tier.min).length,
   })).filter((tier) => tier.count > 0);
+}
+
+export function getMothersDayPriceFilters(products) {
+  const tiers = getMothersDayPriceTiers(products);
+  const counts = new Map(tiers.map((tier) => [tier.id, tier.count]));
+  return [
+    { id: 'all', label: 'Все', count: (products || []).length },
+    { id: 'from-3000', label: 'От 3 000 ₽', count: counts.get('from-3000') || 0 },
+    { id: 'from-5000', label: 'От 5 000 ₽', count: counts.get('from-5000') || 0 },
+    { id: 'from-7000', label: 'От 7 000 ₽', count: counts.get('from-7000') || 0 },
+  ];
+}
+
+export function filterMothersDayProductsByPrice(products, filterId = 'all') {
+  const source = products || [];
+  if (filterId === 'all') return source;
+  return source.filter((product) => {
+    const price = Number(product?.price);
+    if (!Number.isFinite(price)) return false;
+    if (filterId === 'from-3000') return price >= 3_000;
+    if (filterId === 'from-5000') return price >= 5_000;
+    if (filterId === 'from-7000') return price >= 7_000;
+    return true;
+  }).sort((left, right) => Number(left.price) - Number(right.price));
 }
 
 const PROMO_IMAGE_TERMS = [

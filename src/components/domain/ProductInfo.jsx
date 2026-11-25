@@ -1,9 +1,9 @@
-import { Check, Gift, Image, Ruler } from 'lucide-react';
+import React from 'react';
+import { Check, Gift, ShieldCheck, Truck } from 'lucide-react';
 import { Surface } from '../ui/Surface';
 import { Text } from '../ui/Text';
 import { formatMoney } from '../../lib/money';
 import { cleanProductSubtitle } from '../../lib/productCopy';
-import { formatUiSizeLabel } from '../../lib/productUi';
 
 function DetailPill({ children, tone = 'default' }) {
   return (
@@ -69,7 +69,6 @@ function TrustRow({ icon: Icon, title, text }) {
 export function ProductInfo({ product }) {
   const included = Array.isArray(product.composition) ? product.composition.filter(Boolean).slice(0, 5) : [];
   const subtitle = cleanProductSubtitle(product.subtitle);
-  const sizeLabel = formatUiSizeLabel(product.size);
 
   return (
     <div style={{ display: 'grid', gap: 14 }}>
@@ -123,17 +122,6 @@ export function ProductInfo({ product }) {
 
       </Surface>
 
-      {sizeLabel ? (
-        <Surface variant="default" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <Ruler size={19} color="var(--accent)" />
-            <Text variant="title">Размер букета</Text>
-          </div>
-          <Text variant="body" style={{ marginTop: 10, fontWeight: 900 }}>{sizeLabel}</Text>
-          <Text variant="caption" muted style={{ marginTop: 4 }}>Диаметр × высота по данным карточки товара.</Text>
-        </Surface>
-      ) : null}
-
       {included.length ? (
         <Surface variant="default" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
@@ -154,9 +142,14 @@ export function ProductInfo({ product }) {
 
       <div style={{ display: 'grid', gap: 10 }}>
         <TrustRow
-          icon={Image}
-          title="Как будет выглядеть"
-          text="Фото показывает стиль, гамму и объём. Сезонные цветы и упаковка могут отличаться; существенную замену согласуем."
+          icon={ShieldCheck}
+          title="Понятный букет"
+          text="Вы видите букет, цену и сценарий доставки до оформления."
+        />
+        <TrustRow
+          icon={Truck}
+          title="Быстрая доставка"
+          text="Флорист собирает заказ, затем курьер везёт его по адресу."
         />
       </div>
     </div>

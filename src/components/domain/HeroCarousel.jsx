@@ -14,9 +14,6 @@ export function HeroCarousel({ slides, className }) {
   const safeSlides = useMemo(() => slides?.filter(Boolean) || [], [slides]);
   const [active, setActive] = useState(0);
   const scrollerRef = useRef(null);
-  // The Home panel has a large top radius. We extend the hero underlay below the panel edge
-  // so the rounded corners always reveal media (not the page background).
-  const UNDERLAY_EXTRA_PX = 48;
 
   function openSlide(slide) {
     if (!slide?.href) return;
@@ -38,15 +35,14 @@ export function HeroCarousel({ slides, className }) {
 
   return (
     <div
-      data-analytics-section="hero"
       className={cx(className)}
       role={!safeSlides.length ? 'status' : undefined}
       aria-busy={!safeSlides.length}
       aria-label={!safeSlides.length ? 'Загружаем актуальные баннеры' : undefined}
       style={{
         position: 'relative',
-        height: `calc(55dvh + ${UNDERLAY_EXTRA_PX}px)`,
-        minHeight: 360 + UNDERLAY_EXTRA_PX,
+        height: '100%',
+        minHeight: 0,
         overflow: 'hidden',
         borderRadius: 0,
         background: 'linear-gradient(145deg, var(--c-ink-06), var(--c-ink-14))',
@@ -81,10 +77,6 @@ export function HeroCarousel({ slides, className }) {
         {safeSlides.map((s, idx) => (
           <div
             key={s.id || idx}
-            data-analytics-impression="banner"
-            data-analytics-banner={String(s.id || idx)}
-            data-analytics-placement="home_hero"
-            data-analytics-position={idx + 1}
             style={{
               minWidth: '100%',
               height: '100%',
@@ -129,9 +121,6 @@ export function HeroCarousel({ slides, className }) {
             <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
               background: 'linear-gradient(180deg, rgba(40,20,25,0.10), rgba(40,20,25,0.16) 42%, rgba(40,20,25,0.58))' }} />
             {s.href ? <button type="button" aria-label={'Открыть баннер: ' + (s.caption || '')}
-              data-analytics-element="hero_cta" data-analytics-placement="home_hero"
-              data-analytics-impression="banner" data-analytics-banner={String(s.id || idx)}
-              data-analytics-position={idx + 1}
               tabIndex={idx === active ? 0 : -1} onClick={() => openSlide(s)}
               style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'transparent', border: 0,
                 cursor: 'pointer', touchAction: 'pan-x' }} /> : null}
@@ -142,7 +131,7 @@ export function HeroCarousel({ slides, className }) {
       <div
         style={{
           position: 'absolute',
-          left: 'var(--sp-4)',
+          left: 'calc(var(--sp-4) + var(--app-inset-left))',
           top: 'calc(var(--sp-4) + var(--app-inset-top))',
           height: 34,
           padding: '0 12px',
@@ -167,10 +156,9 @@ export function HeroCarousel({ slides, className }) {
       <div
         style={{
           position: 'absolute',
-          left: 'var(--sp-4)',
-          right: 'var(--sp-4)',
-          // Keep caption in the same visual position even though the underlay is taller.
-          bottom: `calc(var(--sp-6) + ${UNDERLAY_EXTRA_PX}px)`,
+          left: 'calc(var(--sp-4) + var(--app-inset-left))',
+          right: 'calc(var(--sp-4) + var(--app-inset-right))',
+          bottom: 'calc(var(--sp-8) + 4px)',
           color: 'var(--c-white)',
           textAlign: 'left',
         }}

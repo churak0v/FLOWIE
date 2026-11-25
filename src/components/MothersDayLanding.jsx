@@ -1,20 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, MapPin } from 'lucide-react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { api } from '../api';
 import { HERO_SLIDES } from '../data/mock';
 import { trackAnalytics } from '../lib/analytics';
 import { formatMoney } from '../lib/money';
 import {
-  getMothersDayPriceTiers,
+  getMothersDayPriceFilters,
+  filterMothersDayProductsByPrice,
   getMothersDayDeliveryDateSuggestion,
   hasMothersDayCampaignEnded,
   selectMothersDayProducts,
 } from '../lib/mothersDayCampaign';
 import { useAppState } from '../state/AppState';
 import { FrequentlyOrderedSection } from './domain/FrequentlyOrderedSection';
-import { CampaignAssuranceCards } from './domain/CampaignAssuranceCards';
-import { MothersDayPickerPromo } from './domain/MothersDayPickerPromo';
 import { AppShell } from './layout/AppShell';
 import { AppImage } from './ui/AppImage';
 
@@ -25,6 +24,7 @@ export function MothersDayLanding() {
   const { state, actions } = useAppState();
   const bouquetsRef = useRef(null);
   const [motherBanner, setMotherBanner] = useState(FALLBACK_MOTHER_BANNER);
+  const [priceFilter, setPriceFilter] = useState('all');
   const campaignEnded = hasMothersDayCampaignEnded();
 
   useEffect(() => {
@@ -46,7 +46,8 @@ export function MothersDayLanding() {
     () => selectMothersDayProducts(state.products.items, state.collections.items, motherBanner?.image),
     [motherBanner?.image, state.collections.items, state.products.items]
   );
-  const priceTiers = useMemo(() => getMothersDayPriceTiers(products), [products]);
+  const priceFilters = useMemo(() => getMothersDayPriceFilters(products), [products]);
+  const filteredProducts = useMemo(() => filterMothersDayProductsByPrice(products, priceFilter), [priceFilter, products]);
   const minimumPrice = useMemo(
     () => products.reduce((minimum, product) => Math.min(minimum, Number(product?.price) || Infinity), Infinity),
     [products]
@@ -62,8 +63,14 @@ export function MothersDayLanding() {
   };
 
   return (
-    <AppShell style={{ '--app-content-inset-bottom': '96px' }}>
-      <main style={{ width: 'min(100%, var(--app-max))', margin: '0 auto', paddingBottom: 'calc(104px + var(--app-inset-bottom))' }}>
+    <AppShell style={{ padding: 0, '--app-shell-bottom-space': '0px', '--app-content-inset-bottom': '0px' }}>
+      <main style={{
+        width: 'min(100%, var(--app-max))',
+        margin: '0 auto',
+        paddingBottom: state.cart.items.length
+          ? 'calc(80px + var(--app-nav-inset-bottom))'
+          : 'calc(24px + var(--app-inset-bottom))',
+      }}>
         <section style={{ position: 'relative', minHeight: 330, overflow: 'hidden', background: 'var(--c-ink-14)' }}>
           <AppImage
             src={motherBanner?.image}
@@ -78,10 +85,10 @@ export function MothersDayLanding() {
               <MapPin size={14} /> Ижевск
             </span>
             <div>
-              <p style={{ margin: '0 0 7px', fontSize: 13, fontWeight: 900, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Предзаказ на 29 ноября</p>
+              <p style={{ margin: '0 0 7px', fontSize: 13, fontWeight: 900, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Предзаказ · доставка 29 ноября</p>
               <h1 style={{ margin: 0, maxWidth: 360, fontSize: 'clamp(31px, 9vw, 42px)', lineHeight: 0.98, letterSpacing: '-0.035em' }}>День матери — 29 ноября</h1>
               <p style={{ margin: '10px 0 0', maxWidth: 350, fontSize: 15, fontWeight: 750, lineHeight: 1.35 }}>
-                {Number.isFinite(minimumPrice) ? `Букеты от ${formatMoney(minimumPrice)}. ` : ''}Доступность и стоимость доставки проверим по адресу.
+                {Number.isFinite(minimumPrice) ? `Букеты от ${formatMoney(minimumPrice)}. ` : ''}Доставка по Ижевску 29 ноября.
               </p>
               <button type="button" onClick={scrollToBouquets} style={{ marginTop: 16, minHeight: 50, padding: '0 18px', border: 0, borderRadius: 999, background: 'var(--accent)', color: 'var(--c-accent-contrast)', fontWeight: 1000, display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', boxShadow: 'var(--shadow-accent)' }}>
                 Выбрать букет <ArrowDown size={18} strokeWidth={3} />
@@ -90,31 +97,50 @@ export function MothersDayLanding() {
           </div>
         </section>
 
-        <CampaignAssuranceCards />
-        <MothersDayPickerPromo />
+        <section aria-label="Условия предзаказа" style={{ padding: '14px calc(16px + var(--app-inset-right)) 0 calc(16px + var(--app-inset-left))' }}>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+            {['Фото перед отправкой', 'Цена букета указана сразу', 'Предзаказ на 29 ноября. Доставка рассчитывается по адресу'].map((fact) => (
+              <li key={fact} style={{ minHeight: 66, padding: '11px 10px', borderRadius: 16, border: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', alignItems: 'center', fontSize: 12, fontWeight: 850, lineHeight: 1.25 }}>
+                {fact}
+              </li>
+            ))}
+          </ul>
+        </section>
 
         <section ref={bouquetsRef} style={{ scrollMarginTop: 12, padding: '26px calc(16px + var(--app-inset-right)) 0 calc(16px + var(--app-inset-left))' }}>
           <div style={{ display: 'grid', gap: 8, marginBottom: 18 }}>
-            <h2 style={{ margin: 0, fontSize: 25, lineHeight: 1.05 }}>Букеты для мамы</h2>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+              <h2 style={{ margin: 0, fontSize: 25, lineHeight: 1.05 }}>Букеты для мамы</h2>
+              <Link to="/catalog" onClick={() => trackAnalytics('home_banner_click', { meta: { bannerId: 'mothers-day-catalog-top' } })} style={{ color: 'var(--accent)', fontSize: 14, fontWeight: 950, textUnderlineOffset: 3 }}>
+                Все букеты
+              </Link>
+            </div>
             <p style={{ margin: 0, color: 'var(--muted)', fontSize: 14, lineHeight: 1.4 }}>Актуальная подборка для предзаказа на 29 ноября.</p>
-            {priceTiers.length ? (
-              <div aria-label="Ценовые уровни" style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 4 }}>
-                {priceTiers.map((tier) => (
-                  <span key={tier.id} style={{ minHeight: 32, padding: '0 11px', borderRadius: 999, border: '1px solid var(--border)', background: 'var(--surface)', display: 'inline-flex', alignItems: 'center', fontSize: 12, fontWeight: 900 }}>
+            {priceFilters.length ? (
+              <div aria-label="Фильтр по цене" style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 4 }}>
+                {priceFilters.map((tier) => {
+                  const selected = priceFilter === tier.id;
+                  return (
+                  <button type="button" key={tier.id} aria-pressed={selected} disabled={!tier.count}
+                    onClick={() => setPriceFilter(tier.id)}
+                    style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`, background: selected ? 'var(--accent)' : 'var(--surface)', color: selected ? 'var(--c-accent-contrast)' : 'var(--text)', display: 'inline-flex', alignItems: 'center', fontSize: 12, fontWeight: 900, cursor: tier.count ? 'pointer' : 'default', opacity: tier.count ? 1 : 0.5 }}>
                     {tier.label} · {tier.count}
-                  </span>
-                ))}
+                  </button>
+                );})}
               </div>
             ) : null}
           </div>
 
-          {products.length ? (
-            <FrequentlyOrderedSection products={products} />
+          {filteredProducts.length ? (
+            <FrequentlyOrderedSection products={filteredProducts} />
           ) : (
             <div role="status" style={{ padding: '28px 18px', borderRadius: 18, background: 'var(--surface)', border: '1px solid var(--border)', textAlign: 'center', fontWeight: 800 }}>
               Загружаем актуальные букеты…
             </div>
           )}
+          <Link to="/catalog" onClick={() => trackAnalytics('home_banner_click', { meta: { bannerId: 'mothers-day-catalog-bottom' } })} style={{ width: '100%', minHeight: 56, marginTop: 18, borderRadius: 'var(--r-pill)', border: '1px solid var(--c-ink-12)', background: 'var(--accent)', color: 'var(--c-accent-contrast)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, fontWeight: 1000, textDecoration: 'none', boxShadow: 'var(--shadow-accent)' }}>
+            Посмотреть все букеты
+          </Link>
         </section>
       </main>
     </AppShell>

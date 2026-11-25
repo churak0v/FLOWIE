@@ -143,6 +143,7 @@ function normalizePath(value) {
     const exact = new Set([
       '/', '/catalog', '/shop', '/cart', '/checkout', '/favorites', '/recipients', '/account', '/mothers-day', '/mothers-day/picker',
       '/legal/privacy', '/legal/consent', '/legal/offer', '/success',
+      '/product/:id', '/recipients/:id', '/pay/:id',
     ]);
     if (exact.has(path)) return path;
     if (/^\/product\/\d+$/.test(path)) return '/product/:id';

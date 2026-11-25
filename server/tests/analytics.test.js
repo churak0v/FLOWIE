@@ -23,6 +23,19 @@ function payload(overrides = {}) {
   };
 }
 
+test('canonical dynamic route keys survive normalization without restoring entity IDs', () => {
+  for (const routeKey of ['/product/:id', '/recipients/:id', '/pay/:id']) {
+    const normalized = normalizeClientEvent(payload({
+      event: 'scroll_depth', routeKey,
+      meta: { percent: 50, routeKey },
+    }));
+    assert.equal(normalized.routeKey, routeKey);
+    assert.equal(normalized.meta.routeKey, routeKey);
+  }
+  assert.equal(normalizeClientEvent(payload({ routeKey: '/product/123' })).routeKey, '/product/:id');
+  assert.equal(normalizeClientEvent(payload({ routeKey: '/unknown/private' })).routeKey, '/other');
+});
+
 test('client event normalization keeps only allowlisted, bounded attribution', () => {
   const normalized = normalizeClientEvent(payload({
     meta: {

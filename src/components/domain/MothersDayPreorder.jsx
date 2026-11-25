@@ -7,7 +7,6 @@ import { AppImage } from '../ui/AppImage';
 export function MothersDayPreorder({ compact = false, image = '', imagePosition = 'center 40%' }) {
   return (
     <section
-      data-analytics-section="mothers_day"
       aria-labelledby="mothers-day-preorder-title"
       style={{
         position: 'relative',
@@ -44,8 +43,6 @@ export function MothersDayPreorder({ compact = false, image = '', imagePosition 
           <span style={{ marginTop: 7, fontSize: 13, fontWeight: 850, opacity: 0.94 }}>Выберите букет ниже · дату укажете при оформлении</span>
         ) : (
           <Link
-            data-analytics-element="mothers_day_cta"
-            data-analytics-placement="home_mothers_day"
             to={MOTHERS_DAY_CATALOG_HREF}
             state={{ campaignImage: image || '', campaignImagePosition: imagePosition }}
             aria-label="Выбрать букет с доставкой ко Дню матери 29 ноября"

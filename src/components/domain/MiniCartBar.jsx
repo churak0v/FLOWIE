@@ -1,3 +1,4 @@
+import React from 'react';
 import { ShoppingBag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatMoney } from '../../lib/money';
@@ -21,8 +22,6 @@ export function MiniCartBar({ count, sum, bottom = 'calc(108px + var(--app-nav-i
         }}
       >
         <button
-          data-analytics-element="mini_cart"
-          data-analytics-placement="floating"
           type="button"
           onClick={() => navigate('/cart')}
           aria-label={`Корзина, товаров: ${count}, ${formatMoney(sum)}`}
@@ -72,8 +71,6 @@ export function MiniCartBar({ count, sum, bottom = 'calc(108px + var(--app-nav-i
 
   return (
     <button
-      data-analytics-element="mini_cart"
-      data-analytics-placement="floating"
       type="button"
       onClick={() => navigate('/cart')}
       style={{

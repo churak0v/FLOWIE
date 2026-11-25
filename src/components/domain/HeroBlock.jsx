@@ -1,13 +1,12 @@
-import React from 'react';
 import { User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { HeroCarousel } from './HeroCarousel';
 
-export function HeroBlock({ slides }) {
+export function HeroBlock({ slides, isAuthenticated = false, onLogin }) {
   const navigate = useNavigate();
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', height: '100%' }}>
       <HeroCarousel slides={slides} />
 
       <div
@@ -27,8 +26,8 @@ export function HeroBlock({ slides }) {
 
         <button
           type="button"
-          aria-label="Профиль"
-          onClick={() => navigate('/account')}
+          aria-label={isAuthenticated ? 'Профиль' : 'Войти'}
+          onClick={() => isAuthenticated ? navigate('/account') : onLogin?.()}
           style={{
             width: 40,
             height: 40,

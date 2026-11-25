@@ -226,10 +226,6 @@ export function Account() {
                   const enabled = event.target.checked;
                   setAnalyticsOptOut(!enabled);
                   setAnalyticsEnabled(enabled && !isDoNotTrackEnabled());
-                  // Third-party counters are initialized only at bootstrap. Reloading is the
-                  // only reliable way to both start them after opt-in and stop Webvisor/VK
-                  // after opt-out without leaving an already loaded recorder alive.
-                  window.location.reload();
                 }}
                 aria-label="Аналитика использования"
                 style={{ width: 22, height: 22, flexShrink: 0 }}

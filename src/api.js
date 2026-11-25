@@ -125,22 +125,6 @@ export const api = {
         return data.url;
     },
 
-    analyzeGiftPickerPhoto: async (file, { consent = false } = {}) => {
-        const formData = new FormData();
-        formData.append('photo', file);
-        formData.append('consent', consent ? 'true' : 'false');
-        const res = await fetch(`${API_URL}/gift-picker/photo-profile`, {
-            method: 'POST', body: formData, credentials: 'include',
-        });
-        const data = await res.json().catch(() => null);
-        if (!res.ok || !data?.profile) {
-            const error = new Error(data?.error || 'PHOTO_UPLOAD_FAILED');
-            error.status = res.status;
-            throw error;
-        }
-        return data.profile;
-    },
-
     // Products
     searchCatalog: async (payload, { signal } = {}) => {
         return fetchJson(`${API_URL}/search/catalog`, {

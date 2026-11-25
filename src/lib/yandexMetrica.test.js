@@ -30,8 +30,3 @@ test('keeps commerce goal identifiers and revenue without arbitrary fields', () 
     params: { orderId: 8, revenue: 4590 },
   });
 });
-
-test('uses fixed goal names for behavioral milestones', () => {
-  assert.equal(createYandexMetricaGoal('engagement_milestone', { meta: { seconds: 15 } }).goal, 'engaged_15s');
-  assert.equal(createYandexMetricaGoal('scroll_depth', { meta: { percent: 50 } }).goal, 'scroll_50');
-});
