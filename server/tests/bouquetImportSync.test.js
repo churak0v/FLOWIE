@@ -29,6 +29,7 @@ function prismaDouble(row) {
     bouquetImportBatch: batch,
     bouquetRecipe: { async create({ data }) { const value = { id: `recipe-${recipes.length + 1}`, ...data }; recipes.push(value); return value; } },
     async $queryRawUnsafe() { return [{ locked: true }]; },
+    async $executeRawUnsafe() { return 1; },
     async $transaction(callback) {
       const previous = transactionTail;
       let release;

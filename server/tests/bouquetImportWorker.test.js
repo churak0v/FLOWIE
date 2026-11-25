@@ -34,6 +34,7 @@ function fakePrisma(rows) {
       async create({ data }) { const row = { id: `recipe-${recipes.length + 1}`, ...data }; recipes.push(row); return row; },
     },
     async $queryRawUnsafe() { return [{ locked: true }]; },
+    async $executeRawUnsafe() { return 1; },
     async $transaction(callback) { return callback(prisma); },
     recipes,
   };

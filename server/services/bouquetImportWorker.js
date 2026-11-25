@@ -183,7 +183,7 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
 
   async function mutateState(id, callback) {
     return prisma.$transaction(async (tx) => {
-      await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `bouquet-import:${id}`);
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `bouquet-import:${id}`);
       const latest = await tx.bouquetImportBatch.findUnique({ where: { id } });
       if (!latest) throw new Error('BOUQUET_IMPORT_NOT_FOUND');
       const state = clone(latest.state);
@@ -238,7 +238,7 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
   async function persistParsed(row, parsed, details = {}) {
     const status = parsed.complete ? 'REVIEW_REQUIRED' : 'PARTIAL_REVIEW_REQUIRED';
     return prisma.$transaction(async (tx) => {
-      await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `bouquet-import:${row.id}`);
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `bouquet-import:${row.id}`);
       const latest = await tx.bouquetImportBatch.findUnique({ where: { id: row.id } });
       if (!latest) throw new Error('BOUQUET_IMPORT_NOT_FOUND');
       const state = clone(latest.state);
