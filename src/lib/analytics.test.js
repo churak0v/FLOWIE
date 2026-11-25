@@ -118,6 +118,10 @@ test('preserves privacy-safe session and route context through the deployed API 
   assert.equal(normalized.sessionId, payload.sessionId);
   assert.equal(normalized.meta.percent, 50);
   assert.doesNotThrow(() => normalizeClientEvent(sanitizeAnalyticsPayload('engagement_milestone', { meta: { seconds: 15 } })));
+  const engagement = sanitizeAnalyticsPayload('section_engagement', { meta: { sectionKey: 'gallery', activeMs: 12_345, reason: 'heartbeat' } });
+  assert.equal(engagement.meta.activeMs, 12_345);
+  assert.doesNotThrow(() => normalizeClientEvent(engagement));
+  assert.equal(sanitizeAnalyticsPayload('page_engagement', { meta: { activeMs: 12_345, reason: 'free-form' } }), null);
 });
 
 test('tracks the required funnel events and rejects unknown events', () => {

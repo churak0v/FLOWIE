@@ -1,6 +1,6 @@
 import { sendYandexMetricaEvent } from './yandexMetrica.js';
 import { sendVkPixelEvent } from './vkPixel.js';
-import { ELEMENT_KEYS, ENGAGEMENT_SECONDS, PLACEMENT_KEYS, SCROLL_DEPTHS, SECTION_KEYS, allowedTaxonomyValue, normalizeRouteKey } from './analyticsTaxonomy.js';
+import { ELEMENT_KEYS, ENGAGEMENT_REASONS, ENGAGEMENT_SECONDS, PLACEMENT_KEYS, SCROLL_DEPTHS, SECTION_KEYS, allowedTaxonomyValue, normalizeRouteKey } from './analyticsTaxonomy.js';
 
 const API_BASE = import.meta.env?.VITE_API_URL || '/api';
 
@@ -23,6 +23,8 @@ const ALLOWED_EVENTS = new Set([
   'checkout_error',
   'payment_start',
   'engagement_milestone',
+  'page_engagement',
+  'section_engagement',
   'scroll_depth',
   'section_view',
   'element_click',
@@ -81,6 +83,8 @@ const EVENT_META_KEYS = {
   checkout_error: new Set([...ATTRIBUTION_KEYS, 'errorCode']),
   payment_start: new Set(ATTRIBUTION_KEYS),
   engagement_milestone: new Set([...ATTRIBUTION_KEYS, 'seconds', 'routeKey', 'deviceClass']),
+  page_engagement: new Set([...ATTRIBUTION_KEYS, 'activeMs', 'reason', 'routeKey', 'deviceClass']),
+  section_engagement: new Set([...ATTRIBUTION_KEYS, 'activeMs', 'reason', 'sectionKey', 'routeKey', 'deviceClass']),
   scroll_depth: new Set([...ATTRIBUTION_KEYS, 'percent', 'routeKey', 'deviceClass']),
   section_view: new Set([...ATTRIBUTION_KEYS, 'sectionKey', 'routeKey', 'deviceClass']),
   element_click: new Set([...ATTRIBUTION_KEYS, 'elementKey', 'placementKey', 'routeKey', 'deviceClass']),
@@ -273,6 +277,14 @@ export function sanitizeAnalyticsPayload(event, input = {}) {
     let value = positiveInteger(rawMeta[key]);
     if (key === 'quantity' && value !== undefined) value = Math.min(99, value);
     if (value !== undefined) meta[key] = value;
+  }
+  if (['page_engagement', 'section_engagement'].includes(event)) {
+    const activeMs = Number(rawMeta.activeMs);
+    if (Number.isSafeInteger(activeMs) && activeMs >= 0 && activeMs <= 604_800_000) meta.activeMs = activeMs;
+    const reason = allowedTaxonomyValue(ENGAGEMENT_REASONS, rawMeta.reason);
+    if (reason) meta.reason = reason;
+    if (meta.activeMs === undefined || !meta.reason) return null;
+    if (event === 'section_engagement' && !meta.sectionKey) return null;
   }
   if (event === 'engagement_milestone' && ENGAGEMENT_SECONDS.has(Number(rawMeta.seconds))) meta.seconds = Number(rawMeta.seconds);
   if (event === 'scroll_depth' && SCROLL_DEPTHS.has(Number(rawMeta.percent))) meta.percent = Number(rawMeta.percent);

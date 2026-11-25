@@ -14,18 +14,25 @@ function replaceGlobal(name, value) {
   return () => descriptor ? Object.defineProperty(globalThis, name, descriptor) : delete globalThis[name];
 }
 
-function environment() {
+function environment({ elements = [] } = {}) {
   let now = 0;
   const intervals = new Map();
   const windowListeners = new Map();
   const rootListeners = new Map();
   let intervalId = 0;
+  const observers = [];
+  class FakeIntersectionObserver {
+    constructor(callback, options) { this.callback = callback; this.options = options; observers.push(this); }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
   const document = {
     visibilityState: 'visible',
     hasFocus: () => true,
     documentElement: { scrollHeight: 1100 },
     body: { scrollHeight: 1100 },
-    querySelectorAll: () => [],
+    querySelectorAll: () => elements,
     addEventListener: (name, handler) => rootListeners.set(name, handler),
     removeEventListener: (name) => rootListeners.delete(name),
   };
@@ -42,7 +49,7 @@ function environment() {
   };
   const restores = [
     replaceGlobal('window', window), replaceGlobal('document', document),
-    replaceGlobal('performance', { now: () => now }), replaceGlobal('IntersectionObserver', undefined),
+    replaceGlobal('performance', { now: () => now }), replaceGlobal('IntersectionObserver', FakeIntersectionObserver),
     replaceGlobal('MutationObserver', undefined), replaceGlobal('localStorage', memoryStorage()),
     replaceGlobal('sessionStorage', memoryStorage()), replaceGlobal('navigator', { doNotTrack: '0', globalPrivacyControl: false }),
   ];
@@ -51,6 +58,13 @@ function environment() {
     advance(milliseconds) {
       const steps = Math.ceil(milliseconds / 1000);
       for (let index = 0; index < steps; index += 1) { now += Math.min(1000, milliseconds - index * 1000); [...intervals.values()].forEach((handler) => handler()); }
+    },
+    visibility(value) { document.visibilityState = value; rootListeners.get('visibilitychange')?.(); },
+    blur() { windowListeners.get('blur')?.(); },
+    focus() { windowListeners.get('focus')?.(); },
+    intersect(element, visible) {
+      const observer = observers.find((item) => item.options?.threshold?.length === 2);
+      observer?.callback([{ target: element, isIntersecting: visible, intersectionRatio: visible ? 0.75 : 0 }]);
     },
     scroll(y) { window.scrollY = y; windowListeners.get('scroll')?.(); },
     restore() { restores.reverse().forEach((restore) => restore()); },
@@ -74,14 +88,52 @@ test('active-time milestones pause while hidden and emit honest 5/15/30/60 lower
     beginAnalyticsPageView('/catalog');
     const cleanup = installBehaviorAnalytics(env.document);
     env.advance(15_000);
-    env.document.visibilityState = 'hidden';
+    env.visibility('hidden');
     env.advance(20_000);
-    env.document.visibilityState = 'visible';
+    env.visibility('visible');
     env.advance(45_000);
     cleanup();
     const events = await drainEvents();
     assert.deepEqual(events.filter((event) => event.event === 'engagement_milestone').map((event) => event.meta.seconds), [5, 15, 30, 60]);
     assert.equal(events.every((event) => event.routeKey === '/catalog'), true);
+  } finally { clearAnalyticsQueue(); env.restore(); }
+});
+
+test('cumulative snapshots use active focused time and lifecycle reasons', async () => {
+  clearAnalyticsQueue();
+  const env = environment();
+  try {
+    beginAnalyticsPageView('/product/42');
+    const cleanup = installBehaviorAnalytics(env.document);
+    env.advance(12_000);
+    env.blur();
+    env.advance(25_000);
+    env.focus();
+    env.advance(3_000);
+    cleanup();
+    const events = (await drainEvents()).filter((event) => event.event === 'page_engagement');
+    assert.deepEqual(events.map((event) => event.meta.reason), ['heartbeat', 'blur', 'heartbeat', 'route_leave']);
+    assert.deepEqual(events.map((event) => event.meta.activeMs), [10_000, 12_000, 15_000, 15_000]);
+    assert.equal(events.every((event) => event.routeKey === '/product/:id'), true);
+  } finally { clearAnalyticsQueue(); env.restore(); }
+});
+
+test('section snapshots count only visible focused overlap and remain cumulative', async () => {
+  clearAnalyticsQueue();
+  const section = { dataset: { analyticsSection: 'composition' } };
+  const env = environment({ elements: [section] });
+  try {
+    beginAnalyticsPageView('/product/42');
+    const cleanup = installBehaviorAnalytics(env.document);
+    env.intersect(section, true);
+    env.advance(6_000);
+    env.intersect(section, false);
+    env.advance(4_000);
+    cleanup();
+    const events = (await drainEvents()).filter((event) => event.event === 'section_engagement');
+    assert.deepEqual(events.map((event) => event.meta.sectionKey), ['composition', 'composition']);
+    assert.deepEqual(events.map((event) => event.meta.activeMs), [6_000, 6_000]);
+    assert.deepEqual(events.map((event) => event.meta.reason), ['heartbeat', 'route_leave']);
   } finally { clearAnalyticsQueue(); env.restore(); }
 });
 
