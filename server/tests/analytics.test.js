@@ -135,6 +135,36 @@ test('gift picker accepts only controlled non-photo metadata', () => {
   assert.throws(() => normalizeClientEvent(payload({ event: 'gift_picker_photo_selected', meta: { filename: 'private.jpg' } })), AnalyticsValidationError);
 });
 
+test('auth path accepts attribution only and rejects all form values', () => {
+  for (const event of ['auth_open', 'auth_code_requested', 'auth_verified']) {
+    const normalized = normalizeClientEvent(payload({
+      event,
+      routeKey: '/account',
+      meta: {
+        path: '/account?phone=79991234567',
+        utm_source: 'telegram',
+      },
+    }));
+    assert.deepEqual(normalized.meta, {
+      sessionId: SESSION_ID,
+      path: '/account',
+      utm_source: 'telegram',
+    });
+    assert.doesNotMatch(JSON.stringify(normalized), /7999/);
+    for (const privateMeta of [
+      { phone: '+7 999 123-45-67' },
+      { code: '123456' },
+      { name: 'Private Person' },
+      { value: 'form value' },
+    ]) {
+      assert.throws(
+        () => normalizeClientEvent(payload({ event, meta: privateMeta })),
+        (error) => error.code === 'UNKNOWN_META_FIELD',
+      );
+    }
+  }
+});
+
 test('eventId and sessionId are mandatory and commerce identifiers are positive integers', () => {
   assert.throws(() => normalizeClientEvent(payload({ eventId: undefined })), (error) => error.code === 'BAD_EVENT_ID');
   assert.throws(() => normalizeClientEvent(payload({ sessionId: undefined })), (error) => error.code === 'BAD_SESSION_ID');

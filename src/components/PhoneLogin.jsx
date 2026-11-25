@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { persistPersonalDataConsent } from '../lib/authUi';
+import { trackAuthAnalytics, trackVerifiedAuthAfterConfirmation } from '../lib/analytics';
 import {
   formatRussianPhoneInput,
   normalizeRussianPhoneDigits,
@@ -34,6 +35,13 @@ export function PhoneLogin({ initialPhone = '', onSuccess, onCancel }) {
   const [verifiedUser, setVerifiedUser] = useState(null);
   const phoneInputRef = useRef(null);
   const pendingPhoneCursor = useRef(null);
+  const authOpenTracked = useRef(false);
+
+  useEffect(() => {
+    if (authOpenTracked.current) return;
+    authOpenTracked.current = true;
+    trackAuthAnalytics('auth_open');
+  }, []);
 
   useEffect(() => {
     if (!retryAt) return undefined;
@@ -69,6 +77,7 @@ export function PhoneLogin({ initialPhone = '', onSuccess, onCancel }) {
     setError('');
     try {
       const result = await api.requestPhoneOtp(normalizedPhone);
+      trackAuthAnalytics('auth_code_requested');
       setChallengeId(String(result?.challengeId || ''));
       setRetryAt(Date.now() + Number(result?.resendAfter || 60) * 1000);
       setCode('');
@@ -92,6 +101,7 @@ export function PhoneLogin({ initialPhone = '', onSuccess, onCancel }) {
       // The OTP endpoints do not persist legal consent. Store it on the newly
       // verified session before exposing the authenticated UI.
       await persistPersonalDataConsent({ accepted: consentAccepted, updateMe: api.updateMe });
+      void trackVerifiedAuthAfterConfirmation(api.getMe);
       await onSuccess?.(result?.user || null);
     } catch (verifyError) {
       setError(errorText(verifyError));

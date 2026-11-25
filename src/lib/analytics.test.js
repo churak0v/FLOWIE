@@ -14,7 +14,9 @@ import {
   sanitizeAnalyticsPayload,
   setAnalyticsOptOut,
   trackAnalytics,
+  trackAuthAnalytics,
   trackConfirmedPurchase,
+  trackVerifiedAuthAfterConfirmation,
 } from './analytics.js';
 
 const require = createRequire(import.meta.url);
@@ -178,6 +180,40 @@ test('tracks the required funnel events and rejects unknown events', () => {
   } finally {
     clearAnalyticsQueue();
     restoreNavigator();
+    restoreStorage();
+  }
+});
+
+test('auth observations are fixed, privacy-minimized and server-valid', async () => {
+  const restoreStorage = replaceGlobal('localStorage', memoryStorage());
+  const restoreSession = replaceGlobal('sessionStorage', memoryStorage());
+  const restoreNavigator = replaceGlobal('navigator', { doNotTrack: '0', globalPrivacyControl: false });
+  try {
+    clearAnalyticsQueue();
+    for (const event of ['auth_open', 'auth_code_requested', 'auth_verified']) {
+      const payload = sanitizeAnalyticsPayload(event, {
+        meta: {
+          phone: '+7 999 123-45-67',
+          code: '123456',
+          name: 'Private Person',
+          value: 'form value',
+          path: '/account?phone=79991234567',
+        },
+      });
+      assert.deepEqual(payload.meta, { path: '/account' });
+      assert.doesNotMatch(JSON.stringify(payload), /7999|123456|Private Person|form value/);
+      assert.doesNotThrow(() => normalizeClientEvent(payload));
+      assert.equal(trackAuthAnalytics(event), true);
+    }
+    assert.equal(trackAuthAnalytics('new_registration'), false);
+    assert.equal(await trackVerifiedAuthAfterConfirmation(async () => ({ user: { phoneVerified: false } })), false);
+    assert.equal(await trackVerifiedAuthAfterConfirmation(async () => { throw new Error('network'); }), false);
+    assert.equal(await trackVerifiedAuthAfterConfirmation(async () => ({ user: { phoneVerified: true, phone: '+79991234567' } })), true);
+    assert.equal(getAnalyticsDebugState().queued, 4);
+  } finally {
+    clearAnalyticsQueue();
+    restoreNavigator();
+    restoreSession();
     restoreStorage();
   }
 });

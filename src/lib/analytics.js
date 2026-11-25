@@ -22,6 +22,9 @@ const ALLOWED_EVENTS = new Set([
   'checkout_start',
   'checkout_error',
   'payment_start',
+  'auth_open',
+  'auth_code_requested',
+  'auth_verified',
   'engagement_milestone',
   'page_engagement',
   'section_engagement',
@@ -84,6 +87,9 @@ const EVENT_META_KEYS = {
   checkout_start: new Set(ATTRIBUTION_KEYS),
   checkout_error: new Set([...ATTRIBUTION_KEYS, 'errorCode']),
   payment_start: new Set(ATTRIBUTION_KEYS),
+  auth_open: new Set(ATTRIBUTION_KEYS),
+  auth_code_requested: new Set(ATTRIBUTION_KEYS),
+  auth_verified: new Set(ATTRIBUTION_KEYS),
   engagement_milestone: new Set([...ATTRIBUTION_KEYS, 'seconds', 'routeKey', 'deviceClass']),
   page_engagement: new Set([...ATTRIBUTION_KEYS, 'activeMs', 'reason', 'routeKey', 'deviceClass']),
   section_engagement: new Set([...ATTRIBUTION_KEYS, 'activeMs', 'reason', 'sectionKey', 'routeKey', 'deviceClass']),
@@ -427,6 +433,28 @@ export function trackAnalytics(event, input = {}, options = {}) {
   }
   scheduleFlush();
   return true;
+}
+
+const AUTH_EVENTS = new Set(['auth_open', 'auth_code_requested', 'auth_verified']);
+
+export function trackAuthAnalytics(event) {
+  if (!AUTH_EVENTS.has(event)) return false;
+  try {
+    return trackAnalytics(event, {}, { firstPartyOnly: true });
+  } catch {
+    return false;
+  }
+}
+
+export async function trackVerifiedAuthAfterConfirmation(getMe) {
+  if (typeof getMe !== 'function' || !isAnalyticsEnabled()) return false;
+  try {
+    const result = await getMe();
+    if (!result?.user?.phoneVerified) return false;
+    return trackAuthAnalytics('auth_verified');
+  } catch {
+    return false;
+  }
 }
 
 export function trackConfirmedPurchase({ orderId, revenue, paymentStatus } = {}) {

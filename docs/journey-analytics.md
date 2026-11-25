@@ -33,3 +33,13 @@ Preceding banner, section and product exposures are associations only: they do
 not establish causal influence, visitor identity or advertising incrementality.
 Visits are not people, elapsed time is not active time, and no missing
 historical values are inferred.
+
+The phone-auth path adds three first-party-only observations: `auth_open` for
+each newly opened login sheet, `auth_code_requested` only after the OTP request
+API succeeds, and `auth_verified` only after the verification API succeeds and
+a subsequent `/auth/me` response confirms `phoneVerified`. These events contain
+only the shared session, page-view, route and bounded attribution fields. They
+never contain a phone number, OTP, name or form value and are not forwarded to
+VK or Yandex goals. `auth_verified` means a successful phone authentication; it
+does not distinguish a new registration from an existing-user login and must
+not drive gift, payment or other financial decisions.
