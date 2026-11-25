@@ -157,6 +157,26 @@ test('behavior v2 accepts only fixed taxonomy and hashes click identifiers', () 
   assert.throws(() => normalizeClientEvent(payload({ event: 'section_view', meta: { sectionKey: 'user-supplied-value' } })), (error) => error.code === 'BAD_SECTION_KEY');
 });
 
+test('cumulative engagement accepts bounded time and fixed lifecycle taxonomy only', () => {
+  const page = normalizeClientEvent(payload({
+    event: 'page_engagement',
+    pageViewId: '123e4567-e89b-42d3-a456-426614174111',
+    routeKey: '/product/42',
+    meta: { activeMs: 12_345, reason: 'heartbeat', routeKey: '/product/:id' },
+  }));
+  assert.equal(page.meta.activeMs, 12_345);
+  assert.equal(page.meta.reason, 'heartbeat');
+  const section = normalizeClientEvent(payload({
+    event: 'section_engagement',
+    pageViewId: '123e4567-e89b-42d3-a456-426614174111',
+    meta: { activeMs: 4_321, reason: 'route_leave', sectionKey: 'composition' },
+  }));
+  assert.equal(section.meta.sectionKey, 'composition');
+  assert.throws(() => normalizeClientEvent(payload({ event: 'page_engagement', meta: { activeMs: 1, reason: 'invented' } })), (error) => error.code === 'BAD_ENGAGEMENT_REASON');
+  assert.throws(() => normalizeClientEvent(payload({ event: 'section_engagement', meta: { activeMs: 1, reason: 'heartbeat' } })), (error) => error.code === 'SECTION_KEY_REQUIRED');
+  assert.throws(() => normalizeClientEvent(payload({ event: 'page_engagement', meta: { activeMs: 604_800_001, reason: 'heartbeat' } })), (error) => error.code === 'BAD_ACTIVE_MS');
+});
+
 test('legacy referral input is minimized without retaining raw href or trusted source', () => {
   const normalized = normalizeClientEvent(payload({
     event: 'ref_open',

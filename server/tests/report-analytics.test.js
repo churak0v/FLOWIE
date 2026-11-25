@@ -104,6 +104,40 @@ test('report uses only narrow safe meta fields and provides explicit unknown buc
   assert.doesNotMatch(JSON.stringify(report), /person@example|79990000000|private stack|contains PII/);
 });
 
+test('journey report takes max cumulative snapshots and keeps ordered associations non-causal', () => {
+  const at = (second) => new Date(`2026-11-18T10:00:${String(second).padStart(2, '0')}.000Z`);
+  const common = { userId: 1, sessionId: 'session-journey', pageViewId: 'pageview-journey-1', routeKey: '/product/:id' };
+  const report = buildAnalyticsReport({
+    events: [
+      { ...common, event: 'page_view', createdAt: at(1), meta: { sessionId: common.sessionId } },
+      { ...common, event: 'page_engagement', createdAt: at(2), meta: { sessionId: common.sessionId, activeMs: 10_000, reason: 'heartbeat' } },
+      { ...common, event: 'page_engagement', createdAt: at(3), meta: { sessionId: common.sessionId, activeMs: 10_000, reason: 'heartbeat' } },
+      { ...common, event: 'page_engagement', createdAt: at(4), meta: { sessionId: common.sessionId, activeMs: 8_000, reason: 'heartbeat' } },
+      { ...common, event: 'page_engagement', createdAt: at(5), meta: { sessionId: common.sessionId, activeMs: 15_000, reason: 'route_leave' } },
+      { ...common, event: 'section_engagement', createdAt: at(6), meta: { sessionId: common.sessionId, sectionKey: 'composition', activeMs: 4_000, reason: 'heartbeat' } },
+      { ...common, event: 'section_engagement', createdAt: at(7), meta: { sessionId: common.sessionId, sectionKey: 'composition', activeMs: 7_000, reason: 'route_leave' } },
+      { ...common, event: 'banner_view', createdAt: at(8), meta: { sessionId: common.sessionId, bannerId: 'gift' } },
+      { ...common, event: 'product_view', productId: 10, createdAt: at(9), meta: { sessionId: common.sessionId } },
+      { ...common, event: 'cart_add', productId: 10, createdAt: at(10), meta: { sessionId: common.sessionId } },
+      { ...common, event: 'checkout_start', createdAt: at(11), meta: { sessionId: common.sessionId } },
+      { ...common, event: 'payment_start', createdAt: at(12), meta: { sessionId: common.sessionId } },
+      { ...common, event: 'payment_success', createdAt: at(13), meta: { sessionId: common.sessionId, source: 'client' } },
+      { ...common, event: 'payment_success', createdAt: at(14), meta: { sessionId: common.sessionId, source: 'server' } },
+      { userId: 99, event: 'page_engagement', sessionId: 'staff-session', pageViewId: 'staff-view', routeKey: '/', meta: { sessionId: 'staff-session', activeMs: 99_000 } },
+    ],
+    staffUserIds: [99], range,
+  });
+  assert.deepEqual(report.journey.activeTime.routes, [{ routeKey: '/product/:id', measuredPageViews: 1, totalActiveMs: 15_000 }]);
+  assert.deepEqual(report.journey.activeTime.sections, [{ routeKey: '/product/:id', sectionKey: 'composition', measuredPageViews: 1, totalActiveMs: 7_000 }]);
+  assert.equal(report.journey.orderedFunnel.at(-1).knownSessionsReachedInOrder, 1);
+  assert.deepEqual(report.journey.precedingAssociations, [
+    { exposure: 'banner:gift', confirmedPaymentSessions: 1 },
+    { exposure: 'product:10', confirmedPaymentSessions: 1 },
+  ]);
+  assert.deepEqual(report.dataQuality.qa, { staffEventsExcluded: 1, staffOrdersExcluded: 0 });
+  assert.match(report.definitions.journey, /ассоциации/);
+});
+
 test('loader accepts only bounded 7/30 day ranges and queries confirmed paidAt orders', async () => {
   assert.equal(parseReportDays('7'), 7);
   assert.equal(parseReportDays(30), 30);

@@ -68,8 +68,107 @@ function sortedCounts(map, keyName, limit = 50) {
     .slice(0, limit);
 }
 
+function safeActiveMs(meta) {
+  const value = Number(objectMeta(meta).activeMs);
+  return Number.isSafeInteger(value) && value >= 0 && value <= 604_800_000 ? value : null;
+}
+
+function engagementSnapshotKey(row, sectionKey = '') {
+  const sessionId = safeSessionId(row);
+  const pageViewId = safeLabel(row?.pageViewId, 96);
+  if (!sessionId || !pageViewId) return null;
+  return `${sessionId}\u0000${pageViewId}\u0000${sectionKey}`;
+}
+
+function buildJourneyMetrics(events) {
+  const pageSnapshots = new Map();
+  const sectionSnapshots = new Map();
+  const pageViews = new Map();
+  const sessionEvents = new Map();
+
+  for (const row of events) {
+    const event = String(row.event || '');
+    const sessionId = safeSessionId(row);
+    const pageViewId = safeLabel(row.pageViewId, 96);
+    const routeKey = safeLabel(row.routeKey, 64) || 'unknown';
+    if (sessionId) {
+      if (!sessionEvents.has(sessionId)) sessionEvents.set(sessionId, []);
+      sessionEvents.get(sessionId).push(row);
+    }
+    if (event === 'page_view' && sessionId && pageViewId) pageViews.set(`${sessionId}\u0000${pageViewId}`, { routeKey });
+    if (event !== 'page_engagement' && event !== 'section_engagement') continue;
+    const activeMs = safeActiveMs(row.meta);
+    if (activeMs == null) continue;
+    const sectionKey = event === 'section_engagement' ? safeLabel(objectMeta(row.meta).sectionKey, 48) : '';
+    if (event === 'section_engagement' && !sectionKey) continue;
+    const key = engagementSnapshotKey(row, sectionKey || '');
+    if (!key) continue;
+    const target = event === 'page_engagement' ? pageSnapshots : sectionSnapshots;
+    const previous = target.get(key);
+    if (!previous || activeMs > previous.activeMs) target.set(key, { activeMs, routeKey, sectionKey: sectionKey || null });
+  }
+
+  const routeRows = new Map();
+  for (const { activeMs, routeKey } of pageSnapshots.values()) {
+    if (!routeRows.has(routeKey)) routeRows.set(routeKey, { routeKey, measuredPageViews: 0, totalActiveMs: 0 });
+    const item = routeRows.get(routeKey);
+    item.measuredPageViews += 1;
+    item.totalActiveMs += activeMs;
+  }
+  const sectionRows = new Map();
+  for (const { activeMs, routeKey, sectionKey } of sectionSnapshots.values()) {
+    const key = `${routeKey}\u0000${sectionKey}`;
+    if (!sectionRows.has(key)) sectionRows.set(key, { routeKey, sectionKey, measuredPageViews: 0, totalActiveMs: 0 });
+    const item = sectionRows.get(key);
+    item.measuredPageViews += 1;
+    item.totalActiveMs += activeMs;
+  }
+  const measuredPageViewKeys = new Set([...pageSnapshots.keys()].map((key) => key.slice(0, key.lastIndexOf('\u0000'))));
+
+  const stages = ['page_view', 'product_view', 'cart_add', 'checkout_start', 'payment_start', 'payment_success'];
+  const reached = new Map(stages.map((stage) => [stage, 0]));
+  const preceding = new Map();
+  for (const rows of sessionEvents.values()) {
+    rows.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    let stageIndex = 0;
+    for (const row of rows) {
+      const expected = stages[stageIndex];
+      const trustedPayment = expected !== 'payment_success' || objectMeta(row.meta).source === 'server';
+      if (row.event === expected && trustedPayment) {
+        reached.set(stages[stageIndex], reached.get(stages[stageIndex]) + 1);
+        stageIndex += 1;
+        if (stageIndex >= stages.length) break;
+      }
+    }
+    const paidIndex = rows.findIndex((row) => row.event === 'payment_success' && objectMeta(row.meta).source === 'server');
+    if (paidIndex < 0) continue;
+    const unique = new Set();
+    for (const row of rows.slice(0, paidIndex)) {
+      const meta = objectMeta(row.meta);
+      let key = null;
+      if (row.event === 'banner_view') key = `banner:${safeLabel(meta.bannerId, 32) || 'unknown'}`;
+      if (row.event === 'section_view') key = `section:${safeLabel(meta.sectionKey, 48) || 'unknown'}`;
+      if (row.event === 'product_view' && Number.isInteger(Number(row.productId))) key = `product:${Number(row.productId)}`;
+      if (key) unique.add(key);
+    }
+    for (const key of unique) increment(preceding, key);
+  }
+
+  return {
+    activeTime: {
+      routes: [...routeRows.values()].sort((a, b) => b.totalActiveMs - a.totalActiveMs || a.routeKey.localeCompare(b.routeKey)).slice(0, 100),
+      sections: [...sectionRows.values()].sort((a, b) => b.totalActiveMs - a.totalActiveMs || a.sectionKey.localeCompare(b.sectionKey)).slice(0, 200),
+      measuredPageViews: pageSnapshots.size,
+      pageViewsWithoutActiveTime: [...pageViews.keys()].filter((key) => !measuredPageViewKeys.has(key)).length,
+    },
+    orderedFunnel: stages.map((event) => ({ event, knownSessionsReachedInOrder: reached.get(event) })),
+    precedingAssociations: sortedCounts(preceding, 'exposure', 100).map(({ exposure, count }) => ({ exposure, confirmedPaymentSessions: count })),
+  };
+}
+
 function buildAnalyticsReport({ events = [], orders = [], deliveryInvoices = [], products = [], staffUserIds = [], range, truncated = false }) {
   const staff = new Set(staffUserIds.map(Number));
+  const staffEventsExcluded = events.filter((event) => staff.has(Number(event.userId))).length;
   const cleanEvents = events.filter((event) => event.userId == null || !staff.has(Number(event.userId)));
   const cleanOrders = orders.filter((order) => !staff.has(Number(order.userId)) && !order.user?.staffRole);
   const cleanDeliveryInvoices = deliveryInvoices.filter((invoice) => {
@@ -247,10 +346,12 @@ function buildAnalyticsReport({ events = [], orders = [], deliveryInvoices = [],
       unknown: { orders: unknownOrders, revenue: unknownRevenue },
     },
     behavior,
+    journey: buildJourneyMetrics(cleanEvents),
     dataQuality: {
       eventsTruncated: Boolean(truncated),
       staffExcluded: true,
       eventLimit: EVENT_LIMIT,
+      qa: { staffEventsExcluded, staffOrdersExcluded: orders.length - cleanOrders.length },
     },
     definitions: {
       visits: 'Количество событий page_view.',
@@ -259,6 +360,9 @@ function buildAnalyticsReport({ events = [], orders = [], deliveryInvoices = [],
       funnel: 'eventCount — число событий; knownSessionCohort — уникальные известные sessionId на этапе. Это не проценты конверсии.',
       finance: 'Основная выручка — Order с paymentStatus=CONFIRMED; доплаты доставки — только PAID DeliveryInvoice. Обе суммы отбираются по своему paidAt и не смешиваются.',
       attribution: 'Оплата относится к кампании только при сохранённом Order.referralLinkId; остальные оплаты показаны как unknown.',
+      activeTime: 'activeMs — максимум накопительного снимка на pageViewId, а не сумма heartbeat. Считается только видимое окно в фокусе; исторические просмотры без снимков остаются пустыми.',
+      sectionTime: 'Времена секций могут пересекаться и не складываются в длительность страницы.',
+      journey: 'Визиты не равны людям. Ordered funnel использует только известные sessionId и порядок событий. Предшествующие показы — ассоциации, а не доказательство причинного влияния.',
     },
   };
 }

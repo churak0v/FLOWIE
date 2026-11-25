@@ -14,6 +14,8 @@ const CLIENT_EVENTS = new Set([
   'ref_open',
   'write_access_requested',
   'engagement_milestone',
+  'page_engagement',
+  'section_engagement',
   'scroll_depth',
   'section_view',
   'element_click',
@@ -52,6 +54,8 @@ const EVENT_META_FIELDS = {
   ref_open: new Set([...COMMON_ATTRIBUTION_FIELDS, 'tag', 'source', 'href']),
   write_access_requested: new Set(['tag', 'source', 'status', 'alreadyAllowed']),
   engagement_milestone: new Set([...COMMON_ATTRIBUTION_FIELDS, 'seconds', 'routeKey', 'deviceClass']),
+  page_engagement: new Set([...COMMON_ATTRIBUTION_FIELDS, 'activeMs', 'reason', 'routeKey', 'deviceClass']),
+  section_engagement: new Set([...COMMON_ATTRIBUTION_FIELDS, 'activeMs', 'reason', 'sectionKey', 'routeKey', 'deviceClass']),
   scroll_depth: new Set([...COMMON_ATTRIBUTION_FIELDS, 'percent', 'routeKey', 'deviceClass']),
   section_view: new Set([...COMMON_ATTRIBUTION_FIELDS, 'sectionKey', 'routeKey', 'deviceClass']),
   element_click: new Set([...COMMON_ATTRIBUTION_FIELDS, 'elementKey', 'placementKey', 'routeKey', 'deviceClass']),
@@ -71,7 +75,13 @@ const EVENT_META_FIELDS = {
 };
 
 const PRODUCT_EVENTS = new Set(['product_view', 'favorite_add', 'favorite_remove', 'cart_add', 'cart_remove', 'product_card_view', 'product_card_click', 'gift_picker_product_open', 'gift_picker_cart_add']);
-const SECTION_KEYS = new Set(['hero', 'mothers_day', 'quick_picks', 'active_orders', 'frequently_ordered', 'catalog_results', 'product_details', 'cart_items', 'checkout_form', 'payment_status']);
+const SECTION_KEYS = new Set([
+  'hero', 'mothers_day', 'quick_picks', 'active_orders', 'frequently_ordered',
+  'catalog_results', 'product_details', 'cart_items', 'checkout_form', 'payment_status',
+  'gallery', 'summary', 'composition', 'dimensions', 'care', 'promotion',
+  'motivation', 'similar', 'same_flowers', 'upsells',
+]);
+const ENGAGEMENT_REASONS = new Set(['heartbeat', 'route_leave', 'pagehide', 'blur', 'hidden', 'unload']);
 const ELEMENT_KEYS = new Set(['hero_cta', 'mothers_day_cta', 'quick_pick', 'product_card', 'product_add', 'mini_cart', 'nav_home', 'nav_catalog', 'nav_favorites', 'nav_recipients', 'nav_account', 'cart_checkout', 'checkout_submit', 'payment_retry']);
 const PLACEMENT_KEYS = new Set(['home_hero', 'home_mothers_day', 'home_quick_picks', 'home_recommendations', 'catalog_grid', 'catalog_list', 'product_recommendations', 'recipient_recommendations', 'cart', 'checkout', 'payment', 'bottom_nav', 'floating']);
 const GIFT_PICKER_EVENTS = new Set([...CLIENT_EVENTS].filter((event) => event.startsWith('gift_picker_')));
@@ -227,6 +237,8 @@ function normalizeMeta(event, input, sessionId) {
     if (![5, 15, 30, 60].includes(seconds)) throw new AnalyticsValidationError('BAD_ENGAGEMENT_SECONDS');
     out.seconds = seconds;
   }
+  if (meta.activeMs != null) out.activeMs = boundedCount(meta.activeMs, 'BAD_ACTIVE_MS', 604_800_000);
+  if (meta.reason != null) out.reason = fixedToken(meta.reason, ENGAGEMENT_REASONS, 'BAD_ENGAGEMENT_REASON');
   if (meta.percent != null) {
     const percent = boundedCount(meta.percent, 'BAD_SCROLL_DEPTH', 90);
     if (![25, 50, 75, 90].includes(percent)) throw new AnalyticsValidationError('BAD_SCROLL_DEPTH');
@@ -269,6 +281,11 @@ function normalizeMeta(event, input, sessionId) {
       if (typeof meta.alreadyAllowed !== 'boolean') throw new AnalyticsValidationError('BAD_ALREADY_ALLOWED');
       out.alreadyAllowed = meta.alreadyAllowed;
     }
+  }
+  if (event === 'page_engagement' || event === 'section_engagement') {
+    if (out.activeMs == null) throw new AnalyticsValidationError('ACTIVE_MS_REQUIRED');
+    if (!out.reason) throw new AnalyticsValidationError('ENGAGEMENT_REASON_REQUIRED');
+    if (event === 'section_engagement' && !out.sectionKey) throw new AnalyticsValidationError('SECTION_KEY_REQUIRED');
   }
   return out;
 }

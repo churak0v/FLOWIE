@@ -1,4 +1,5 @@
 import { getAnalyticsContext, trackAnalytics } from './analytics.js';
+import { SECTION_KEYS } from './analyticsTaxonomy.js';
 
 const ENGAGEMENT = [5, 15, 30, 60];
 const DEPTHS = [25, 50, 75, 90];
@@ -21,25 +22,88 @@ export function installBehaviorAnalytics(root = document) {
   const ownerDocument = root.ownerDocument || root;
   const pageViewId = getAnalyticsContext().pageViewId;
   let activeMs = 0;
-  let lastTick = performance.now();
+  let lastSample = performance.now();
+  let lastHeartbeat = lastSample;
+  let pageIsActive = ownerDocument.visibilityState === 'visible'
+    && (typeof ownerDocument.hasFocus !== 'function' || ownerDocument.hasFocus());
+  const sectionActiveMs = new Map();
+  const lastSectionSnapshotMs = new Map();
+  let lastPageSnapshotMs = -1;
+  const visibleSectionElements = new Map();
+  const sectionVisibility = new WeakMap();
   const sentEngagement = new Set();
   const sentDepth = new Set();
   const observed = new WeakSet();
+  const sectionElements = new Set();
   const dwellTimers = new WeakMap();
 
-  const tick = () => {
+  const sample = () => {
     const now = performance.now();
-    const focused = typeof ownerDocument.hasFocus !== 'function' || ownerDocument.hasFocus();
-    if (ownerDocument.visibilityState === 'visible' && focused) activeMs += Math.min(1_500, now - lastTick);
-    lastTick = now;
+    const delta = Math.max(0, now - lastSample);
+    if (pageIsActive) {
+      activeMs += delta;
+      for (const [sectionKey, elements] of visibleSectionElements) {
+        if (elements.size) sectionActiveMs.set(sectionKey, (sectionActiveMs.get(sectionKey) || 0) + delta);
+      }
+    }
+    lastSample = now;
     for (const seconds of ENGAGEMENT) {
       if (activeMs >= seconds * 1_000 && !sentEngagement.has(seconds)) {
         sentEngagement.add(seconds);
         trackAnalytics('engagement_milestone', { pageViewId, meta: { seconds } }, { dedupeKey: `${pageViewId}:engagement:${seconds}` });
       }
     }
+    return now;
+  };
+
+  const snapshot = (reason) => {
+    sample();
+    const pageMilliseconds = Math.floor(activeMs);
+    if (reason !== 'heartbeat' || pageMilliseconds !== lastPageSnapshotMs) {
+      trackAnalytics('page_engagement', { pageViewId, meta: { activeMs: pageMilliseconds, reason } }, { firstPartyOnly: true });
+      lastPageSnapshotMs = pageMilliseconds;
+    }
+    for (const [sectionKey, milliseconds] of sectionActiveMs) {
+      const rounded = Math.floor(milliseconds);
+      if (reason === 'heartbeat' && rounded === lastSectionSnapshotMs.get(sectionKey)) continue;
+      trackAnalytics('section_engagement', {
+        pageViewId,
+        meta: { sectionKey, activeMs: rounded, reason },
+      }, { firstPartyOnly: true });
+      lastSectionSnapshotMs.set(sectionKey, rounded);
+    }
+  };
+
+  const refreshActiveState = () => {
+    sample();
+    pageIsActive = ownerDocument.visibilityState === 'visible'
+      && (typeof ownerDocument.hasFocus !== 'function' || ownerDocument.hasFocus());
+  };
+  const tick = () => {
+    const now = sample();
+    if (now - lastHeartbeat >= 10_000) {
+      snapshot('heartbeat');
+      lastHeartbeat = now;
+    }
   };
   const interval = window.setInterval(tick, 1_000);
+
+  const onBlur = () => { sample(); pageIsActive = false; snapshot('blur'); };
+  const onFocus = () => { refreshActiveState(); };
+  const onVisibilityChange = () => {
+    if (ownerDocument.visibilityState !== 'visible') {
+      sample();
+      pageIsActive = false;
+      snapshot('hidden');
+    } else refreshActiveState();
+  };
+  const onPageHide = () => snapshot('pagehide');
+  const onBeforeUnload = () => snapshot('unload');
+  window.addEventListener('blur', onBlur);
+  window.addEventListener('focus', onFocus);
+  window.addEventListener('pagehide', onPageHide);
+  window.addEventListener('beforeunload', onBeforeUnload);
+  ownerDocument.addEventListener('visibilitychange', onVisibilityChange);
 
   const onScroll = () => {
     const total = Math.max(ownerDocument.documentElement?.scrollHeight || 0, ownerDocument.body?.scrollHeight || 0);
@@ -79,12 +143,44 @@ export function installBehaviorAnalytics(root = document) {
     }
   }, { threshold: [0.5] }) : null;
 
+  const sectionObserver = typeof IntersectionObserver === 'function' ? new IntersectionObserver((entries) => {
+    sample();
+    for (const entry of entries) {
+      const element = entry.target;
+      const sectionKey = String(element.dataset.analyticsSection || '');
+      if (!SECTION_KEYS.has(sectionKey)) continue;
+      const wasVisible = sectionVisibility.get(element) === true;
+      const isVisible = entry.isIntersecting && entry.intersectionRatio > 0;
+      if (wasVisible === isVisible) continue;
+      sectionVisibility.set(element, isVisible);
+      let elements = visibleSectionElements.get(sectionKey);
+      if (!elements) {
+        elements = new Set();
+        visibleSectionElements.set(sectionKey, elements);
+      }
+      if (isVisible) elements.add(element);
+      else elements.delete(element);
+      if (!sectionActiveMs.has(sectionKey)) sectionActiveMs.set(sectionKey, 0);
+    }
+  }, { threshold: [0, 0.5] }) : null;
+
   const observe = () => {
-    if (!impressionObserver) return;
+    sample();
+    for (const element of sectionElements) {
+      if (element.isConnected !== false) continue;
+      sectionElements.delete(element);
+      if (!sectionVisibility.get(element)) continue;
+      sectionVisibility.set(element, false);
+      visibleSectionElements.get(String(element.dataset.analyticsSection || ''))?.delete(element);
+    }
     root.querySelectorAll('[data-analytics-section],[data-analytics-impression]').forEach((element) => {
       if (observed.has(element)) return;
       observed.add(element);
-      impressionObserver.observe(element);
+      impressionObserver?.observe(element);
+      if (element.dataset.analyticsSection) {
+        sectionElements.add(element);
+        sectionObserver?.observe(element);
+      }
     });
   };
   observe();
@@ -105,11 +201,17 @@ export function installBehaviorAnalytics(root = document) {
   root.addEventListener('click', onClick, true);
 
   return () => {
-    tick();
+    snapshot('route_leave');
     window.clearInterval(interval);
     window.removeEventListener('scroll', onScroll);
+    window.removeEventListener('blur', onBlur);
+    window.removeEventListener('focus', onFocus);
+    window.removeEventListener('pagehide', onPageHide);
+    window.removeEventListener('beforeunload', onBeforeUnload);
+    ownerDocument.removeEventListener('visibilitychange', onVisibilityChange);
     root.removeEventListener('click', onClick, true);
     mutationObserver?.disconnect();
     impressionObserver?.disconnect();
+    sectionObserver?.disconnect();
   };
 }

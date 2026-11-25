@@ -4,6 +4,12 @@ export const SCROLL_DEPTHS = new Set([25, 50, 75, 90]);
 export const SECTION_KEYS = new Set([
   'hero', 'mothers_day', 'quick_picks', 'active_orders', 'frequently_ordered',
   'catalog_results', 'product_details', 'cart_items', 'checkout_form', 'payment_status',
+  'gallery', 'summary', 'composition', 'dimensions', 'care', 'promotion',
+  'motivation', 'similar', 'same_flowers', 'upsells',
+]);
+
+export const ENGAGEMENT_REASONS = new Set([
+  'heartbeat', 'route_leave', 'pagehide', 'blur', 'hidden', 'unload',
 ]);
 
 export const ELEMENT_KEYS = new Set([
