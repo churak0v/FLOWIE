@@ -115,14 +115,14 @@ export function Cart() {
         </div>
 
         <div style={{ marginTop: 'var(--sp-6)' }}>
-          <PriceBreakdown itemsTotal={itemsTotal} upsellsTotal={upsellsTotal} deliveryCost={deliveryCost} bonusesApplied={bonusesApplied} />
+          <PriceBreakdown itemsTotal={itemsTotal} upsellsTotal={upsellsTotal} deliveryCost={deliveryCost} bonusesApplied={bonusesApplied} deliveryPending />
         </div>
       </AppShell>
 
       <CartFooterCTA
         total={total}
         disabled={!canContinue}
-        label="Продолжить"
+        label="К оформлению · товары"
         onClick={() => {
           trackAnalytics('checkout_start');
           navigate('/checkout');

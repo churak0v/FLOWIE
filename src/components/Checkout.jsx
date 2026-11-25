@@ -467,22 +467,27 @@ export function Checkout() {
           </div>
 
           <Surface variant="default" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', display: 'grid', gap: 12 }}>
-            <Text variant="title">Детали доставки</Text>
-
-            <label style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, cursor: 'pointer' }}>
-              <span>
-                <Text variant="subtitle">Уточнить адрес у получателя</Text>
-                <span style={{ display: 'block', marginTop: 4 }}>
-                  <Text variant="caption" muted>FLOWIE свяжется с получателем. Доставка будет рассчитана и оплачена отдельно.</Text>
-                </span>
-              </span>
-              <input className="ym-disable-keys"
-                type="checkbox"
-                checked={state.checkout.askRecipientAddress}
-                onChange={actions.toggleAskAddress}
-                style={{ width: 22, height: 22, flexShrink: 0 }}
-              />
-            </label>
+            <Text variant="title">Как указать адрес?</Text>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {[
+                { value: false, title: 'Я знаю адрес', text: 'Сразу рассчитаем доставку' },
+                { value: true, title: 'Уточнить', text: 'Свяжемся с получателем' },
+              ].map((option) => {
+                const active = state.checkout.askRecipientAddress === option.value;
+                return (
+                  <button
+                    key={option.title}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => { if (!active) actions.toggleAskAddress(); }}
+                    style={{ minHeight: 94, padding: 12, borderRadius: 16, border: active ? '2px solid var(--accent)' : '1px solid var(--border)', background: active ? 'var(--c-accent-10)' : 'var(--surface)', textAlign: 'left', cursor: 'pointer' }}
+                  >
+                    <Text variant="subtitle">{option.title}</Text>
+                    <Text variant="caption" muted style={{ marginTop: 5 }}>{option.text}</Text>
+                  </button>
+                );
+              })}
+            </div>
 
             <div style={{ height: 1, background: 'var(--border)' }} />
 
@@ -507,7 +512,7 @@ export function Checkout() {
             <Surface variant="soft" style={{ padding: 14, borderRadius: 'var(--r-lg)', border: '1px solid var(--c-accent-border)', background: 'var(--c-accent-10)' }}>
               <Text variant="subtitle">Адрес уточним</Text>
               <Text variant="body" muted style={{ marginTop: 6 }}>
-                Если адрес будет вне зоны бесплатной доставки, вышлем счёт на доплату.
+                Сейчас вы оплатите товары. После уточнения адреса пришлём отдельный счёт за доставку; до его оплаты заказ не передадим курьеру.
               </Text>
             </Surface>
           ) : (
@@ -718,6 +723,7 @@ export function Checkout() {
               deliveryCost={deliveryCost}
               bonusesApplied={bonusesApplied}
               deliverySeparate={deliverySeparate}
+              deliveryPending={!deliverySeparate && deliveryCost == null}
             />
             {submitError ? (
               <div style={{ marginTop: 10 }}>
@@ -730,6 +736,7 @@ export function Checkout() {
 
       <CheckoutFooterCTA
         total={total}
+        deliverySeparate={deliverySeparate}
         disabled={!canPay}
         loading={submitting}
         onClick={async () => {

@@ -6,13 +6,16 @@ import { AppImage } from '../ui/AppImage';
 import { formatMoney } from '../../lib/money';
 import { useAppState } from '../../state/AppState';
 import { trackAnalytics } from '../../lib/analytics';
+import { formatUiSizeLabel } from '../../lib/productUi';
 
-export function ProductCard({ id, title, price, image, images, onAdd, onOpen, view = 'grid' }) {
+export function ProductCard({ id, title, price, image, images, size, composition, onAdd, onOpen, view = 'grid' }) {
   const { state, actions } = useAppState();
   const isSaved = state.favorites.productIds.includes(id);
   const cartItem = state.cart.items.find((item) => String(item.productId) === String(id));
   const cartQty = Number(cartItem?.qty || 0);
   const isList = view === 'list';
+  const compositionPreview = Array.isArray(composition) ? composition.filter(Boolean).slice(0, 2).join(' · ') : '';
+  const sizeLabel = formatUiSizeLabel(size);
   const gallery = useMemo(() => {
     const seen = new Set();
     return [image, ...(Array.isArray(images) ? images : [])]
@@ -109,6 +112,11 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
         >
           <Heart size={19} strokeWidth={2.5} fill={isSaved ? 'currentColor' : 'none'} />
         </button> : null}
+        {sizeLabel ? (
+          <span style={{ position: 'absolute', left: 10, bottom: 10, minHeight: 28, padding: '0 9px', borderRadius: 999, background: 'rgba(255,255,255,0.88)', color: 'var(--text)', display: 'inline-flex', alignItems: 'center', fontSize: 11, fontWeight: 1000, boxShadow: '0 8px 20px rgba(17,17,17,0.12)', backdropFilter: 'blur(8px)' }}>
+            {sizeLabel}
+          </span>
+        ) : null}
       </div>
 
       <div style={{ padding: isList ? 14 : 14, display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, background: 'var(--surface)' }}>
@@ -139,6 +147,12 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
           >
             {title}
           </Text>
+
+          {compositionPreview && !isList ? (
+            <Text variant="caption" muted style={{ marginTop: 7, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.25 }}>
+              {compositionPreview}
+            </Text>
+          ) : null}
 
           {isList ? (
             <button

@@ -13,6 +13,7 @@ import {
 } from '../lib/mothersDayCampaign';
 import { useAppState } from '../state/AppState';
 import { FrequentlyOrderedSection } from './domain/FrequentlyOrderedSection';
+import { CampaignAssuranceCards } from './domain/CampaignAssuranceCards';
 import { AppShell } from './layout/AppShell';
 import { AppImage } from './ui/AppImage';
 
@@ -76,10 +77,10 @@ export function MothersDayLanding() {
               <MapPin size={14} /> Ижевск
             </span>
             <div>
-              <p style={{ margin: '0 0 7px', fontSize: 13, fontWeight: 900, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Предзаказ · доставка 29 ноября</p>
+              <p style={{ margin: '0 0 7px', fontSize: 13, fontWeight: 900, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Предзаказ на 29 ноября</p>
               <h1 style={{ margin: 0, maxWidth: 360, fontSize: 'clamp(31px, 9vw, 42px)', lineHeight: 0.98, letterSpacing: '-0.035em' }}>День матери — 29 ноября</h1>
               <p style={{ margin: '10px 0 0', maxWidth: 350, fontSize: 15, fontWeight: 750, lineHeight: 1.35 }}>
-                {Number.isFinite(minimumPrice) ? `Букеты от ${formatMoney(minimumPrice)}. ` : ''}Доставка по Ижевску 29 ноября.
+                {Number.isFinite(minimumPrice) ? `Букеты от ${formatMoney(minimumPrice)}. ` : ''}Доступность и стоимость доставки проверим по адресу.
               </p>
               <button type="button" onClick={scrollToBouquets} style={{ marginTop: 16, minHeight: 50, padding: '0 18px', border: 0, borderRadius: 999, background: 'var(--accent)', color: 'var(--c-accent-contrast)', fontWeight: 1000, display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', boxShadow: 'var(--shadow-accent)' }}>
                 Выбрать букет <ArrowDown size={18} strokeWidth={3} />
@@ -87,6 +88,8 @@ export function MothersDayLanding() {
             </div>
           </div>
         </section>
+
+        <CampaignAssuranceCards />
 
         <section ref={bouquetsRef} style={{ scrollMarginTop: 12, padding: '26px calc(16px + var(--app-inset-right)) 0 calc(16px + var(--app-inset-left))' }}>
           <div style={{ display: 'grid', gap: 8, marginBottom: 18 }}>

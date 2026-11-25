@@ -1,8 +1,7 @@
-import React from 'react';
 import { formatMoney } from '../../lib/money';
 import { SbpLogo } from '../ui/SbpLogo';
 
-export function CheckoutFooterCTA({ total, disabled, loading = false, onClick }) {
+export function CheckoutFooterCTA({ total, disabled, loading = false, deliverySeparate = false, onClick }) {
   return (
     <div
       style={{
@@ -23,7 +22,7 @@ export function CheckoutFooterCTA({ total, disabled, loading = false, onClick })
         disabled={disabled}
         style={{
           width: '100%',
-          height: 56,
+          minHeight: 60,
           border: 0,
           borderRadius: 'var(--r-lg)',
           background: disabled ? 'var(--c-ink-14)' : '#1d1346',
@@ -31,14 +30,18 @@ export function CheckoutFooterCTA({ total, disabled, loading = false, onClick })
           cursor: disabled ? 'default' : 'pointer',
           fontWeight: 900,
           fontSize: 16,
-          display: 'inline-flex',
+          display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 9,
           boxShadow: disabled ? 'none' : '0 12px 28px rgba(32,19,79,0.22)',
         }}
       >
-        {loading ? 'Открываем оплату…' : <><span>Оплатить по</span><SbpLogo compact /><span>· {formatMoney(total)}</span></>}
+        {loading ? 'Открываем оплату…' : <>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><span>{deliverySeparate ? 'Оплатить букет по' : 'Оплатить по'}</span><SbpLogo compact /><span>· {formatMoney(total)}</span></span>
+          {deliverySeparate ? <span style={{ fontSize: 11, fontWeight: 800, opacity: 0.78 }}>Доставка пока не включена</span> : null}
+        </>}
       </button>
     </div>
   );
