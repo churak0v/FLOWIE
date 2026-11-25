@@ -7,6 +7,7 @@ const {
   homePage,
   mothersDayPage,
   notFoundPage,
+  plainText,
   productPage,
   renderDocument,
 } = require('../services/seo');
@@ -75,6 +76,43 @@ function createSeoRouter({ prisma = new PrismaClient(), loadShell = createShellL
     res.type('text/plain');
     res.set('Cache-Control', 'public, max-age=300');
     res.send(`User-agent: *\nAllow: /\nSitemap: ${baseUrl}/sitemap.xml\n`);
+  });
+
+  // A concise discovery guide, generated from the same public records as the catalog.
+  // Prices remain on canonical product pages, avoiding a second stale price list.
+  router.get('/llms.txt', async (req, res, next) => {
+    try {
+      const baseUrl = requestBaseUrl(req);
+      const products = await prisma.product.findMany({
+        where: activeProductWhere(),
+        select: { id: true, name: true },
+        orderBy: { id: 'asc' },
+      });
+      const label = (value) => plainText(value, 180).replace(/[\\\[\]<>]/g, '');
+      const lines = [
+        '# FLOWIE',
+        '',
+        '> FLOWIE — интернет-магазин букетов и цветочных композиций с доставкой по Ижевску, Россия.',
+        '',
+        'Каталог и карточки товаров доступны без регистрации. Актуальные цены в рублях, состав и доступность указаны на странице каждого товара. Стоимость доставки зависит от адреса и не включена в цену букета, если на странице не указано иное.',
+        'Список ниже включает только опубликованные основные товары. Наличие и цены могут изменяться: перед рекомендацией или заказом проверьте карточку. Неопубликованные размеры, отзывы и гарантии не следует выводить из фотографий.',
+        '',
+        '## Каталог',
+        `- [Главная](${baseUrl}/): подборки букетов и предложения магазина.`,
+        `- [Каталог цветов](${baseUrl}/catalog): доступные букеты и композиции.`,
+        `- [Карта сайта](${baseUrl}/sitemap.xml): канонические страницы товаров и подборок.`,
+        '',
+        '## Товары',
+        ...products.map((product) => `- [${label(product.name)}](${baseUrl}/product/${product.id})`),
+        '',
+      ];
+      res.type('text/plain');
+      res.set('Cache-Control', 'public, max-age=300');
+      res.set('X-Content-Type-Options', 'nosniff');
+      res.send(lines.join('\n'));
+    } catch (error) {
+      next(error);
+    }
   });
 
   router.get('/sitemap.xml', async (req, res, next) => {

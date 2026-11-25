@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const sharp = require('sharp');
+const { generateImageVariants } = require('./imageVariants');
 
 function cleanName(value) {
   return String(value || 'Букет')
@@ -38,7 +39,19 @@ async function derivativeFor({ buffer, importId, uploadsDir }) {
     try { await fs.writeFile(temporary, webp, { flag: 'wx', mode: 0o644 }); await fs.rename(temporary, destination); }
     finally { await fs.unlink(temporary).catch(() => {}); }
   }
+  // The original remains available for future reprocessing, but its public URL
+  // is not returned until every responsive variant is ready.
+  await generateImageVariants(destination);
   return `/uploads/${relativeDir.split(path.sep).join('/')}/${filename}`;
+}
+
+function cachedDerivativePath({ url, importId, uploadsDir }) {
+  const relativeDir = path.join('import-products', safeSegment(importId));
+  const publicPrefix = `/uploads/${relativeDir.split(path.sep).join('/')}/`;
+  if (!String(url || '').startsWith(publicPrefix)) return null;
+  const filename = String(url).slice(publicPrefix.length);
+  if (!/^[a-f0-9]{64}\.webp$/.test(filename)) return null;
+  return path.join(uploadsDir, relativeDir, filename);
 }
 
 async function materializeBouquetProductDrafts({ prisma, storage, importId, uploadsDir = path.join(__dirname, '..', 'uploads') }) {
@@ -55,7 +68,14 @@ async function materializeBouquetProductDrafts({ prisma, storage, importId, uplo
     for (const photoId of [...new Set((draft.photoIds || []).map(String))]) {
       const file = files.get(photoId);
       if (!file?.storageKey || file.status !== 'STORED') continue;
-      if (cachedUrls[photoId]) { urls.push(cachedUrls[photoId]); continue; }
+      if (cachedUrls[photoId]) {
+        const cachedPath = cachedDerivativePath({ url: cachedUrls[photoId], importId, uploadsDir });
+        if (cachedPath) {
+          await generateImageVariants(cachedPath);
+          urls.push(cachedUrls[photoId]);
+          continue;
+        }
+      }
       const stored = await storage.get(file.storageKey);
       const url = await derivativeFor({ buffer: stored.buffer, importId, uploadsDir });
       newCachedUrls[photoId] = url;

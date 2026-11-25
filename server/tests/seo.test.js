@@ -225,3 +225,23 @@ test('static and private SPA fallbacks are marked noindex', () => {
   assert.match(index, /<meta name="robots" content="noindex,nofollow"/);
   assert.match(nginx, /X-Robots-Tag "noindex, nofollow"/);
 });
+
+test('llms guide exposes canonical active products as text without unpublished products or stale prices', async () => {
+  await withServer(seoRouter(), async (base) => {
+    const response = await fetch(`${base}/llms.txt`, { headers: { host: 'flowie.test' } });
+    const text = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /text\/plain; charset=utf-8/);
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.match(text, /^# FLOWIE\n/);
+    assert.match(text, /https:\/\/flowie\.test\/product\/7/);
+    assert.doesNotMatch(text, /product\/8|Скрытый товар|<script>|5000|4500/);
+    assert.doesNotMatch(text, /<html|id="root"/);
+    const html = await fetch(`${base}/product/7`).then((r) => r.text());
+    assert.match(html, /rel="describedby" type="text\/plain" href="\/llms\.txt"/);
+  });
+  for (const file of ['default.conf', 'production-edge.conf.template']) {
+    const config = fs.readFileSync(path.join(__dirname, '../../nginx', file), 'utf8');
+    assert.match(config, /location = \/llms\.txt \{\s*proxy_pass http:/);
+  }
+});

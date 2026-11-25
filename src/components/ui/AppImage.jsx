@@ -1,82 +1,48 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { imageSizes, imageVariantPlan, normalizeImageUrl } from '../../lib/imageSources';
+import { rememberDisplayedImage, wasImageDisplayed } from '../../lib/imageMemory';
 
-function normalizeAssetUrl(raw) {
-  const s = String(raw || '').trim();
-  if (!s) return '';
-  if (/^(?:https?:|data:|blob:)/i.test(s)) return s;
-  if (s.startsWith('/')) return s;
-  return '/' + s;
-}
+const DEFAULT_FALLBACK = '/flowie-icon.svg';
 
-const DEFAULT_FALLBACK =
-  'https://images.unsplash.com/photo-1561181286-d3fee7d55364?auto=format&fit=crop&w=1200&q=80';
+export function AppImage({ src, alt = '', fallback = DEFAULT_FALLBACK, onError, onLoad, variant = 'card', sizes, ...props }) {
+  const [failures, setFailures] = useState({});
+  const original = normalizeImageUrl(src);
+  const plan = imageVariantPlan(original, { buildSha: import.meta.env.VITE_BUILD_SHA || '', siteOrigin: globalThis.location?.origin || '' });
+  const key = plan?.original || original;
+  const failed = failures[key] || {};
+  const originalFailed = !original || failed.original;
+  const useVariants = Boolean(plan && !originalFailed && (!failed.avif || !failed.webp));
+  const finalSrc = originalFailed ? normalizeImageUrl(fallback) || DEFAULT_FALLBACK
+    : useVariants ? plan.fallback : plan?.original || original;
+  const warm = !originalFailed && wasImageDisplayed(key);
+  const responsiveSizes = sizes || imageSizes(variant);
 
-// Generated variants exist for uploads (3 sizes) and bundled public photos
-// (4 sizes). Third-party images are never rewritten.
-function variantSources(url) {
-  const upload = /^\/uploads\/[0-9a-f-]+\.(?:jpe?g|png|webp)$/i.test(url);
-  const staticPhoto = /^\/(?:hero|upsells|assets)\/[a-z0-9_./-]+\.(?:jpe?g|png|webp)$/i.test(url) ||
-    /^\/[a-z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(url);
-  if (!upload && !staticPhoto) return null;
-
-  const widths = upload ? [320, 640, 1280] : [320, 640, 1280, 1920];
-  const revision = staticPhoto && import.meta.env.VITE_BUILD_SHA
-    ? '?v=' + encodeURIComponent(import.meta.env.VITE_BUILD_SHA) : '';
-  const srcset = ext => widths.map(width => url + '@' + width + '.' + ext + revision + ' ' + width + 'w').join(', ');
-  return { avif: srcset('avif'), webp: srcset('webp'), revision };
-}
-
-export function AppImage({
-  src, alt = '', fallback = DEFAULT_FALLBACK, onError,
-  variant = 'card', sizes, ...props
-}) {
-  const [failedVariant, setFailedVariant] = useState('');
-  const [failedOriginal, setFailedOriginal] = useState('');
-  const original = normalizeAssetUrl(src);
-  const fallbackUrl = normalizeAssetUrl(fallback) || DEFAULT_FALLBACK;
-  const originalFailed = !original || original === failedOriginal;
-  const sources = !originalFailed && failedVariant !== original ? variantSources(original) : null;
-  const staticPhoto = original.startsWith('/hero/') || original.startsWith('/upsells/') ||
-    original.startsWith('/assets/') || /^\/[a-z0-9_-]+\.(?:jpe?g|png|webp)$/i.test(original);
-  const rev = staticPhoto && import.meta.env.VITE_BUILD_SHA ? '?v=' + encodeURIComponent(import.meta.env.VITE_BUILD_SHA) : '';
-  const finalSrc = originalFailed ? fallbackUrl : original + rev;
-
+  const markFailure = format => setFailures(previous => ({ ...previous, [key]: { ...(previous[key] || {}), [format]: true } }));
   const handleError = event => {
-    if (sources && failedVariant !== original) setFailedVariant(original);
-    else if (!originalFailed) setFailedOriginal(original);
+    const selected = event.currentTarget.currentSrc || event.currentTarget.src || '';
+    if (useVariants && /@\d+\.avif(?:[?#]|$)/i.test(selected)) markFailure('avif');
+    else if (useVariants && /@\d+\.webp(?:[?#]|$)/i.test(selected)) markFailure('webp');
+    else if (!originalFailed) markFailure('original');
     onError?.(event);
   };
+  const handleLoad = event => {
+    if (!originalFailed) rememberDisplayedImage(key, event.currentTarget);
+    onLoad?.(event);
+  };
+  const loading = warm ? 'eager' : props.loading || 'eager';
+  const decoding = warm ? 'sync' : props.decoding || 'async';
 
-  if (!sources) {
-    return <img {...props} src={finalSrc} alt={alt}
-      loading={props.loading || 'eager'} decoding={props.decoding || 'async'}
-      referrerPolicy="no-referrer" onError={handleError} />;
-  }
+  if (!useVariants) return <img {...props} src={finalSrc} alt={originalFailed ? 'Фотография недоступна' : alt} loading={loading} decoding={decoding} referrerPolicy="no-referrer" onLoad={handleLoad} onError={handleError} data-image-warm={warm || undefined} data-image-optimized="false" />;
 
-  const styles = props.style || {};
-  const { style, className, ...imgProps } = props;
-  const responsiveSizes = sizes || (
-    variant === 'hero' ? '100vw'
-      : variant === 'detail' ? '(max-width: 600px) 100vw, 800px'
-        : variant === 'thumb' ? '80px'
-          : variant === 'tile' ? '156px'
-            : '(max-width: 600px) 45vw, 320px'
-  );
+  const { style = {}, className, ...imgProps } = props;
   return (
-    <picture className={className} style={{ ...styles, display: styles.display || 'block' }}>
-      <source type="image/avif" srcSet={sources.avif} sizes={responsiveSizes} />
-      <source type="image/webp" srcSet={sources.webp} sizes={responsiveSizes} />
-      <img {...imgProps} key={finalSrc + ':responsive'} src={finalSrc} alt={alt}
-        loading={imgProps.loading || 'eager'} decoding={imgProps.decoding || 'async'}
-        referrerPolicy="no-referrer" onError={handleError}
-        style={{
-          display: 'block', width: '100%',
-          height: styles.height === 'auto' && !styles.aspectRatio ? 'auto' : '100%',
-          aspectRatio: styles.aspectRatio, objectFit: styles.objectFit,
-          objectPosition: styles.objectPosition, borderRadius: styles.borderRadius,
-          filter: styles.filter,
-        }}
-      />
+    <picture className={className} style={{ ...style, display: style.display || 'block' }}>
+      {!failed.avif ? <source type="image/avif" srcSet={plan.avif} sizes={responsiveSizes} /> : null}
+      {!failed.webp ? <source type="image/webp" srcSet={plan.webp} sizes={responsiveSizes} /> : null}
+      <img {...imgProps} src={!failed.webp ? finalSrc : plan.original} srcSet={!failed.webp ? plan.webp : undefined} sizes={responsiveSizes} alt={alt}
+        loading={loading} decoding={decoding} referrerPolicy="no-referrer" onError={handleError} onLoad={handleLoad}
+        data-image-warm={warm || undefined} data-image-optimized="true"
+        style={{ display: 'block', width: '100%', height: style.height === 'auto' && !style.aspectRatio ? 'auto' : '100%', aspectRatio: style.aspectRatio, objectFit: style.objectFit, objectPosition: style.objectPosition, borderRadius: style.borderRadius, filter: style.filter }} />
     </picture>
   );
 }

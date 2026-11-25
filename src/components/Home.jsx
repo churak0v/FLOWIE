@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { Surface } from './ui/Surface';
@@ -31,7 +31,6 @@ export function Home({ onLogin, registrationGift }) {
   const navigate = useNavigate();
   const { state, actions } = useAppState();
   const [activeOrders, setActiveOrders] = useState([]);
-  const heroRef = useRef(null);
   const [initialHeroSlides] = useState(() => {
     const cached = cachedHomeSlides();
     return cached.length ? cached : HERO_SLIDES;
@@ -39,31 +38,6 @@ export function Home({ onLogin, registrationGift }) {
   const [heroSlides, setHeroSlides] = useState(initialHeroSlides);
   const isAuthenticated = Boolean(state.auth.me?.phoneVerified);
   const mothersDayCampaignActive = isMothersDayCampaignActive();
-
-  useEffect(() => {
-    // Keep the image behind the rising sheet without an edge-attached fixed
-    // container. Safari extends the background of such containers into its UI.
-    let frame = 0;
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => {
-      frame = 0;
-      const hero = heroRef.current;
-      if (!hero) return;
-      const offset = reducedMotion.matches ? 0 : Math.min(Math.max(window.scrollY, 0), hero.offsetHeight);
-      hero.style.transform = `translate3d(0, ${offset}px, 0)`;
-    };
-    const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
-    update();
-    window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
-    reducedMotion.addEventListener('change', schedule);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', schedule);
-      window.removeEventListener('resize', schedule);
-      reducedMotion.removeEventListener('change', schedule);
-    };
-  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -121,27 +95,27 @@ export function Home({ onLogin, registrationGift }) {
 
   return (
     <AppShell style={{ padding: 0, '--app-content-inset-bottom': '0px' }}>
-      <main className="homeScene" style={{ position: 'relative', isolation: 'isolate', width: '100%', paddingBottom: `calc(var(--app-bottom-nav-space) + ${hasMiniCart ? '64px' : '0px'})` }}>
+      <main className="homeScene" style={{ position: 'relative', isolation: 'isolate', width: '100%', '--home-hero-overlap': '28px', paddingBottom: `calc(var(--app-bottom-nav-space) + ${hasMiniCart ? '64px' : '0px'})` }}>
         <section
-          ref={heroRef}
           aria-label="Главные предложения"
           style={{
-            position: 'absolute',
+            // Keep this containing box paint-free: Safari may extend an opaque
+            // fixed/sticky background into viewport edges. Media is clipped by
+            // the inner layer instead, while sticky remains compositor-native.
+            position: 'sticky',
             zIndex: 0,
-            top: 0,
-            left: 0,
+            top: 'calc(-1 * var(--app-inset-top))',
             width: '100%',
             height: 'var(--home-hero-height)',
-            overflow: 'hidden',
-            willChange: 'transform',
+            background: 'transparent',
           }}
         >
-          <HeroBlock slides={slides} isAuthenticated={isAuthenticated} onLogin={onLogin} />
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+            <HeroBlock slides={slides} isAuthenticated={isAuthenticated} onLogin={onLogin} />
+          </div>
         </section>
 
-        <div aria-hidden="true" style={{ height: 'calc(var(--home-hero-height) - 28px)', pointerEvents: 'none' }} />
-
-        <Surface variant="default" style={{ position: 'relative', zIndex: 1, minHeight: '65dvh', borderTopLeftRadius: 28, borderTopRightRadius: 28, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, boxShadow: '0 -14px 36px rgba(31, 15, 22, 0.14)', paddingTop: 'var(--sp-6)', paddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))', paddingRight: 'calc(var(--sp-4) + var(--app-inset-right))', paddingBottom: 'var(--sp-4)', background: 'var(--bg)' }}>
+        <Surface variant="default" style={{ position: 'relative', zIndex: 1, marginTop: 'calc(-1 * var(--home-hero-overlap))', minHeight: '65dvh', borderTopLeftRadius: 28, borderTopRightRadius: 28, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, boxShadow: '0 -14px 36px rgba(31, 15, 22, 0.14)', paddingTop: 'var(--sp-6)', paddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))', paddingRight: 'calc(var(--sp-4) + var(--app-inset-right))', paddingBottom: 'var(--sp-4)', background: 'var(--bg)' }}>
           {isAuthenticated ? <SubscriptionRow /> : null}
 
           {activeOrders.length ? <section style={{ marginTop: 24 }}>

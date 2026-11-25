@@ -9,11 +9,26 @@ function isVideoSrc(src) {
   return /\.mp4($|[?#])/i.test(String(src || '').trim());
 }
 
+function slideMediaKey(slide, index) {
+  return `${slide?.id || index}:${slide?.video || slide?.image || ''}`;
+}
+
 export function HeroCarousel({ slides, className }) {
   const navigate = useNavigate();
   const safeSlides = useMemo(() => slides?.filter(Boolean) || [], [slides]);
   const [active, setActive] = useState(0);
+  const [readyMedia, setReadyMedia] = useState(() => new Set());
+  const readyMediaRef = useRef(new Set());
   const scrollerRef = useRef(null);
+
+  const markMediaReady = (slide, index) => {
+    const key = slideMediaKey(slide, index);
+    if (readyMediaRef.current.has(key)) return;
+    const next = new Set(readyMediaRef.current);
+    next.add(key);
+    readyMediaRef.current = next;
+    setReadyMedia(next);
+  };
 
   function openSlide(slide) {
     if (!slide?.href) return;
@@ -22,16 +37,24 @@ export function HeroCarousel({ slides, className }) {
   }
 
   useEffect(() => {
+    if (active < safeSlides.length) return;
+    setActive(0);
+    scrollerRef.current?.scrollTo({ left: 0, behavior: 'auto' });
+  }, [active, safeSlides.length]);
+
+  useEffect(() => {
     if (safeSlides.length <= 1) return undefined;
     const timer = window.setInterval(() => {
       const el = scrollerRef.current;
       if (!el) return;
       const next = (Math.round(el.scrollLeft / el.clientWidth) + 1) % safeSlides.length;
+      if (!readyMediaRef.current.has(slideMediaKey(safeSlides[next], next))) return;
       el.scrollTo({ left: next * el.clientWidth, behavior: 'smooth' });
-      setActive(next);
     }, 5200);
     return () => window.clearInterval(timer);
-  }, [safeSlides.length]);
+  }, [safeSlides]);
+
+  const nextToPrepare = safeSlides.length > 1 ? (active + 1) % safeSlides.length : active;
 
   return (
     <div
@@ -54,7 +77,7 @@ export function HeroCarousel({ slides, className }) {
         onScroll={() => {
           const el = scrollerRef.current;
           if (!el) return;
-          const next = Math.round(el.scrollLeft / el.clientWidth);
+          const next = Math.max(0, Math.min(safeSlides.length - 1, Math.round(el.scrollLeft / el.clientWidth)));
           if (next !== active) setActive(next);
         }}
         style={{
@@ -85,14 +108,15 @@ export function HeroCarousel({ slides, className }) {
               background: 'var(--c-ink-06)',
             }}
           >
-            {idx !== active ? null : s.video || isVideoSrc(s.image) ? (
+            {idx !== active && idx !== nextToPrepare && !readyMedia.has(slideMediaKey(s, idx)) ? null : s.video || isVideoSrc(s.image) ? (
               <video
                 src={s.video || s.image}
                 muted
                 playsInline
-                autoPlay
+                autoPlay={idx === active}
                 loop
-                preload={idx === 0 ? 'metadata' : 'none'}
+                preload={idx === active || idx === nextToPrepare ? 'auto' : 'metadata'}
+                onCanPlay={() => markMediaReady(s, idx)}
                 aria-hidden="true"
                 style={{
                   width: '100%',
@@ -107,8 +131,9 @@ export function HeroCarousel({ slides, className }) {
                 src={s.image}
                 alt=""
                 aria-hidden="true"
-                loading="eager"
+                loading={idx === active || idx === nextToPrepare ? 'eager' : 'lazy'}
                 fetchPriority={idx === 0 ? 'high' : 'auto'}
+                onLoad={() => markMediaReady(s, idx)}
                 variant="hero"
                 style={{
                   width: '100%',

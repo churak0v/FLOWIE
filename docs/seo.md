@@ -41,3 +41,9 @@ After an authorized deployment, validate a small URL sample with Google's Rich R
 - [Robots meta directives](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag)
 - [Build a sitemap](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
 - [Correct 404 behavior](https://developers.google.com/search/docs/crawling-indexing/troubleshoot-crawling-errors)
+
+## AI discovery
+
+`/llms.txt` is a public UTF-8 text discovery guide generated from active, non-upsell products. It links to canonical product pages rather than duplicating prices. Both Nginx layers forward this exact route to the API; public HTML advertises it with `rel="describedby"`. Do not add private orders, users, procurement prices, or unpublished products.
+
+This follows the optional [llms.txt proposal](https://llmstxt.org/); it is not a ranking directive. [Google states](https://developers.google.com/search/docs/appearance/ai-features) that no special AI text files are required for its AI search features. Crawlable useful content and standard SEO remain necessary; rankings and citations are not guaranteed.

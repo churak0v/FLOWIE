@@ -163,6 +163,12 @@ server {
     add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
   }
 
+  location = /llms.txt {
+    proxy_pass http://api:3001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto https;
+  }
+
   location = /robots.txt {
     proxy_pass http://api:3001;
     proxy_set_header Host $host;

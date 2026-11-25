@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import { useLayoutEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { cx } from '../../lib/cx';
 
@@ -9,23 +9,21 @@ export function AppShell({ className, style, children }) {
   // Use pathname+search (not location.key) so tab switching preserves scroll and doesn't feel like a full reload.
   const restoreKey = useMemo(() => `${location.pathname}${location.search}`, [location.pathname, location.search]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const y = SCROLL_POSITIONS.get(restoreKey);
-    // Restore after layout, otherwise it can be clamped to 0 during mount.
-    requestAnimationFrame(() => {
-      try {
-        window.scrollTo(0, typeof y === 'number' ? y : 0);
-      } catch {
-        // ignore
-      }
-    });
+    // Card image frames already reserve their size. Restore before first paint,
+    // rather than exposing an empty top-of-page frame while Safari schedules lazy images.
+    try { window.scrollTo(0, typeof y === 'number' ? y : 0); } catch { /* keep native position */ }
 
     const onScroll = () => {
       SCROLL_POSITIONS.set(restoreKey, window.scrollY);
     };
 
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    return () => {
+      SCROLL_POSITIONS.set(restoreKey, window.scrollY);
+      window.removeEventListener('scroll', onScroll);
+    };
   }, [restoreKey]);
 
   return (
