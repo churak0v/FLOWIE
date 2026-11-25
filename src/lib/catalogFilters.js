@@ -21,10 +21,23 @@ const FLOWER_RULES = [
   { key: 'anemones', label: 'Анемоны', pattern: /анемон/ },
   { key: 'freesia', label: 'Фрезии', pattern: /фрези/ },
   { key: 'dahlias', label: 'Георгины', pattern: /георгин/ },
+  { key: 'lagurus', label: 'Лагурус', pattern: /лагурус/ },
+  { key: 'gypsophila', label: 'Гипсофила', pattern: /гипсофил/ },
+  { key: 'ozothamnus', label: 'Озотамнус', pattern: /озотамнус/ },
+  { key: 'tanacetum', label: 'Танацетум', pattern: /танацетум/ },
+  { key: 'cotton', label: 'Хлопок', pattern: /(^|[^а-яё])хлопок(?=$|[^а-яё])/ },
+  { key: 'amaranth', label: 'Амарант', pattern: /амарант/ },
+  { key: 'statice', label: 'Кермек', pattern: /кермек|статиц/ },
+  { key: 'limonium', label: 'Лимониум', pattern: /лимониум/ },
+  { key: 'spray-roses', label: 'Кустовые розы', pattern: /марвел\s+баблз/ },
   { key: 'seasonal', label: 'Сезонные цветы', pattern: /сезонн[а-яё]*\s+цвет/ },
 ];
 
-const NON_FLOWER_RE = /упаков|лент|открытк|зелень|эвкалипт|букет|корзин|ваза|средств|сыворот|маск|парфюм|наушник|кабел|чехол|дополн|декор|бумаг|пленк|плёнк/;
+const NON_FLOWER_RE = /упаков|лент|бант|открытк|инструкц|рекомендац[а-яё]*\s+по\s+уход|зелень|эвкалипт|нобилис|писташ|фисташк|букет|корзин|коробк|кашпо|сумочк|ваза|стекл[а-яё]*\s+ваз|аквабокс|с\s+водой|кризал|chrysal|биофлор|губк[а-яё]*(?:\s+флорист)?|оазис|средств|подкорм|удобрен|сыворот|маск|парфюм|perfume|transport|транспорт|доставк|наушник|кабел|чехол|дополн|декор|бумаг|тишью|фоамиран|пленк|плёнк|пакет|оформлен|топпер|игрушк|шпажк/;
+
+const PRESERVED_TITLE_RE = /сухоцветн[а-яё]*\s+(?:букет|композици)|(?:букет|композици)[^|—;]{0,40}(?:из\s+)?сухоцвет|(?:^|[|—:;-])\s*стабилизированн[а-яё]*\s+(?:букет|композици|цвет)|^\s*стабилизированн[а-яё]*\s+(?:роз|гортенз|орхиде|лаванд|лагурус|хлопок|мох|эвкалипт|амарант|кермек|лимониум)|(?:букет|композици)[^|—;]{0,48}(?:из\s+)?стабилизированн[а-яё]*\s+цвет/iu;
+const PRESERVED_INGREDIENT_RE = /сухоцвет|стабилиз|высуш|суш[её]н/iu;
+const INHERENT_DRY_FLOWERS = new Set(['lagurus', 'cotton']);
 
 function cleanCompositionName(value) {
   const raw = typeof value === 'object' && value ? value.name : value;
@@ -64,6 +77,16 @@ export function getProductFlowers(product) {
     if (flower?.key && !byKey.has(flower.key)) byKey.set(flower.key, flower);
   }
   return [...byKey.values()];
+}
+
+export function isPreservedComposition(product) {
+  const title = [product?.title, product?.name, product?.subtitle].map(value => String(value || '')).join(' ');
+  if (PRESERVED_TITLE_RE.test(title)) return true;
+  const botanical = (Array.isArray(product?.composition) ? product.composition : [])
+    .map(entry => ({ entry, flower: normalizeFlowerName(entry), raw: cleanCompositionName(entry) }))
+    .filter(item => item.flower);
+  if (!botanical.length) return false;
+  return botanical.every(({ flower, raw }) => PRESERVED_INGREDIENT_RE.test(raw) || INHERENT_DRY_FLOWERS.has(flower.key));
 }
 
 export function buildFlowerOptions(products) {

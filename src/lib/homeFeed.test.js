@@ -65,3 +65,12 @@ test('pink dianthus are not treated as roses by the home rubric', () => {
   assert.equal(feed.roses.some(p => p.id === 40), false);
   assert.equal(feed.roses.some(p => p.id === 41), true);
 });
+
+test('builds a preserved segment without admitting an ordinary bouquet with one stabilized green', () => {
+  const preserved = product(200, 6200, 'Композиция из сухоцветов', { composition: [{ name: 'Лагурус' }, { name: 'Хлопок' }] });
+  const ordinary = product(201, 5900, 'Розы со стабилизированным эвкалиптом', { composition: [{ name: 'Роза Эквадор' }, { name: 'Эвкалипт стабилизированный' }] });
+  const filler = Array.from({ length: 30 }, (_, index) => product(index + 1, 4000 + index));
+  const feed = buildHomeFeed([preserved, ordinary, ...filler]);
+  assert.equal(feed.preserved.some(item => item.id === preserved.id), true);
+  assert.equal(feed.preserved.some(item => item.id === ordinary.id), false);
+});

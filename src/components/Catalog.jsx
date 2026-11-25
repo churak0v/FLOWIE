@@ -10,7 +10,7 @@ import { FrequentlyOrderedSection } from './domain/FrequentlyOrderedSection';
 import { useAppState } from '../state/AppState';
 import { trackAnalytics } from '../lib/analytics';
 import { useCatalogSearch } from '../lib/useCatalogSearch';
-import { buildFlowerOptions, filterCatalogProducts, normalizePriceBoundary, PRICE_PRESETS, selectCatalogScopeProducts } from '../lib/catalogFilters';
+import { buildFlowerOptions, filterCatalogProducts, isPreservedComposition, normalizePriceBoundary, PRICE_PRESETS, selectCatalogScopeProducts } from '../lib/catalogFilters';
 import { MothersDayPreorder } from './domain/MothersDayPreorder';
 import { isMothersDayCampaignActive } from '../lib/mothersDayCampaign';
 
@@ -45,6 +45,8 @@ export function Catalog() {
   const [draftSort, setDraftSort] = useState('default');
   const [draftView, setDraftView] = useState('grid');
 
+  const preservedOnly = query.get('preserved') === '1';
+  const hasPreserved = useMemo(() => state.products.items.some(isPreservedComposition), [state.products.items]);
   const collectionId = query.get('collection');
   const scenarioId = query.get('scenario');
   const searchQuery = query.get('search') || '';
@@ -62,7 +64,7 @@ export function Catalog() {
   const scenarios = state.collections.scenarios || [];
   const activeCollection = findBySlugOrId(collections, collectionId);
   const activeScenario = findBySlugOrId(scenarios, scenarioId);
-  const title = activeCollection?.title || activeScenario?.title || (isMothersDay ? 'Букеты ко Дню матери' : 'Каталог цветов');
+  const title = preservedOnly ? 'Композиции надолго' : activeCollection?.title || activeScenario?.title || (isMothersDay ? 'Букеты ко Дню матери' : 'Каталог цветов');
 
   const baseProducts = useMemo(() => {
     const allProducts = state.products.items || [];
@@ -71,8 +73,9 @@ export function Catalog() {
       : scenarioId
         ? (activeScenario?.productIds || [])
         : null;
-    return selectCatalogScopeProducts(allProducts, ids);
-  }, [activeCollection, activeScenario, collectionId, scenarioId, state.products.items]);
+    const scoped = selectCatalogScopeProducts(allProducts, ids);
+    return preservedOnly ? scoped.filter(isPreservedComposition) : scoped;
+  }, [activeCollection, activeScenario, collectionId, scenarioId, preservedOnly, state.products.items]);
 
   const flowerOptions = useMemo(() => buildFlowerOptions(state.products.items || []), [state.products.items]);
   const searchResult = useCatalogSearch({
@@ -131,6 +134,7 @@ export function Catalog() {
     const params = new URLSearchParams(location.search);
     params.delete('collection');
     params.delete('scenario');
+    params.delete('preserved');
     if (type && value != null) params.set(type, String(value));
     trackAnalytics('filter_change', { meta: { filter: type || 'scope', value: String(value || 'all') } });
     navigateWithParams(params);
@@ -175,7 +179,8 @@ export function Catalog() {
   }
 
   const filterChips = [
-    { key: 'all', label: 'Все цветы', active: !collectionId && !scenarioId, onClick: () => switchScope(null, null) },
+    { key: 'all', label: 'Все цветы', active: !collectionId && !scenarioId && !preservedOnly, onClick: () => switchScope(null, null) },
+    ...(hasPreserved ? [{key: 'preserved', label: 'Композиции надолго', active: preservedOnly, onClick: () => switchScope('preserved', '1')}] : []),
     ...collections.map((collection) => ({ key: `collection:${collection.id}`, label: collection.title || 'Подборка', active: activeCollection?.id === collection.id, onClick: () => switchScope('collection', collection.slug || collection.id) })),
     ...scenarios.map((scenario) => ({ key: `scenario:${scenario.id}`, label: scenario.title || 'Сценарий', active: activeScenario?.id === scenario.id, onClick: () => switchScope('scenario', scenario.slug || scenario.id) })),
   ];
@@ -190,6 +195,8 @@ export function Catalog() {
             <Text variant="caption" muted style={{ marginTop: 2 }}>{searchResult.loading ? 'Ищем букеты…' : `${shown.length} вариантов`}</Text>
           </div>
         </div>
+
+        {preservedOnly ? <p style={{fontSize: 14, lineHeight: 1.45, color: 'var(--muted)'}}>Стабилизированные цветы и сухоцветы — для тех, кто хочет сохранить красоту без полива.</p> : null}
 
         {isMothersDay ? (
           <div style={{ marginTop: 16 }}>

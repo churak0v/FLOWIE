@@ -6,7 +6,7 @@ export const SECTION_KEYS = new Set([
   'catalog_results', 'product_details', 'cart_items', 'checkout_form', 'payment_status',
   'gallery', 'summary', 'composition', 'dimensions', 'care', 'promotion',
   'motivation', 'similar', 'same_flowers', 'upsells',
-  'home_opening', 'home_budget', 'home_roses', 'home_premium', 'home_more',
+  'home_opening', 'home_budget', 'home_roses', 'home_premium', 'home_more', 'home_preserved',
 ]);
 
 export const ENGAGEMENT_REASONS = new Set([

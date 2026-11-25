@@ -20,8 +20,8 @@ export function HomeCareGuide() {
         <span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(105deg, rgba(52,22,31,.93) 5%, rgba(52,22,31,.66) 58%, rgba(52,22,31,.18))' }} />
         <span style={{ position: 'relative', zIndex: 1, minHeight: 250, padding: 22, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <span style={{ width: 42, height: 42, display: 'grid', placeItems: 'center', borderRadius: 14, background: 'rgba(255,255,255,.16)', backdropFilter: 'blur(10px)' }}><Droplets size={22} /></span>
-          <span style={{ marginTop: 'auto', maxWidth: 310, fontSize: 30, lineHeight: 1.02, fontWeight: 1000 }}>Уход — по цветку, а не по одному шаблону</span>
-          <span style={{ marginTop: 10, maxWidth: 320, fontSize: 14, lineHeight: 1.45, color: 'rgba(255,255,255,.82)' }}>Выберите состав букета и узнайте, как обновить срез и следить за водой.</span>
+          <span style={{ marginTop: 'auto', maxWidth: 310, fontSize: 30, lineHeight: 1.02, fontWeight: 1000 }}>Как сохранить букет красивым</span>
+          <span style={{ marginTop: 10, maxWidth: 340, fontSize: 14, lineHeight: 1.45, color: 'rgba(255,255,255,.82)' }}>Сколько воды налить, когда обновить срез и как ухаживать за цветами в коробке.</span>
           <span style={{ marginTop: 18, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 950 }}>Открыть гид <ArrowUpRight size={18} /></span>
         </span>
       </button>

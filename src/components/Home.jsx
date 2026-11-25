@@ -139,6 +139,7 @@ export function Home({ onLogin, registrationGift }) {
           <HomeBudgetExplorer products={feed.budgetPool} />
           <HomeStoryBanner bannerId="home-clear-price" eyebrow="Выбирайте под свой бюджет" title="Сначала выберите сумму. Потом — свой букет." text="Покажем букеты от 3 000, 5 000 и 7 000 ₽. Доставка рассчитывается отдельно по адресу." image={feed.priceBanner?.image || feed.priceBanner?.images?.[0]} product={feed.priceBanner} href="/catalog" />
           <HomeFeedSection sectionKey="home_roses" title="Розы в разных характерах" subtitle="От спокойных до выразительных сочетаний" products={feed.roses} href="/catalog?flower=roses&flower=spray-roses&flower=peony-roses" />
+          <HomeFeedSection sectionKey="home_preserved" title="Композиции надолго" subtitle="Стабилизированные цветы и сухоцветы — красота без полива" products={feed.preserved} href="/catalog?preserved=1" />
           <HomeCareGuide />
           <HomeFeedSection sectionKey="home_premium" title="Для большого жеста" subtitle="Крупные и выразительные букеты" products={feed.premium} href="/catalog?min=7000" />
           <HomeFeedSection sectionKey="home_more" title="Ещё идеи" subtitle="Другие стили из актуального каталога" products={feed.more} href="/catalog" />

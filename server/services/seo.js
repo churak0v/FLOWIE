@@ -57,6 +57,48 @@ function productImages(product, baseUrl) {
   return [...new Set(values.map((value) => absoluteHttpUrl(value, baseUrl)).filter(Boolean))];
 }
 
+function ownedUploadVariantPlan(value, baseUrl) {
+  const original = absoluteHttpUrl(value, baseUrl);
+  if (!original) return null;
+  let imageUrl;
+  let siteUrl;
+  try {
+    imageUrl = new URL(original);
+    siteUrl = new URL(baseUrl);
+  } catch {
+    return null;
+  }
+  if (imageUrl.origin !== siteUrl.origin) return null;
+  const pathname = imageUrl.pathname;
+  const uuidUpload = /^\/uploads\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpe?g|png|webp)$/i.test(pathname);
+  const ownedImport = /^\/uploads\/flowwow-owned\/[a-f0-9]{64}\.(?:jpe?g|png|webp)$/i.test(pathname)
+    || /^\/uploads\/import-products\/(?:[a-z0-9_-]+\/)+[a-f0-9]{64}\.(?:jpe?g|png|webp)$/i.test(pathname);
+  if (!uuidUpload && !ownedImport) return null;
+  const base = `${imageUrl.origin}${pathname}`;
+  const query = imageUrl.search;
+  const variant = (width, format) => `${base}@${width}.${format}${query}`;
+  const widths = [320, 640, 1280];
+  return {
+    original,
+    avif: widths.map(width => `${variant(width, 'avif')} ${width}w`).join(', '),
+    webp: widths.map(width => `${variant(width, 'webp')} ${width}w`).join(', '),
+    fallback: variant(640, 'webp'),
+  };
+}
+
+function responsiveImageMarkup(image, alt, baseUrl, { className = '', loading = 'lazy', width = 640, height = 640, sizes = '(max-width: 430px) calc((100vw - 50px) / 2), 190px' } = {}) {
+  const original = absoluteHttpUrl(image, baseUrl);
+  if (!original) return '';
+  const classAttribute = className ? ` class="${escapeHtml(className)}"` : '';
+  const plan = ownedUploadVariantPlan(original, baseUrl);
+  if (!plan) return `<img${classAttribute} src="${escapeHtml(original)}" alt="${escapeHtml(alt)}" loading="${escapeHtml(loading)}" width="${escapeHtml(width)}" height="${escapeHtml(height)}">`;
+  return `<picture>
+        <source type="image/avif" srcset="${escapeHtml(plan.avif)}" sizes="${escapeHtml(sizes)}">
+        <source type="image/webp" srcset="${escapeHtml(plan.webp)}" sizes="${escapeHtml(sizes)}">
+        <img${classAttribute} src="${escapeHtml(plan.fallback)}" srcset="${escapeHtml(plan.webp)}" sizes="${escapeHtml(sizes)}" alt="${escapeHtml(alt)}" loading="${escapeHtml(loading)}" width="${escapeHtml(width)}" height="${escapeHtml(height)}">
+      </picture>`;
+}
+
 function canonicalCollectionUrl(baseUrl, collection) {
   const key = collection?.type === 'scenario' ? 'scenario' : 'collection';
   return `${baseUrl}/catalog?${key}=${encodeURIComponent(String(collection?.slug || collection?.id || ''))}`;
@@ -67,7 +109,7 @@ function productCard(product, baseUrl) {
   const description = plainText(product?.description, 150);
   return `<article class="seo-card">
     <a href="/product/${encodeURIComponent(String(product.id))}">
-      ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(product.name)}" loading="lazy" width="640" height="640">` : ''}
+      ${image ? responsiveImageMarkup(image, product.name, baseUrl) : ''}
       <h2>${escapeHtml(product.name)}</h2>
     </a>
     ${description ? `<p>${escapeHtml(description)}</p>` : ''}
@@ -267,7 +309,7 @@ function productPage({ product, collection, baseUrl }) {
     type: 'product',
     structuredData: [productData, breadcrumbJsonLd(baseUrl, crumbs)],
     content: `${breadcrumbs(crumbs)}<article class="seo-product">
-      <div>${images[0] ? `<img class="seo-product-image" src="${escapeHtml(images[0])}" alt="${escapeHtml(product.name)}" width="800" height="800">` : ''}</div>
+      <div>${images[0] ? responsiveImageMarkup(images[0], product.name, baseUrl, { className: 'seo-product-image', loading: 'eager', width: 800, height: 800, sizes: '(max-width: 430px) 100vw, 430px' }) : ''}</div>
       <div><h1>${escapeHtml(product.name)}</h1><p class="seo-price">${escapeHtml(money(price))}</p><p>${escapeHtml(description)}</p>${composition}</div>
     </article>`,
   };
@@ -299,5 +341,6 @@ module.exports = {
   notFoundPage,
   plainText,
   productPage,
+  responsiveImageMarkup,
   renderDocument,
 };

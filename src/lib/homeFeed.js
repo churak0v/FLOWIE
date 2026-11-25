@@ -1,3 +1,5 @@
+import { isPreservedComposition } from './catalogFilters.js';
+
 function activeCatalogProducts(products) {
   return (products || []).filter((product) => product && product.isActive !== false && !product.isUpsell
     && String(product.image || product.images?.[0] || '').trim());
@@ -53,6 +55,7 @@ export function buildHomeFeed(products) {
     return [...visible, ...preview];
   };
   const any = () => true;
+  const preserved = takeSection(isPreservedComposition);
   const opening = takeSection(any);
   const photoBanner = take(any, 1)[0] || null;
   const roses = takeSection((product) => /(^|[^а-яё])роз(?:а|ы|у|е|ой|ою|ам|ами|ах)?(?=$|[^а-яё])/iu.test(searchableText(product)));
@@ -65,7 +68,7 @@ export function buildHomeFeed(products) {
   ];
   const priceBanner = take(any, 1)[0] || null;
   const more = takeSection(any);
-  return { opening, photoBanner, budgetPool, priceBanner, roses, premium, more };
+  return { opening, photoBanner, budgetPool, priceBanner, roses, preserved, premium, more };
 }
 
 export function filterHomeBudgetProducts(products, filterId) {

@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 process.env.PUBLIC_SITE_URL = 'https://flowie.test';
 const { createSeoRouter } = require('../routes/seo');
+const { responsiveImageMarkup } = require('../services/seo');
 const productsRouter = require('../routes/products');
 
 const SHELL = `<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="robots" content="noindex,nofollow"><title>FLOWIE</title></head><body><div id="root"></div><script type="module" src="/assets/app.js"></script></body></html>`;
@@ -15,7 +16,7 @@ const activeProduct = {
   name: maliciousName,
   price: 5000,
   discount: 500,
-  image: '/uploads/rose.jpg',
+  image: '/uploads/flowwow-owned/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg',
   description: '<b>Свежие</b> розы & подарок',
   isActive: true,
   isUpsell: false,
@@ -109,7 +110,33 @@ test('product page returns crawlable escaped HTML and Product/Offer/Breadcrumb J
     assert.doesNotMatch(html, /<script>alert\("x"\)<\/script>/);
     assert.match(html, /\\u003c\/script\\u003e/);
     assert.match(html, /src="\/assets\/app\.js"/);
+    assert.match(html, /<picture>/);
+    assert.match(html, /srcset="https:\/\/flowie\.test\/uploads\/flowwow-owned\/a{64}\.jpg@320\.avif 320w, https:\/\/flowie\.test\/uploads\/flowwow-owned\/a{64}\.jpg@640\.avif 640w, https:\/\/flowie\.test\/uploads\/flowwow-owned\/a{64}\.jpg@1280\.avif 1280w"/);
+    assert.match(html, /src="https:\/\/flowie\.test\/uploads\/flowwow-owned\/a{64}\.jpg@640\.webp"/);
+    assert.match(html, /sizes="\(max-width: 430px\) 100vw, 430px"/);
+    assert.match(html, /"image":\["https:\/\/flowie\.test\/uploads\/flowwow-owned\/a{64}\.jpg"/);
   });
+});
+
+test('SSR image variants are limited to proven owned upload paths and keep escaping', () => {
+  const sha = 'b'.repeat(64);
+  const uuid = responsiveImageMarkup('/uploads/3189eaef-b5ed-4729-ae8e-4fa22e279f32.jpg', 'UUID upload', 'https://flowie.test');
+  assert.match(uuid, /<picture>/);
+  assert.match(uuid, /\/uploads\/3189eaef-b5ed-4729-ae8e-4fa22e279f32\.jpg@640\.webp/);
+
+  const nested = responsiveImageMarkup(`/uploads/import-products/import-42/${sha}.webp`, 'Розы "лето" <script>', 'https://flowie.test', { className: 'seo-product-image', loading: 'eager', sizes: '(max-width: 430px) 100vw, 430px' });
+  assert.match(nested, /<picture>/);
+  assert.match(nested, new RegExp(`/uploads/import-products/import-42/${sha}\\.webp@1280\\.avif 1280w`));
+  assert.match(nested, /alt="Розы &quot;лето&quot; &lt;script&gt;"/);
+  assert.doesNotMatch(nested, /alt="[^"]*<script>/);
+
+  const external = responsiveImageMarkup('https://images.example/rose.jpg', 'Внешнее фото', 'https://flowie.test');
+  assert.doesNotMatch(external, /<picture>|@320|@640|@1280/);
+  assert.match(external, /src="https:\/\/images\.example\/rose\.jpg"/);
+
+  const unknownLocal = responsiveImageMarkup('/uploads/not-confirmed.jpg', 'Неизвестный путь', 'https://flowie.test');
+  assert.doesNotMatch(unknownLocal, /<picture>|@320|@640|@1280/);
+  assert.match(unknownLocal, /src="https:\/\/flowie\.test\/uploads\/not-confirmed\.jpg"/);
 });
 
 test('browser and crawler receive the same server-rendered content', async () => {

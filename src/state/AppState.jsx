@@ -178,7 +178,20 @@ function reducer(state, action) {
     }
 
     case 'PRODUCTS_SET': {
-      return { ...state, products: { items: action.items || [], loading: false, error: '' } };
+      return { ...state, products: { items: action.items || [], loading: false, error: '', unavailableIds: (state.products.unavailableIds || []).filter(id => !(action.items || []).some(item => item.id === id)) } };
+    }
+
+    case 'PRODUCT_UNAVAILABLE': {
+      return { ...state, products: { ...state.products, items: state.products.items.filter(item => item.id !== action.productId), unavailableIds: [...new Set([...(state.products.unavailableIds || []), action.productId])] } };
+    }
+
+    case 'PRODUCT_DETAIL_SYNC': {
+      const product = action.product;
+      if (!product || !Number.isSafeInteger(product.id) || product.id <= 0) return state;
+      const found = state.products.items.some(item => item.id === product.id);
+      const items = found ? state.products.items.map(item => item.id === product.id ? { ...item, ...product, isActive: true } : item)
+        : [...state.products.items, { ...product, isActive: true }];
+      return { ...state, products: { ...state.products, items, unavailableIds: (state.products.unavailableIds || []).filter(id => id !== product.id) } };
     }
 
     case 'PRODUCTS_ERROR': {
@@ -755,6 +768,9 @@ export function AppStateProvider({ children }) {
 
       // favorites
       toggleFavoriteProduct: (productId) => dispatch({ type: 'FAVORITES_TOGGLE_PRODUCT', productId }),
+
+      markProductUnavailable: (productId) => dispatch({ type: 'PRODUCT_UNAVAILABLE', productId }),
+      syncProductDetail: (product) => dispatch({ type: 'PRODUCT_DETAIL_SYNC', product }),
 
       // cart
       addToCart: (productId, qty = 1) => {

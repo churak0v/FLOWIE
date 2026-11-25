@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, Heart, ArrowRight } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppState } from '../state/AppState';
@@ -14,6 +14,7 @@ import { readCacheEntry, writeCacheEntry } from '../lib/persistedCache';
 import { Text } from './ui/Text';
 import { toUiComposition, toUiSize } from '../lib/productUi';
 import { trackAnalytics } from '../lib/analytics';
+import { getProductFlowerCare } from '../data/flowerCare';
 import { RegistrationGiftOffer } from './domain/RegistrationGiftOffer';
 
 export function ProductDetails({ onLogin, registrationGift }) {
@@ -23,7 +24,11 @@ export function ProductDetails({ onLogin, registrationGift }) {
   const { state, actions } = useAppState();
 
   const productFromList = useMemo(() => state.products.items.find((p) => p.id === productId) || null, [productId, state.products.items]);
-  const [product, setProduct] = useState(productFromList);
+  const preloadedProductRef = useRef(productFromList);
+  preloadedProductRef.current = productFromList;
+  const [verifiedProductId, setVerifiedProductId] = useState(null);
+  const [loadedProduct, setProduct] = useState(productFromList);
+  const product = loadedProduct?.id === productId ? loadedProduct : productFromList;
   const [qty, setQty] = useState(1);
   const [loadError, setLoadError] = useState('');
   const [retry, setRetry] = useState(0);
@@ -35,10 +40,11 @@ export function ProductDetails({ onLogin, registrationGift }) {
     }
     let alive = true;
     const cached = readCacheEntry(cacheKey);
-    setProduct(productFromList || cached?.data || null);
+    setProduct(preloadedProductRef.current || cached?.data || null);
+    setVerifiedProductId(null);
     setLoadError('');
     // Always revalidate: a cached gallery must not keep a hidden product buyable.
-    api.getProduct(productId).then((p) => {
+    api.getProduct(productId, { fresh: true }).then((p) => {
       if (!alive || !p) return;
       const basePrice = Number(p.price || 0);
       const discount = Number(p.discount || 0);
@@ -52,19 +58,23 @@ export function ProductDetails({ onLogin, registrationGift }) {
         width: p.width, height: p.height, categoryId: p.categoryId ?? null,
       };
       setProduct(next); writeCacheEntry(cacheKey, next);
+      actions.syncProductDetail(next);
+      setVerifiedProductId(productId);
     }).catch(error => {
       if (!alive) return;
       setLoadError(error.status === 404 ? 'not_found' : 'unavailable');
-      if (error.status === 404) setProduct(null);
+      if (error.status === 404) { setProduct(null); actions.markProductUnavailable(productId); }
     });
     return () => { alive = false; };
-  }, [cacheKey, productId, productFromList, retry]);
+  }, [actions, cacheKey, productId, retry]);
 
   useEffect(() => {
     if (Number.isSafeInteger(productId) && productId > 0) {
       trackAnalytics('product_view', { productId, meta: { path: `/product/${productId}` } }, { dedupeKey: productId });
     }
   }, [productId]);
+
+  const care = useMemo(() => getProductFlowerCare(product), [product]);
 
   const cartItem = useMemo(
     () => state.cart.items.find((it) => Number(it.productId) === Number(productId)) || null,
@@ -152,8 +162,9 @@ export function ProductDetails({ onLogin, registrationGift }) {
             <section data-analytics-section="care" style={{ marginTop: 24, padding: 18, borderRadius: 22, background: '#eef3ed' }}>
               <div style={{ fontSize: 11, fontWeight: 850, textTransform: 'uppercase', letterSpacing: '.07em', color: '#57705a' }}>После вручения</div>
               <h2 style={{ margin: '8px 0', fontSize: 22, letterSpacing: '-.025em' }}>Чтобы цветы радовали дольше</h2>
-              <p style={{ fontSize: 14, lineHeight: 1.5, margin: '0 0 14px' }}>Букету в вазе и композиции в губке нужен разный уход. Подскажем, как подливать воду и где поставить цветы.</p>
-              <Link to="/care" data-analytics-element="care_open" style={{ display: 'inline-flex', alignItems: 'center', gap: 12, color: '#36533c', fontWeight: 850, fontSize: 14 }}>Уход за моими цветами <ArrowRight size={18} /></Link>
+              <p style={{ fontSize: 14, lineHeight: 1.5, margin: '0 0 14px' }}>{care.primary.lead}</p>
+              <p style={{fontSize: 14, lineHeight: 1.5, margin: '0 0 14px', fontWeight: 700}}>{care.primary.water}</p>
+              <Link to={`/care?flower=${encodeURIComponent(care.primary.key)}`} data-analytics-element="care_open" style={{ display: 'inline-flex', alignItems: 'center', gap: 12, color: '#36533c', fontWeight: 850, fontSize: 14 }}>Уход за моими цветами <ArrowRight size={18} /></Link>
             </section>
             <section data-analytics-section="motivation" style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 22 }}>
               <h2 style={{ fontSize: 22, lineHeight: 1.15, letterSpacing: '-.025em', margin: '0 0 8px' }}>Вы выбираете. Мы покажем результат.</h2>
@@ -165,7 +176,7 @@ export function ProductDetails({ onLogin, registrationGift }) {
       </AppShell>
 
       <ProductAddBar
-        disabled={!product || product.id !== productId || Boolean(loadError)}
+        disabled={!product || product.id !== productId || verifiedProductId !== productId || Boolean(loadError)}
         qty={qty}
         onDec={handleDec}
         onInc={handleInc}

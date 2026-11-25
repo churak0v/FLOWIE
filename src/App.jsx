@@ -84,9 +84,10 @@ function AppRoutes() {
             pathname,
             search: location.search,
             products: state.products.items,
+            unavailableIds: state.products.unavailableIds || [],
             origin: window.location.origin,
         });
-    }, [location.search, pathname, state.products.items]);
+    }, [location.search, pathname, state.products.items, state.products.unavailableIds]);
 
     const refreshRegistrationGift = useCallback(async () => {
         const next = normalizeRegistrationGiftStatus(await api.getRegistrationGiftStatus());

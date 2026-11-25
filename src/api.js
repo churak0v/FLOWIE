@@ -141,8 +141,8 @@ export const api = {
     getUpsells: async () => {
         return fetchJson(`${API_URL}/products?kind=upsell`, { cache: 'no-store', cacheTtlMs: 15_000, cacheKey: 'GET:/products?kind=upsell' });
     },
-    getProduct: async (id) => {
-        return fetchJson(`${API_URL}/products/${encodeURIComponent(id)}`, { cache: 'no-store', cacheTtlMs: 15_000 });
+    getProduct: async (id, { fresh = false } = {}) => {
+        return fetchJson(`${API_URL}/products/${encodeURIComponent(id)}`, { cache: 'no-store', cacheTtlMs: fresh ? 0 : 15_000 });
     },
     createProduct: async (productData) => {
         return fetchJson(`${API_URL}/products`, {
