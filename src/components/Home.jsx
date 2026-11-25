@@ -17,6 +17,7 @@ import { HomeFeedSection } from './domain/HomeFeedSection';
 import { HomeStoryBanner } from './domain/HomeStoryBanner';
 import { HomeBudgetExplorer } from './domain/HomeBudgetExplorer';
 import { HomeCareGuide } from './domain/HomeCareGuide';
+import { RegistrationGiftOffer } from './domain/RegistrationGiftOffer';
 
 const HOME_BANNERS_CACHE_KEY = 'home_banners_v2';
 const HOME_BANNERS_TIMEOUT_MS = 4_000;
@@ -26,7 +27,7 @@ function cachedHomeSlides() {
   return Array.isArray(cached?.data?.heroSlides) ? cached.data.heroSlides : [];
 }
 
-export function Home({ onLogin }) {
+export function Home({ onLogin, registrationGift }) {
   const navigate = useNavigate();
   const { state, actions } = useAppState();
   const [activeOrders, setActiveOrders] = useState([]);
@@ -142,6 +143,15 @@ export function Home({ onLogin }) {
 
         <Surface variant="default" style={{ position: 'relative', zIndex: 1, minHeight: '65dvh', borderTopLeftRadius: 28, borderTopRightRadius: 28, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, boxShadow: '0 -14px 36px rgba(31, 15, 22, 0.14)', paddingTop: 'var(--sp-6)', paddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))', paddingRight: 'calc(var(--sp-4) + var(--app-inset-right))', paddingBottom: 'var(--sp-4)', background: 'var(--bg)' }}>
           {isAuthenticated ? <SubscriptionRow /> : null}
+
+          <RegistrationGiftOffer
+            status={registrationGift?.status}
+            user={state.auth.me}
+            placement="home"
+            onExpose={registrationGift?.onExpose}
+            onRefresh={registrationGift?.onRefresh}
+            onLogin={onLogin}
+          />
 
           {activeOrders.length ? <section style={{ marginTop: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>

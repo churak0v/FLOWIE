@@ -13,8 +13,9 @@ import { readCacheEntry, writeCacheEntry, isCacheFresh } from '../lib/persistedC
 import { Text } from './ui/Text';
 import { toUiComposition, toUiSize } from '../lib/productUi';
 import { trackAnalytics } from '../lib/analytics';
+import { RegistrationGiftOffer } from './domain/RegistrationGiftOffer';
 
-export function ProductDetails() {
+export function ProductDetails({ onLogin, registrationGift }) {
   const { id } = useParams();
   const productId = Number(id);
   const navigate = useNavigate();
@@ -170,6 +171,15 @@ export function ProductDetails() {
         <div style={{ marginTop: 'var(--sp-6)' }}>
           {product ? <ProductInfo product={product} /> : <Text variant="body" muted>Загрузка...</Text>}
         </div>
+
+        <RegistrationGiftOffer
+          status={registrationGift?.status}
+          user={state.auth.me}
+          placement="product_details"
+          onExpose={registrationGift?.onExpose}
+          onRefresh={registrationGift?.onRefresh}
+          onLogin={onLogin}
+        />
 
         {product ? <AlsoLikeSection productId={product.id} /> : null}
       </AppShell>

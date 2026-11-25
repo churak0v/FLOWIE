@@ -5,6 +5,7 @@ import { useAppState } from '../state/AppState';
 import { AppShell } from './layout/AppShell';
 import { Surface } from './ui/Surface';
 import { Text } from './ui/Text';
+import { RegistrationGiftAccountStatus } from './domain/RegistrationGiftOffer';
 import { OrderHistoryList } from './domain/OrderHistoryList';
 import { PhoneLogin } from './PhoneLogin';
 import { isAnalyticsEnabled, isDoNotTrackEnabled, setAnalyticsOptOut } from '../lib/analytics';
@@ -72,7 +73,7 @@ function RowButton({ title, subtitle, onClick, right }) {
   );
 }
 
-export function Account() {
+export function Account({ registrationGift }) {
   const navigate = useNavigate();
   const { state, actions } = useAppState();
 
@@ -205,6 +206,8 @@ export function Account() {
               <Text variant="body" muted>{me.phone}</Text>
             </div>
           </Surface>
+
+          <RegistrationGiftAccountStatus status={registrationGift?.status} />
 
           <Surface variant="soft" style={{ padding: 16, borderRadius: 'var(--r-lg)', border: '1px solid var(--border)', background: 'var(--bg)' }}>
             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, cursor: dntEnabled ? 'default' : 'pointer' }}>

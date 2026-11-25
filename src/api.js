@@ -154,6 +154,14 @@ export const api = {
 
     getHomeBanners: async () => fetchJson(API_URL + '/home-banners', { cache: 'no-store' }),
 
+    // Registration gift. The server is the source of truth; campaigns default to disabled.
+    getRegistrationGiftStatus: async () => fetchJson(`${API_URL}/registration-gift/status`, { cache: 'no-store' }),
+    exposeRegistrationGift: async (payload = {}) => fetchJson(`${API_URL}/registration-gift/exposure`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    }),
+
     // Collections (thematic + scenarios)
     getCollections: async () => {
         return fetchJson(`${API_URL}/collections`, { cache: 'no-store', cacheTtlMs: 60_000 });

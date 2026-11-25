@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useReducer, useRef } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Home } from './components/Home';
 import { BottomNav } from './components/ui/BottomNav';
@@ -10,6 +10,7 @@ import { AppStateProvider, useAppState } from './state/AppState';
 import { beginAnalyticsPageView, extractAnalyticsAttribution, markAnalyticsReady, trackAnalytics } from './lib/analytics';
 import { installBehaviorAnalytics } from './lib/behaviorAnalytics';
 import { initialLoginModalState, isVerifiedUser, loginModalReducer } from './lib/authUi';
+import { normalizeRegistrationGiftStatus } from './lib/registrationGift';
 
 const lazyNamed = (loader, name) => lazy(() => loader().then((module) => ({ default: module[name] })));
 const ProductDetails = lazyNamed(() => import('./components/ProductDetails'), 'ProductDetails');
@@ -73,7 +74,33 @@ function AppRoutes() {
     const { pathname } = location;
     const analyticsLocationRef = useRef('');
     const [loginModal, dispatchLoginModal] = useReducer(loginModalReducer, initialLoginModalState);
+    const [registrationGiftStatus, setRegistrationGiftStatus] = useState(() => normalizeRegistrationGiftStatus(null));
     const verifiedUser = isVerifiedUser(state.auth.me);
+
+    const refreshRegistrationGift = useCallback(async () => {
+        const next = normalizeRegistrationGiftStatus(await api.getRegistrationGiftStatus());
+        setRegistrationGiftStatus(next);
+        return next;
+    }, []);
+
+    useEffect(() => {
+        let alive = true;
+        api.getRegistrationGiftStatus()
+            .then((value) => { if (alive) setRegistrationGiftStatus(normalizeRegistrationGiftStatus(value)); })
+            .catch(() => { if (alive) setRegistrationGiftStatus(normalizeRegistrationGiftStatus(null)); });
+        return () => { alive = false; };
+    }, [state.auth.me?.id, state.auth.me?.phoneVerified]);
+
+    const registrationGift = useMemo(() => ({
+        status: registrationGiftStatus,
+        onExpose: async ({ placement }) => {
+            const result = await api.exposeRegistrationGift({ placement });
+            const next = result?.status || result;
+            if (next && typeof next === 'object') setRegistrationGiftStatus(normalizeRegistrationGiftStatus(next));
+            else await refreshRegistrationGift();
+        },
+        onRefresh: refreshRegistrationGift,
+    }), [refreshRegistrationGift, registrationGiftStatus]);
 
     useEffect(() => {
         if (verifiedUser && loginModal.open) dispatchLoginModal({ type: 'SUCCESS' });
@@ -180,8 +207,8 @@ function AppRoutes() {
             {/* Keep the route stack transform-free so fixed mobile controls stay stable. */}
             <Suspense fallback={<div style={{ minHeight: '100dvh', background: 'var(--bg)' }} />}>
             <Routes>
-                <Route path="/" element={<Home onLogin={() => dispatchLoginModal({ type: 'OPEN', intendedDestination: null })} />} />
-                <Route path="/product/:id" element={<ProductDetails />} />
+                <Route path="/" element={<Home registrationGift={registrationGift} onLogin={() => dispatchLoginModal({ type: 'OPEN', intendedDestination: null })} />} />
+                <Route path="/product/:id" element={<ProductDetails registrationGift={registrationGift} onLogin={() => dispatchLoginModal({ type: 'OPEN', intendedDestination: null })} />} />
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/catalog" element={<Catalog />} />
@@ -196,7 +223,7 @@ function AppRoutes() {
                 <Route path="/chat/:id" element={<Navigate to="/account" replace />} />
                 <Route path="/inbox" element={<Navigate to="/account" replace />} />
                 <Route path="/inbox/:id" element={<Navigate to="/account" replace />} />
-                <Route path="/account" element={<Account />} />
+                <Route path="/account" element={<Account registrationGift={registrationGift} />} />
                 <Route path="/pay/:id" element={<PaymentManual />} />
                 <Route path="/legal/privacy" element={<PrivacyPolicy />} />
                 <Route path="/legal/consent" element={<DataProcessingConsent />} />
@@ -229,6 +256,11 @@ function AppRoutes() {
                 onSuccess={async () => {
                     const user = await actions.loadMe();
                     if (!isVerifiedUser(user)) return;
+                    try {
+                        await refreshRegistrationGift();
+                    } catch {
+                        // Auth succeeds independently; status is refreshed again when auth state changes.
+                    }
                     const destination = loginModal.intendedDestination;
                     dispatchLoginModal({ type: 'SUCCESS' });
                     if (destination && destination !== pathname) navigate(destination);
