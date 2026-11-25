@@ -7,14 +7,20 @@ function productImage(product) {
   return String(product?.image || product?.images?.[0] || '').trim();
 }
 
-export function MoreProductsCard({ products, href, label = 'Показать все' }) {
+export function MoreProductsCard({ products, href, collectionTitle, label = 'Показать все' }) {
   const images = (products || []).map(productImage).filter(Boolean).slice(0, 4);
   if (!images.length) return null;
+  const query = new URL(href, 'https://flowie.art').searchParams;
+  const floor = query.get('min');
+  const bannerId = floor && /^\d{1,6}$/.test(floor) ? `home-more-from-${floor}` : query.has('search') || query.has('flower') ? 'home-more-roses' : 'home-more-catalog';
 
   return (
     <Link
       to={href}
-      aria-label={`${label}: открыть подборку`}
+      aria-label={`${label}: ${collectionTitle || 'открыть подборку'}`}
+      data-analytics-impression="banner"
+      data-analytics-banner={bannerId}
+      data-analytics-placement="home_recommendations"
       style={{
         minWidth: 0,
         height: '100%',

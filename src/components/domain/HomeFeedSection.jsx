@@ -14,7 +14,7 @@ export function HomeFeedSection({ title, subtitle, products, href = '/catalog', 
           {subtitle ? <Text variant="caption" muted style={{ marginTop: 4 }}>{subtitle}</Text> : null}
         </div>
       </div>
-      <FrequentlyOrderedSection products={visibleProducts} trailingCard={<MoreProductsCard products={collageProducts} href={href} />} />
+      <FrequentlyOrderedSection products={visibleProducts} trailingCard={<MoreProductsCard products={collageProducts} href={href} collectionTitle={title} />} />
     </section>
   );
 }

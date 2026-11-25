@@ -11,6 +11,7 @@ CREATE TABLE "RegistrationGiftLedger" (
   "offerTerms" VARCHAR(240),
   "termsVersion" VARCHAR(80) NOT NULL,
   "exposedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "exposurePlacement" VARCHAR(20),
   "claimedAt" TIMESTAMP(3),
   "fulfilledAt" TIMESTAMP(3),
   "fulfilledById" INTEGER,

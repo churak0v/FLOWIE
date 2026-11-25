@@ -163,7 +163,7 @@ export function Home({ onLogin, registrationGift }) {
           <HomeStoryBanner bannerId="home-photo-proof" eyebrow="Спокойнее выбирать" title="Сначала фото. Потом доставка." text="Перед отправкой пришлём фото готового букета." image={feed.photoBanner?.image || feed.photoBanner?.images?.[0]} href="/catalog" />
           <HomeBudgetExplorer products={feed.budgetPool} />
           <HomeStoryBanner bannerId="home-clear-price" eyebrow="Без сюрпризов в корзине" title="Красивый жест. Понятная цена." text="Стоимость доставки рассчитывается по адресу." image={feed.priceBanner?.image || feed.priceBanner?.images?.[0]} product={feed.priceBanner} href="/catalog" />
-          <HomeFeedSection title="Розы в разных характерах" subtitle="От спокойных до выразительных сочетаний" products={feed.roses} href="/catalog?search=Роза" />
+          <HomeFeedSection title="Розы в разных характерах" subtitle="От спокойных до выразительных сочетаний" products={feed.roses} href="/catalog?flower=roses&flower=spray-roses&flower=peony-roses" />
           <HomeCareGuide />
           <HomeFeedSection title="Для большого жеста" subtitle="Крупные и выразительные букеты" products={feed.premium} href="/catalog?min=7000" />
           <HomeFeedSection title="Ещё идеи" subtitle="Другие стили из актуального каталога" products={feed.more} href="/catalog" />

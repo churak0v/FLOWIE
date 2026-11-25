@@ -27,9 +27,13 @@ function createRegistrationGiftRouter({ prisma, env = process.env, now = () => n
 
   router.post('/exposure', requireSameOrigin, requireAuth, async (req, res) => {
     try {
+      const placement = req.body?.placement ?? null;
+      if (placement !== null && !['home', 'product'].includes(placement)) {
+        return res.status(400).json({ ok: false, error: 'BAD_PLACEMENT' });
+      }
       const user = await prisma.user.findUnique({ where: { id: req.user.id } });
       if (!user) return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
-      const status = await recordRegistrationGiftExposure({ prisma, user, env, now });
+      const status = await recordRegistrationGiftExposure({ prisma, user, placement, env, now });
       return res.json({ ok: true, ...status });
     } catch (error) {
       return res.status(500).json({ ok: false, error: 'REGISTRATION_GIFT_EXPOSURE_FAILED' });

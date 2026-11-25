@@ -1,7 +1,7 @@
 const FLOWER_RULES = [
-  { key: 'spray-roses', label: 'Кустовые розы', pattern: /кустов[а-яё]*\s+роз/ },
-  { key: 'peony-roses', label: 'Пионовидные розы', pattern: /пионовидн[а-яё]*\s+роз/ },
-  { key: 'roses', label: 'Розы', pattern: /(^|[^а-яё])роз[а-яё]*/ },
+  { key: 'spray-roses', label: 'Кустовые розы', pattern: /кустов[а-яё]*\s+роз(?:а|ы|у|е|ой|ою|ам|ами|ах)?(?=$|[^а-яё])/ },
+  { key: 'peony-roses', label: 'Пионовидные розы', pattern: /пионовидн[а-яё]*\s+роз(?:а|ы|у|е|ой|ою|ам|ами|ах)?(?=$|[^а-яё])/ },
+  { key: 'roses', label: 'Розы', pattern: /(^|[^а-яё])роз(?:а|ы|у|е|ой|ою|ам|ами|ах)?(?=$|[^а-яё])/ },
   { key: 'chrysanthemums', label: 'Хризантемы', pattern: /хризантем/ },
   { key: 'peonies', label: 'Пионы', pattern: /(^|[^а-яё])пион[а-яё]*/ },
   { key: 'tulips', label: 'Тюльпаны', pattern: /тюльпан/ },

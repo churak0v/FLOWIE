@@ -55,7 +55,7 @@ export function buildHomeFeed(products) {
   const any = () => true;
   const opening = takeSection(any);
   const photoBanner = take(any, 1)[0] || null;
-  const roses = takeSection((product) => /(^|[^а-яё])роз[а-яё]*/iu.test(searchableText(product)));
+  const roses = takeSection((product) => /(^|[^а-яё])роз(?:а|ы|у|е|ой|ою|ам|ами|ах)?(?=$|[^а-яё])/iu.test(searchableText(product)));
   const premium = takeSection((product) => Number(product.price) >= 7_000);
   const byPrice = [...source].sort((left, right) => Number(left.price) - Number(right.price));
   const budgetPool = [

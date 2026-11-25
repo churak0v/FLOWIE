@@ -101,7 +101,7 @@ async function getRegistrationGiftStatus({ prisma, user, env = process.env }) {
   return publicStatus(config, row, user);
 }
 
-async function recordRegistrationGiftExposure({ prisma, user, env = process.env, now = () => new Date() }) {
+async function recordRegistrationGiftExposure({ prisma, user, placement = null, env = process.env, now = () => new Date() }) {
   const config = getRegistrationGiftConfig(env);
   if (!config.enabled || !user?.id || user.verifiedPhone) return publicStatus(config, null, user);
   const row = await prisma.registrationGiftLedger.upsert({
@@ -118,6 +118,7 @@ async function recordRegistrationGiftExposure({ prisma, user, env = process.env,
       offerTerms: config.campaign.terms,
       termsVersion: config.termsVersion,
       exposedAt: now(),
+      exposurePlacement: ['home', 'product'].includes(placement) ? placement : null,
     },
   });
   return publicStatus(config, row, user);

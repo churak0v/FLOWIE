@@ -55,3 +55,13 @@ test('budget interaction uses inclusive lower bounds without hidden maximums', (
   assert.deepEqual(filterHomeBudgetProducts(products, 'from-7000').map(({ id }) => id), [6]);
   assert.deepEqual(products.map(({ id }) => id), [6, 1, 4, 2, 5, 3, 4]);
 });
+
+test('pink dianthus are not treated as roses by the home rubric', () => {
+  const filler = Array.from({ length: 6 }, (_, i) => product(i + 1, 4000));
+  const feed = buildHomeFeed([...filler,
+    product(40, 4500, 'Букет розовых диантусов', { composition: [{ name: 'Диантус розовый', quantity: 9 }] }),
+    product(41, 5000, 'Букет с розами', { composition: [{ name: 'Роза французская', quantity: 9 }] }),
+  ]);
+  assert.equal(feed.roses.some(p => p.id === 40), false);
+  assert.equal(feed.roses.some(p => p.id === 41), true);
+});

@@ -76,12 +76,13 @@ class ErrorBoundary extends React.Component {
     render() {
         if (this.state.hasError) {
             return (
-                <div style={{ padding: 20, color: 'red', fontSize: 20 }}>
-                    <h1>Something went wrong.</h1>
-                    <p>Check console for details.</p>
-                    <details style={{ whiteSpace: 'pre-wrap' }}>
+                <div style={{ padding: 'calc(32px + env(safe-area-inset-top, 0px)) 24px', color: 'var(--text)', maxWidth: 430, margin: '0 auto' }}>
+                    <h1 style={{ fontSize: 25 }}>Не удалось открыть страницу</h1>
+                    <p>Обновите страницу и попробуйте ещё раз.</p>
+                    <button type="button" onClick={() => window.location.reload()} style={{ padding: '12px 20px', border: 0, borderRadius: 16, background: 'var(--accent)', color: '#fff', fontWeight: 800 }}>Обновить страницу</button>
+                    {import.meta.env.DEV ? <details style={{ whiteSpace: 'pre-wrap', marginTop: 20 }}>
                         {this.state.error && this.state.error.toString()}
-                    </details>
+                    </details> : null}
                 </div>
             );
         }

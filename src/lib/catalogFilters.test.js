@@ -37,3 +37,9 @@ test('accepts async semantic IDs without bypassing price filters', () => {
   assert.deepEqual(filterCatalogProducts(products, { search: 'нежное настроение', semanticProductIds: [2], max: 5000 }).map((product) => product.id), [2]);
   assert.deepEqual(filterCatalogProducts(products, { search: 'нежное настроение', semanticProductIds: [3], max: 5000 }), []);
 });
+
+test('rose color adjectives do not turn pink dianthus or chrysanthemums into roses', () => {
+  assert.deepEqual(normalizeFlowerName('Диантус розовый'), {key:'dianthus',label:'Диантус'});
+  assert.deepEqual(normalizeFlowerName('Кустовая розовая хризантема'), {key:'chrysanthemums',label:'Хризантемы'});
+  assert.deepEqual(normalizeFlowerName('Кустовые розы'), {key:'spray-roses',label:'Кустовые розы'});
+});

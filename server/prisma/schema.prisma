@@ -171,6 +171,7 @@ model RegistrationGiftLedger {
   offerTerms         String?   @db.VarChar(240)
   termsVersion       String    @db.VarChar(80)
   exposedAt          DateTime  @default(now())
+  exposurePlacement  String?   @db.VarChar(20)
   claimedAt          DateTime?
   fulfilledAt        DateTime?
   fulfilledById      Int?
