@@ -7,7 +7,7 @@ function productByPath(pathname, products) {
   return (products || []).find((product) => String(product?.id) === match[1]) || null;
 }
 
-export function describePageMetadata({ pathname = '/', search = '', products = [], origin = '' } = {}) {
+export function describePageMetadata({ pathname = '/', search = '', products = [], unavailableIds = [], origin = '' } = {}) {
   const product = productByPath(pathname, products);
   let title = DEFAULT_TITLE;
   let description = DEFAULT_DESCRIPTION;
@@ -31,7 +31,7 @@ export function describePageMetadata({ pathname = '/', search = '', products = [
     }
     robots = 'index,follow';
   } else if (/^\/product\/\d+$/.test(pathname)) {
-    title = product ? `${product.name} — купить с доставкой | FLOWIE` : 'Букет с доставкой | FLOWIE';
+    title = product ? `${product.name || product.title || 'Букет'} — купить с доставкой | FLOWIE` : 'Букет с доставкой | FLOWIE';
     description = product?.description
       ? String(product.description).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 260)
       : 'Свежий букет FLOWIE с доставкой по Ижевску.';
@@ -42,11 +42,21 @@ export function describePageMetadata({ pathname = '/', search = '', products = [
     description = 'Букеты для мамы с доставкой по Ижевску. Выберите букет и оформите заказ в FLOWIE.';
     canonicalPath = '/mothers-day';
     robots = 'index,follow';
+  } else if (pathname === '/care') {
+    title = 'Уход за цветами — советы флориста | FLOWIE';
+    description = 'Как ухаживать за букетом в вазе и композицией в флористической губке, чтобы цветы дольше оставались свежими.';
+    canonicalPath = '/care';
+    robots = 'index,follow';
   } else if (pathname === '/cart') title = 'Корзина | FLOWIE';
   else if (pathname === '/checkout') title = 'Оформление заказа | FLOWIE';
   else if (pathname === '/favorites') title = 'Избранное | FLOWIE';
   else if (pathname === '/account') title = 'Аккаунт | FLOWIE';
   else if (pathname.startsWith('/legal/')) title = 'Правовая информация | FLOWIE';
+
+  if (/^\/product\/\d+$/.test(pathname) && unavailableIds.some(id => String(id) === pathname.split('/').pop())) {
+    title = 'Букет сейчас недоступен | FLOWIE';
+    robots = 'noindex,nofollow';
+  }
 
   return {
     title,
@@ -73,6 +83,13 @@ export function updatePageMetadata(input, documentLike = globalThis.document) {
   ensureMeta(documentLike, 'description').setAttribute('content', metadata.description);
   ensureMeta(documentLike, 'robots').setAttribute('content', metadata.robots);
   const canonicalLinks = [...documentLike.head.querySelectorAll('link[rel="canonical"]')];
+  const previousCanonical = canonicalLinks[0]?.getAttribute('href') || '';
+  const routeChanged = Boolean(previousCanonical) && previousCanonical !== metadata.canonical;
+  if (routeChanged) {
+    for (const element of documentLike.head.querySelectorAll('script[type="application/ld+json"], meta[property^="og:"]')) {
+      element.remove();
+    }
+  }
   const canonical = canonicalLinks.shift() || (metadata.canonical ? documentLike.createElement('link') : null);
   for (const duplicate of canonicalLinks) duplicate.remove();
   if (metadata.canonical && canonical) {
