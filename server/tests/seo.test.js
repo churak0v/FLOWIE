@@ -199,7 +199,7 @@ test('campaign landing is routed to the SEO renderer by both storefront ingress 
     const config = fs.readFileSync(path.join(root, 'nginx', filename), 'utf8');
     const block = config.match(/location = \/mothers-day \{([^}]+)\}/)?.[1];
     assert.ok(block, filename);
-    assert.match(block, /proxy_pass http:\/\/(?:api:3001|\$api_host);/);
+    assert.match(block, /proxy_pass http:\/\/(?:api:3001|\$api_host|\$flowie_api_host);/);
     assert.doesNotMatch(block, /noindex/);
   }
 });
@@ -210,7 +210,7 @@ test('public home is routed to indexable SEO HTML by both storefront ingress con
     const config = fs.readFileSync(path.join(root, 'nginx', filename), 'utf8');
     const block = config.match(/location = \/ \{([^}]+)\}/)?.[1];
     assert.ok(block, filename);
-    assert.match(block, /proxy_pass http:\/\/(?:api:3001|\$api_host);/);
+    assert.match(block, /proxy_pass http:\/\/(?:api:3001|\$api_host|\$flowie_api_host);/);
     assert.doesNotMatch(block, /noindex|proxy_pass http:\/\/web:8080/);
   }
 });
@@ -265,7 +265,7 @@ test('care article is routed to the SEO renderer by both storefront ingress conf
     const config = fs.readFileSync(path.join(root, 'nginx', filename), 'utf8');
     const block = config.match(/location = \/care \{([^}]+)\}/)?.[1];
     assert.ok(block, filename);
-    assert.match(block, /proxy_pass http:\/\/(?:api:3001|\$api_host);/);
+    assert.match(block, /proxy_pass http:\/\/(?:api:3001|\$api_host|\$flowie_api_host);/);
   }
 });
 
