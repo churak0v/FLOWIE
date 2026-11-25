@@ -6,17 +6,22 @@ Import is limited to explicitly configured numeric Telegram chat/user IDs. Adeli
 
 ## Florist flow
 
-1. Send `/import`, then send photos in as many Telegram albums as necessary.
+1. Send photos in as many Telegram albums as necessary. The first photo opens an
+   import automatically; `/import` or the bottom **Новая загрузка** button is optional.
 2. Write composition in the caption or reply to a specific photo. Unattached notes
    remain unassigned rather than being attached to an arbitrary bouquet.
-3. Press **Все фото отправлены** only after all albums have arrived. The button
-   identifies this import, not any future import. Failed downloads block analysis;
-   `/import_retry` retries failed/stale downloads.
+3. After 60 seconds of inactivity, the bot asks whether all photos are uploaded.
+   Confirm with **Все фото загружены** on Telegram's persistent bottom keyboard,
+   or press **Добавлю ещё** to continue. New photos invalidate any older question;
+   confirmation requires the current intake revision. Failed downloads block
+   analysis; `/import_retry` retries failed/stale downloads. Old inline callbacks
+   remain accepted for compatibility but new inline action buttons are not sent.
 4. A durable worker prepares an OpenAI Batch only after finalization. Exact-byte
    duplicates cost one image request. Albums are transport groups, not bouquets.
    Similar but non-identical photos are not automatically merged in this version.
-5. The bot sends a ready notification to the uploading chat. Send `/review` to
-   open results; `/next` shows the next photo/draft. Errors also generate a notice.
+5. The bot sends a ready notification to the uploading chat. The bottom buttons
+   **Посмотреть результат** and **Следующее фото** open and navigate results;
+   `/review` and `/next` remain supported. Errors also generate a notice.
 6. Record composition:
 
    ```text

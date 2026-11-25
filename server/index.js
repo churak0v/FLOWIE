@@ -68,6 +68,7 @@ if (process.env.FLOWIE_BOUQUET_IMPORT_ENABLED === 'true') {
     const storage = createBouquetImportStorage();
     app.use('/api/bouquet-import', createBouquetImportRouter({ prisma, storage }));
     require('./services/bouquetImportNotifications').startBouquetImportNotifications({ prisma });
+    require('./services/bouquetImportIdlePrompt').startBouquetImportIdlePrompt({ prisma });
     if (process.env.OPENAI_API_KEY) {
         const { createOpenAIBatchProvider } = require('./services/bouquetImportBatch');
         const { startBouquetImportWorker } = require('./services/bouquetImportWorker');

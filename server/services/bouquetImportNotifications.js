@@ -1,6 +1,7 @@
 'use strict';
 
 const { getTelegramBouquetImportConfig } = require('./telegramBouquetImport');
+const { bouquetKeyboard } = require('./telegramBouquetKeyboard');
 
 const TERMINAL_STATUSES = [
   'REVIEW_REQUIRED',
@@ -34,7 +35,7 @@ function notificationText(row) {
   if (READY_STATUSES.has(row.status)) {
     const count = Array.isArray(row.state?.drafts) ? row.state.drafts.length : 0;
     const lead = row.status === 'PARTIAL_REVIEW_REQUIRED' ? 'Разбор загрузки завершён частично.' : 'Разбор загрузки завершён.';
-    return `${lead} Готово черновиков: ${count}. Отправьте /review, чтобы проверить фотографии и составы.`;
+    return `${lead} Готово черновиков: ${count}. Нажмите «Посмотреть результат» внизу, чтобы проверить фотографии и составы.`;
   }
   return 'Не удалось завершить разбор загрузки. Фотографии сохранены. Попробуйте повторить позже или обратитесь к администратору FLOWIE.';
 }
@@ -87,7 +88,9 @@ function createBouquetImportNotifications({ prisma, env = process.env, fetchImpl
   async function send(row) {
     const response = await fetchImpl(`${config.apiBase}/bot${config.token}/sendMessage`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ chat_id: row.chatId, text: row.notificationText }), signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({ chat_id: row.chatId, text: row.notificationText,
+        reply_markup: bouquetKeyboard(READY_STATUSES.has(row.status) ? 'review' : 'processing'),
+      }), signal: AbortSignal.timeout(15000),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok || !body.ok) throw new Error(`TELEGRAM_SEND_FAILED_${response.status}`);

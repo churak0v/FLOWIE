@@ -58,6 +58,9 @@ function createBouquetImportRepository(prisma, options = {}) {
       const pendingAt = iso(file.createdAt || now());
       const record = { ...file, createdAt: pendingAt, pendingAt, id: crypto.randomUUID(), status: 'PENDING' };
       state.files.push(record);
+      state.intakeRevision = (state.intakeRevision || 0) + 1;
+      state.intakeLastActivityAt = pendingAt;
+      state.confirmationPrompt = null;
       return record;
     }),
     markFileStored: async ({ fileId, storageKey, storedAt }) => {
@@ -96,7 +99,15 @@ function createBouquetImportRepository(prisma, options = {}) {
       if (state.notes.length >= 2000) throw new Error('IMPORT_NOTE_LIMIT');
       state.notes.push({ ...note, createdAt: iso(note.createdAt) });
     }),
-    requestFinalize: ({ importId, requestedAt = now() }) => mutate(importId, (state) => {
+    deferConfirmation: (importId) => mutate(importId, (state) => {
+      if (state.finalizeRequested) throw new Error('IMPORT_ALREADY_FINALIZED');
+      state.intakeRevision = (state.intakeRevision || 0) + 1;
+      state.intakeLastActivityAt = iso(now());
+      state.confirmationPrompt = null;
+    }),
+    requestFinalize: ({ importId, requestedAt = now(), requirePrompt = false }) => mutate(importId, (state) => {
+      if (requirePrompt && (!state.files.length || state.confirmationPrompt?.status !== 'SENT'
+        || state.confirmationPrompt.revision !== (state.intakeRevision || 0))) throw new Error('IMPORT_CONFIRMATION_STALE');
       state.finalizeRequested = true;
       state.finalizeRequestedAt ||= iso(requestedAt);
     }),

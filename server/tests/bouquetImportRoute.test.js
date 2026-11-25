@@ -29,7 +29,7 @@ async function invoke(handler, body, secret = 'webhook-secret') {
   return response;
 }
 
-test('start response sends a finish button scoped to the created import id', async () => {
+test('start response installs a persistent bottom keyboard without premature finish button', async () => {
   const requests = [];
   const router = createBouquetImportRouter({
     env,
@@ -45,8 +45,10 @@ test('start response sends a finish button scoped to the created import id', asy
   assert.equal(response.statusCode, 200);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].url, 'https://telegram.test/botbot-token/sendMessage');
-  assert.equal(requests[0].body.reply_markup.inline_keyboard[0][0].callback_data,
-    'bouquet_import:finish:batch_123');
+  assert.equal(requests[0].body.reply_markup.inline_keyboard, undefined);
+  assert.equal(requests[0].body.reply_markup.is_persistent, true);
+  assert.equal(requests[0].body.reply_markup.resize_keyboard, true);
+  assert.equal(JSON.stringify(requests[0].body.reply_markup).includes('Все фото загружены'), false);
 });
 
 test('authorized callbacks are acknowledged through answerCallbackQuery', async () => {

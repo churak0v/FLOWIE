@@ -55,7 +55,8 @@ test('ready notification targets the owning batch chat and preserves concurrent 
   assert.equal(state.sends.length, 1);
   assert.equal(state.sends[0].chat_id, '-100777');
   assert.match(state.sends[0].text, /Готово черновиков: 3/);
-  assert.match(state.sends[0].text, /\/review/);
+  assert.match(state.sends[0].text, /Посмотреть результат/);
+  assert.equal(state.sends[0].reply_markup.is_persistent, true);
   assert.equal(JSON.stringify(state.sends).includes('private note'), false);
   assert.equal(state.row.state.reviewCursor, 2);
   assert.equal(state.row.state.reviewNotification.status, 'SENT');

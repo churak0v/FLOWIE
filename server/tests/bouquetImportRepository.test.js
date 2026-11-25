@@ -152,6 +152,20 @@ test('accepts delayed pre-confirmation photos and deduplicates retries after fin
     sentAt: new Date(clock.getTime() + 1000).toISOString() }), /IMPORT_ALREADY_FINALIZED/);
 });
 
+test('bottom confirmation cannot finalize a stale prompt after new photos arrive', async () => {
+  const prisma = createPrisma();
+  const repository = createBouquetImportRepository(prisma, { now: () => clock });
+  const batch = await repository.createImport({ chatId: -100, userId: 7 });
+  await repository.reserveFile({ importId: batch.id, messageId: 1, fileUniqueId: 'first', createdAt: clock });
+  batch.state.confirmationPrompt = { status: 'SENT', revision: 1 };
+  await repository.reserveFile({ importId: batch.id, messageId: 2, fileUniqueId: 'second', createdAt: clock });
+  await assert.rejects(repository.requestFinalize({ importId: batch.id, requirePrompt: true }), /IMPORT_CONFIRMATION_STALE/);
+  assert.equal(batch.state.finalizeRequested, false);
+  batch.state.confirmationPrompt = { status: 'SENT', revision: 2 };
+  await repository.requestFinalize({ importId: batch.id, requirePrompt: true });
+  assert.equal(batch.state.finalizeRequested, true);
+});
+
 test('explicit retry reclaims failed and stale PENDING files after a process crash', async () => {
   const prisma = createPrisma();
   const repository = createBouquetImportRepository(prisma, { now: () => clock });

@@ -243,15 +243,29 @@ function createTelegramBouquetImportService(options) {
 
     try {
 
-    if (message && commandOf(message.text) === '/import') {
+    const incomingImage = extractImage(message);
+    if (message && (commandOf(message.text) === '/import' || incomingImage)) {
       const active = await repository.findActiveImport({ chatId, userId });
-      if (active) return { importId: active.id, status: 'already_active' };
-      const created = await repository.createImport({ chatId, userId, startedAt: now() });
-      return { importId: created.id, status: 'started' };
+      if (commandOf(message.text) === '/import') {
+        if (active) return { importId: active.id, status: 'already_active' };
+        const created = await repository.createImport({ chatId, userId, startedAt: now() });
+        return { importId: created.id, status: 'started' };
+      }
+      if (!active) await repository.createImport({ chatId, userId, startedAt: now() });
     }
 
     const active = await repository.findActiveImport({ chatId, userId });
     if (!active) return { ignored: 'no_active_import' };
+
+    if (message && commandOf(message.text) === '/import_more') {
+      await repository.deferConfirmation(active.id);
+      return { importId: active.id, status: 'continue_upload' };
+    }
+    if (message && commandOf(message.text) === '/import_done') {
+      await repository.requestFinalize({ importId: active.id, requestedAt: now(), requirePrompt: true });
+      await maybeQueue(active.id);
+      return { importId: active.id, status: 'waiting_for_files' };
+    }
 
     if (message && ['/import_retry', '/retry'].includes(commandOf(message.text))) {
       const failed = await repository.claimFailedFiles(active.id);
@@ -289,6 +303,7 @@ function createTelegramBouquetImportService(options) {
     if (String(text || '').trim()) await saveText(active, message, text);
     return { importId: active.id, status: reserved ? 'file_pending' : 'captured' };
     } catch (error) {
+      if (error.message === 'IMPORT_CONFIRMATION_STALE') return { status: 'confirmation_stale' };
       if (error.message === 'IMPORT_ALREADY_FINALIZED') return { status: 'closed_import' };
       await repository.releaseUpdate(update.update_id);
       throw error;

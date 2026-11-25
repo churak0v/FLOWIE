@@ -136,6 +136,19 @@ test('does not start paid analysis while import is active', async () => {
   assert.equal(fixture.repository.state.notes[0].targetId, 'file:1');
 });
 
+test('first photo opens an import automatically and never queues paid analysis', async () => {
+  const fixture = createFixture();
+  await fixture.service.handleUpdate(messageUpdate(1, {
+    photo: [{ file_id: 'auto', file_unique_id: 'auto', width: 300, height: 300 }],
+    caption: 'Роза 9 шт',
+  }));
+  await fixture.service.waitForIdle();
+  assert.equal(fixture.repository.state.imports.length, 1);
+  assert.equal(fixture.stored.length, 1);
+  assert.equal(fixture.repository.state.notes[0].text, 'Роза 9 шт');
+  assert.equal(fixture.queued.length, 0);
+});
+
 test('duplicate Telegram updates and files are idempotent', async () => {
   const fixture = createFixture();
   await fixture.service.handleUpdate(messageUpdate(1, { text: '/import' }));

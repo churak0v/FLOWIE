@@ -1,12 +1,13 @@
 'use strict';
 
 const { getTelegramBouquetImportConfig, isAuthorized } = require('./telegramBouquetImport');
+const { bouquetKeyboard } = require('./telegramBouquetKeyboard');
 
 const REVIEW_STATUSES = ['REVIEW_REQUIRED', 'PARTIAL_REVIEW_REQUIRED'];
 const WELCOME = [
   'Добро пожаловать в FLOWIE.',
-  'Чтобы загрузить фотографии букетов, отправьте /import и следуйте подсказкам бота.',
-  'После разбора откройте подборку командой /review.',
+  'Просто присылайте фотографии букетов. Через минуту после последней фотографии спрошу, всё ли загружено. При желании начать загрузку вручную можно командой /import.',
+  'После разбора нажмите «Посмотреть результат» внизу или отправьте /review.',
   'Магазин: https://flowie.art',
   'Панель команды: https://admin.flowie.art',
 ].join('\n');
@@ -45,7 +46,9 @@ function createTelegramBouquetReviewHandler({ prisma, env = process.env, fetchIm
       const response = await fetchImpl(`${config.apiBase}/bot${config.token}/${method}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, ...payload }),
+        body: JSON.stringify({ chat_id: chatId, ...payload,
+          ...(method === 'sendMessage' ? { reply_markup: bouquetKeyboard(command === '/start' ? 'collecting' : 'review') } : {}),
+        }),
         signal: AbortSignal.timeout(15000),
       });
       const body = await response.json().catch(() => ({}));
