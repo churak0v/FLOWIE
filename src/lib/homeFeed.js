@@ -35,18 +35,18 @@ export function buildHomeFeed(products) {
     return selected;
   };
   const any = () => true;
-  const opening = take(any, 4);
+  const opening = take(any, 9);
   const photoBanner = take(any, 1)[0] || null;
-  const roses = take((product) => /(^|[^а-яё])роз[а-яё]*/iu.test(searchableText(product)), 5);
-  const premium = take((product) => Number(product.price) >= 7_000, 5);
+  const roses = take((product) => /(^|[^а-яё])роз[а-яё]*/iu.test(searchableText(product)), 9);
+  const premium = take((product) => Number(product.price) >= 7_000, 9);
   const byPrice = [...source].sort((left, right) => Number(left.price) - Number(right.price));
   const budgetPool = [
-    ...take((product) => meetsHomePriceFloor(product, 'from-7000'), 4, byPrice),
+    ...take((product) => meetsHomePriceFloor(product, 'from-7000'), 9, byPrice),
     ...take((product) => meetsHomePriceFloor(product, 'from-5000'), 5, byPrice),
     ...take((product) => meetsHomePriceFloor(product, 'from-3000'), 6, byPrice),
   ];
   const priceBanner = take(any, 1)[0] || null;
-  const more = take(any, 6);
+  const more = take(any, 9);
   return { opening, photoBanner, budgetPool, priceBanner, roses, premium, more };
 }
 
@@ -54,4 +54,14 @@ export function filterHomeBudgetProducts(products, filterId) {
   return (products || [])
     .filter((product) => meetsHomePriceFloor(product, filterId))
     .sort((left, right) => Number(left.price) - Number(right.price));
+}
+
+export function splitHomeSectionProducts(products) {
+  const source = Array.isArray(products) ? products : [];
+  const visibleProducts = source.slice(0, 5);
+  const reservedProducts = source.slice(5, 9);
+  return {
+    visibleProducts,
+    collageProducts: reservedProducts.length ? reservedProducts : visibleProducts.slice(0, 4),
+  };
 }

@@ -3,7 +3,7 @@ import { useAppState } from '../../state/AppState';
 import { Grid } from '../layout/Grid';
 import { ProductCard } from './ProductCard';
 
-export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMoreLabel = 'Показать ещё', view = 'grid' }) {
+export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMoreLabel = 'Показать ещё', view = 'grid', trailingCard = null }) {
   const navigate = useNavigate();
   const { actions } = useAppState();
   const shownProducts = typeof limit === 'number' ? (products || []).slice(0, limit) : (products || []);
@@ -26,6 +26,7 @@ export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMo
             onAdd={() => actions.addToCart(p.id, 1)}
           />
         ))}
+        {trailingCard}
       </Grid>
 
       {hasMore && showMoreHref ? (
