@@ -34,6 +34,21 @@ function rubles(value) {
   }).format(amount);
 }
 
+function registrationGiftForOrder(order, event) {
+  if (event !== 'ORDER_PAID') return null;
+  const firstPaidOrderId = order.user?.orders?.[0]?.id;
+  if (Number(firstPaidOrderId) !== Number(order.id)) return null;
+  return (order.user?.registrationGifts || []).find((row) => row.claimedAt && !row.fulfilledAt) || null;
+}
+
+function registrationGiftCallbackData(giftId, orderId) {
+  const gift = String(giftId || '').trim();
+  const order = Number(orderId);
+  if (!/^[a-zA-Z0-9_-]+$/.test(gift) || !Number.isSafeInteger(order) || order <= 0) return null;
+  const value = `registration_gift_fulfill:${gift}:${order}`;
+  return Buffer.byteLength(value, 'utf8') <= 64 ? value : null;
+}
+
 function formatOrderMessage(order, event) {
   const paid = event === 'ORDER_PAID';
   const title = `🆕 <b>Новый заказ №${order.id}</b>`;
@@ -47,9 +62,8 @@ function formatOrderMessage(order, event) {
   const deliveryTime = order.askRecipientTime
     ? 'уточнить у получателя'
     : (order.deliveryTime || 'не указано');
-  const firstPaidOrderId = order.user?.orders?.[0]?.id;
-  const gift = (order.user?.registrationGifts || []).find((row) => row.claimedAt && !row.fulfilledAt);
-  const giftLine = paid && Number(firstPaidOrderId) === Number(order.id) && gift
+  const gift = registrationGiftForOrder(order, event);
+  const giftLine = gift
     ? `🎁 <b>Подарок за регистрацию:</b> ${escapeHtml(gift.giftName)} × ${Number(gift.giftQuantity || 1)} — добавить к этому заказу`
     : null;
 
@@ -93,6 +107,10 @@ function retryDelayMs(attempt) {
 async function sendTelegramMessage(notification, env = process.env, fetchImpl = fetch) {
   const { token, adminUrl, apiBase } = getConfig(env);
   if (!token) throw new Error('TELEGRAM_ORDER_BOT_TOKEN_MISSING');
+  const gift = registrationGiftForOrder(notification.order, notification.event);
+  const giftCallback = gift ? registrationGiftCallbackData(gift.id, notification.orderId) : null;
+  const inlineKeyboard = [[{ text: 'Открыть заказ', url: `${adminUrl}/orders/${notification.orderId}` }]];
+  if (giftCallback) inlineKeyboard.push([{ text: 'Подарок передан', callback_data: giftCallback }]);
   const response = await fetchImpl(`${apiBase}/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -102,7 +120,7 @@ async function sendTelegramMessage(notification, env = process.env, fetchImpl = 
       parse_mode: 'HTML',
       disable_web_page_preview: true,
       reply_markup: {
-        inline_keyboard: [[{ text: 'Открыть заказ', url: `${adminUrl}/orders/${notification.orderId}` }]],
+        inline_keyboard: inlineKeyboard,
       },
     }),
   });
@@ -215,5 +233,7 @@ module.exports = {
   parseChatIds,
   processPending,
   sendTelegramMessage,
+  registrationGiftCallbackData,
+  registrationGiftForOrder,
   startTelegramOrderNotifications,
 };

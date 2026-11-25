@@ -89,6 +89,39 @@ test('sends a Telegram message with a direct admin order button', async () => {
   assert.equal(payload.reply_markup.inline_keyboard[0][0].url, 'https://admin.flowie.art/orders/42');
 });
 
+test('adds an idempotent fulfillment callback only for the first paid order gift', async () => {
+  let payload;
+  const order = {
+    id: 42,
+    totalPrice: 10000,
+    items: [],
+    user: {
+      orders: [{ id: 42 }],
+      registrationGifts: [{ id: 'gift_abc-1', giftName: 'Raffaello', giftQuantity: 1, claimedAt: new Date(), fulfilledAt: null }],
+    },
+  };
+  await sendTelegramMessage({ orderId: 42, chatId: '100', event: 'ORDER_PAID', order }, {
+    TELEGRAM_ORDER_BOT_TOKEN: 'secret-token',
+    TELEGRAM_ORDER_CHAT_IDS: '100',
+  }, async (_url, options) => {
+    payload = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ ok: true, result: { message_id: 1 } }) };
+  });
+  assert.deepEqual(payload.reply_markup.inline_keyboard[1], [{
+    text: 'Подарок передан',
+    callback_data: 'registration_gift_fulfill:gift_abc-1:42',
+  }]);
+
+  order.id = 43;
+  await sendTelegramMessage({ orderId: 43, chatId: '100', event: 'ORDER_PAID', order }, {
+    TELEGRAM_ORDER_BOT_TOKEN: 'secret-token', TELEGRAM_ORDER_CHAT_IDS: '100',
+  }, async (_url, options) => {
+    payload = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ ok: true, result: { message_id: 2 } }) };
+  });
+  assert.equal(payload.reply_markup.inline_keyboard.length, 1);
+});
+
 test('uses a configured Telegram relay base URL', async () => {
   let requestUrl;
   await sendTelegramMessage({ orderId: 7, chatId: '100', event: 'ORDER_PAID', order: { id: 7, totalPrice: 1, items: [] } }, {

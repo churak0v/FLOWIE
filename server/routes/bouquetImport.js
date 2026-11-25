@@ -6,10 +6,22 @@ const { createBouquetImportRepository } = require('../services/bouquetImportRepo
 const { createTelegramBouquetRecipeHandler } = require('../services/telegramBouquetRecipe');
 const { createTelegramBouquetReviewHandler } = require('../services/telegramBouquetReview');
 const { createTelegramBouquetCardActionsHandler } = require('../services/telegramBouquetCardActions');
+const { fulfillRegistrationGift } = require('../services/registrationGift');
+
+function parseTelegramStaffIds(value) {
+  return new Set(String(value || '').split(',').map((item) => item.trim()).filter((item) => /^\d+$/.test(item)));
+}
+
+function parseRegistrationGiftCallback(value) {
+  const match = /^registration_gift_fulfill:([a-zA-Z0-9_-]+):([1-9]\d*)$/.exec(String(value || ''));
+  const orderId = Number(match?.[2]);
+  return match && Number.isSafeInteger(orderId) ? { giftId: match[1], orderId } : null;
+}
 
 function createBouquetImportRouter({
   prisma, storage, env = process.env, fetchImpl = fetch,
   repository: injectedRepository, service: injectedService,
+  giftFulfillment = fulfillRegistrationGift,
 }) {
   const router = express.Router();
   const recipeHandler = prisma ? createTelegramBouquetRecipeHandler({ prisma, env, fetchImpl }) : async () => ({ handled: false });
@@ -27,6 +39,35 @@ function createBouquetImportRouter({
     if (!secret || !crypto.timingSafeEqual(digest(actual), digest(secret))) return res.sendStatus(403);
     try {
       req.body = normalizeBouquetUpdate(req.body);
+      const callback = req.body.callback_query;
+      const giftAction = parseRegistrationGiftCallback(callback?.data);
+      if (giftAction) {
+        const staffId = String(callback?.from?.id || '');
+        if (!parseTelegramStaffIds(env.TELEGRAM_ORDER_STAFF_IDS).has(staffId)) return res.json({ ok: true });
+        const result = await giftFulfillment({
+          prisma,
+          giftId: giftAction.giftId,
+          orderId: giftAction.orderId,
+          fulfilledById: null,
+          note: `telegram:${staffId}`,
+        });
+        const token = env.TELEGRAM_ORDER_BOT_TOKEN;
+        const base = String(env.TELEGRAM_ORDER_API_BASE || 'https://api.telegram.org').replace(/\/$/, '');
+        const callbackText = result.error === 'ORDER_NOT_DELIVERED'
+          ? 'Сначала отметьте заказ доставленным.'
+          : result.error
+            ? 'Подарок пока нельзя отметить переданным.'
+            : result.replayed
+              ? 'Подарок уже отмечен как переданный.'
+              : 'Подарок отмечен как переданный.';
+        const response = await fetchImpl(`${base}/bot${token}/answerCallbackQuery`, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ callback_query_id: callback.id, text: callbackText, show_alert: Boolean(result.error) }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!response.ok) throw new Error('TELEGRAM_ANSWERCALLBACKQUERY_FAILED');
+        return res.json({ ok: true });
+      }
       const cardAction = await cardActionsHandler(req.body);
       if (cardAction.handled) {
         if (cardAction.status === 'merge_saved' && env.FLOWIE_IMPORT_MATERIALIZE_PRODUCTS === 'true') {
@@ -91,4 +132,4 @@ function createBouquetImportRouter({
   return router;
 }
 
-module.exports = { createBouquetImportRouter };
+module.exports = { createBouquetImportRouter, parseRegistrationGiftCallback, parseTelegramStaffIds };
