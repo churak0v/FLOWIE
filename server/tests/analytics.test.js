@@ -107,6 +107,17 @@ test('unknown events, fields, metadata and client trusted markers are rejected',
   }
 });
 
+test('gift picker accepts only controlled non-photo metadata', () => {
+  const normalized = normalizeClientEvent(payload({
+    event: 'gift_picker_results_view',
+    meta: { path: '/mothers-day/picker', source: 'photo', styleCode: 'soft', resultCount: 6, tierCoverage: '3' },
+  }));
+  assert.equal(normalized.meta.path, '/mothers-day/picker');
+  assert.equal(normalized.meta.source, 'photo');
+  assert.equal(normalized.meta.resultCount, 6);
+  assert.throws(() => normalizeClientEvent(payload({ event: 'gift_picker_photo_selected', meta: { filename: 'private.jpg' } })), AnalyticsValidationError);
+});
+
 test('eventId and sessionId are mandatory and commerce identifiers are positive integers', () => {
   assert.throws(() => normalizeClientEvent(payload({ eventId: undefined })), (error) => error.code === 'BAD_EVENT_ID');
   assert.throws(() => normalizeClientEvent(payload({ sessionId: undefined })), (error) => error.code === 'BAD_SESSION_ID');

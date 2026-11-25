@@ -4,6 +4,11 @@ export const MOTHERS_DAY_COLLECTION_SLUG = 'день-матери';
 export const MOTHERS_DAY_VALUE_PRODUCT_IDS = [75, 70];
 export const MOTHERS_DAY_FALLBACK_PRODUCT_IDS = [55, 3, 2, 20, 35, 34, 33, 36, 32, 37, 57, 54, 41, 29, 7];
 export const MOTHERS_DAY_PRODUCT_LIMIT = 10;
+export const MOTHERS_DAY_PRICE_TIERS = [
+  { id: 'under-5000', label: 'до 5 000 ₽', min: 0, max: 5_000 },
+  { id: '5001-6999', label: '5 001–6 999 ₽', min: 5_001, max: 6_999 },
+  { id: 'from-7000', label: 'от 7 000 ₽', min: 7_000, max: Infinity },
+];
 
 function localDayNumber(now) {
   return (now.getFullYear() * 10_000) + ((now.getMonth() + 1) * 100) + now.getDate();
@@ -55,13 +60,7 @@ export function selectMothersDayProducts(products, collections, heroImage = '', 
 }
 
 export function getMothersDayPriceTiers(products) {
-  const tiers = [
-    { id: 'under-5000', label: 'до 5 000 ₽', min: 0, max: 5_000 },
-    { id: '5001-6999', label: '5 001–6 999 ₽', min: 5_001, max: 6_999 },
-    { id: 'from-7000', label: 'от 7 000 ₽', min: 7_000, max: Infinity },
-  ];
-
-  return tiers.map((tier) => ({
+  return MOTHERS_DAY_PRICE_TIERS.map((tier) => ({
     ...tier,
     count: (products || []).filter((product) => Number(product?.price) >= tier.min && Number(product?.price) <= tier.max).length,
   })).filter((tier) => tier.count > 0);

@@ -134,6 +134,15 @@ test('behavior payload includes stable page context and rejects arbitrary taxono
   assert.equal(rejectedDimension.meta?.sectionKey, undefined);
 });
 
+test('gift picker events expose controlled dimensions only and validate on the server', () => {
+  const payload = sanitizeAnalyticsPayload('gift_picker_results_view', {
+    meta: { source: 'photo', styleCode: 'soft', resultCount: 6, tierCoverage: '3', filename: 'mother.jpg' },
+  });
+  assert.deepEqual(payload.meta, { source: 'photo', styleCode: 'soft', tierCoverage: '3', resultCount: 6 });
+  assert.equal(JSON.stringify(payload).includes('mother.jpg'), false);
+  assert.doesNotThrow(() => normalizeClientEvent(payload));
+});
+
 test('records a confirmed purchase once per order in the same browser', () => {
   const localStorage = memoryStorage();
   const restoreStorage = replaceGlobal('localStorage', localStorage);

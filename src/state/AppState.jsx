@@ -556,6 +556,9 @@ export function AppStateProvider({ children }) {
         image: cover || images[0] || '',
         images,
         description: p.description || '',
+        color: String(p.color || ''),
+        tags: String(p.tags || ''),
+        sort: Number(p.sort || 0),
         composition: toUiComposition(p.composition),
         size: toUiSize(p.width, p.height),
         categoryId: p.categoryId ?? null,
@@ -633,7 +636,7 @@ export function AppStateProvider({ children }) {
 
       // products
       loadProducts: async () => {
-        const cacheKey = 'products_ui_v12_ru_rub';
+        const cacheKey = 'products_ui_v13_ru_rub';
         const cached = readCacheEntry(cacheKey);
         const cachedItems = Array.isArray(cached?.data) ? cached.data : null;
         if (cachedItems?.length) {

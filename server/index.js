@@ -60,6 +60,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/delivery', deliveryRoutes);
 app.use('/api/delivery', require('./routes/deliveryMaps'));
 app.use('/api/search', require('./routes/search'));
+app.use('/api/gift-picker', require('./routes/giftPicker'));
 	app.use('/api/upload', uploadRoutes);
 	app.use('/api/chats', chatsRoutes);
 	app.use('/api/recipients', recipientsRoutes);

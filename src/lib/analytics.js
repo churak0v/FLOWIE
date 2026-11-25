@@ -30,6 +30,15 @@ const ALLOWED_EVENTS = new Set([
   'banner_click',
   'product_card_view',
   'product_card_click',
+  'gift_picker_view',
+  'gift_picker_photo_selected',
+  'gift_picker_photo_processed',
+  'gift_picker_manual_started',
+  'gift_picker_results_view',
+  'gift_picker_product_open',
+  'gift_picker_cart_add',
+  'gift_picker_reset',
+  'gift_picker_error',
 ]);
 
 const META_LIMITS = {
@@ -52,6 +61,9 @@ const META_LIMITS = {
   placementKey: 48,
   routeKey: 64,
   deviceClass: 12,
+  source: 16,
+  styleCode: 16,
+  tierCoverage: 8,
 };
 
 const ATTRIBUTION_KEYS = ['path', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'yclid', 'mt_click_id', 'referrerHost'];
@@ -76,6 +88,15 @@ const EVENT_META_KEYS = {
   banner_click: new Set([...ATTRIBUTION_KEYS, 'bannerId', 'placementKey', 'position', 'routeKey', 'deviceClass']),
   product_card_view: new Set([...ATTRIBUTION_KEYS, 'placementKey', 'position', 'routeKey', 'deviceClass']),
   product_card_click: new Set([...ATTRIBUTION_KEYS, 'placementKey', 'position', 'routeKey', 'deviceClass']),
+  gift_picker_view: new Set([...ATTRIBUTION_KEYS, 'source']),
+  gift_picker_photo_selected: new Set([...ATTRIBUTION_KEYS, 'source']),
+  gift_picker_photo_processed: new Set([...ATTRIBUTION_KEYS, 'source', 'styleCode']),
+  gift_picker_manual_started: new Set([...ATTRIBUTION_KEYS, 'source']),
+  gift_picker_results_view: new Set([...ATTRIBUTION_KEYS, 'source', 'styleCode', 'resultCount', 'tierCoverage']),
+  gift_picker_product_open: new Set([...ATTRIBUTION_KEYS, 'source']),
+  gift_picker_cart_add: new Set([...ATTRIBUTION_KEYS, 'source']),
+  gift_picker_reset: new Set([...ATTRIBUTION_KEYS, 'source']),
+  gift_picker_error: new Set([...ATTRIBUTION_KEYS, 'source', 'errorCode']),
 };
 
 const MAX_QUEUE_SIZE = 40;
@@ -346,8 +367,10 @@ export function trackAnalytics(event, input = {}, options = {}) {
 
   if (queue.length >= MAX_QUEUE_SIZE) queue.shift();
   queue.push({ payload, attempts: 0 });
-  sendYandexMetricaEvent(event, payload);
-  sendVkPixelEvent(event, payload);
+  if (!options.firstPartyOnly) {
+    sendYandexMetricaEvent(event, payload);
+    sendVkPixelEvent(event, payload);
+  }
   scheduleFlush();
   return true;
 }

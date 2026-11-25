@@ -21,6 +21,15 @@ const CLIENT_EVENTS = new Set([
   'banner_click',
   'product_card_view',
   'product_card_click',
+  'gift_picker_view',
+  'gift_picker_photo_selected',
+  'gift_picker_photo_processed',
+  'gift_picker_manual_started',
+  'gift_picker_results_view',
+  'gift_picker_product_open',
+  'gift_picker_cart_add',
+  'gift_picker_reset',
+  'gift_picker_error',
 ]);
 
 const SERVER_EVENTS = new Set(['order_created', 'payment_success']);
@@ -50,12 +59,22 @@ const EVENT_META_FIELDS = {
   banner_click: new Set([...COMMON_ATTRIBUTION_FIELDS, 'bannerId', 'placementKey', 'position', 'routeKey', 'deviceClass']),
   product_card_view: new Set([...COMMON_ATTRIBUTION_FIELDS, 'placementKey', 'position', 'routeKey', 'deviceClass']),
   product_card_click: new Set([...COMMON_ATTRIBUTION_FIELDS, 'placementKey', 'position', 'routeKey', 'deviceClass']),
+  gift_picker_view: new Set([...COMMON_ATTRIBUTION_FIELDS, 'source']),
+  gift_picker_photo_selected: new Set([...COMMON_ATTRIBUTION_FIELDS, 'source']),
+  gift_picker_photo_processed: new Set([...COMMON_ATTRIBUTION_FIELDS, 'source', 'styleCode']),
+  gift_picker_manual_started: new Set([...COMMON_ATTRIBUTION_FIELDS, 'source']),
+  gift_picker_results_view: new Set([...COMMON_ATTRIBUTION_FIELDS, 'source', 'styleCode', 'resultCount', 'tierCoverage']),
+  gift_picker_product_open: new Set([...COMMON_ATTRIBUTION_FIELDS, 'source']),
+  gift_picker_cart_add: new Set([...COMMON_ATTRIBUTION_FIELDS, 'source']),
+  gift_picker_reset: new Set([...COMMON_ATTRIBUTION_FIELDS, 'source']),
+  gift_picker_error: new Set([...COMMON_ATTRIBUTION_FIELDS, 'source', 'errorCode']),
 };
 
-const PRODUCT_EVENTS = new Set(['product_view', 'favorite_add', 'favorite_remove', 'cart_add', 'cart_remove', 'product_card_view', 'product_card_click']);
+const PRODUCT_EVENTS = new Set(['product_view', 'favorite_add', 'favorite_remove', 'cart_add', 'cart_remove', 'product_card_view', 'product_card_click', 'gift_picker_product_open', 'gift_picker_cart_add']);
 const SECTION_KEYS = new Set(['hero', 'mothers_day', 'quick_picks', 'active_orders', 'frequently_ordered', 'catalog_results', 'product_details', 'cart_items', 'checkout_form', 'payment_status']);
 const ELEMENT_KEYS = new Set(['hero_cta', 'mothers_day_cta', 'quick_pick', 'product_card', 'product_add', 'mini_cart', 'nav_home', 'nav_catalog', 'nav_favorites', 'nav_recipients', 'nav_account', 'cart_checkout', 'checkout_submit', 'payment_retry']);
 const PLACEMENT_KEYS = new Set(['home_hero', 'home_mothers_day', 'home_quick_picks', 'home_recommendations', 'catalog_grid', 'catalog_list', 'product_recommendations', 'recipient_recommendations', 'cart', 'checkout', 'payment', 'bottom_nav', 'floating']);
+const GIFT_PICKER_EVENTS = new Set([...CLIENT_EVENTS].filter((event) => event.startsWith('gift_picker_')));
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9:_-]{7,95}$/;
 const SAFE_CODE_RE = /^[A-Za-z0-9_.:-]{1,80}$/;
 
@@ -122,7 +141,7 @@ function normalizePath(value) {
     const parsed = new URL(raw, 'https://flowie.invalid');
     const path = parsed.pathname.replace(/\/{2,}/g, '/') || '/';
     const exact = new Set([
-      '/', '/catalog', '/shop', '/cart', '/checkout', '/favorites', '/recipients', '/account', '/mothers-day',
+      '/', '/catalog', '/shop', '/cart', '/checkout', '/favorites', '/recipients', '/account', '/mothers-day', '/mothers-day/picker',
       '/legal/privacy', '/legal/consent', '/legal/offer', '/success',
     ]);
     if (exact.has(path)) return path;
@@ -221,6 +240,11 @@ function normalizeMeta(event, input, sessionId) {
     const code = boundedString(meta.errorCode, 80, 'BAD_ERROR_CODE');
     if (!SAFE_CODE_RE.test(code)) throw new AnalyticsValidationError('BAD_ERROR_CODE');
     out.errorCode = code;
+  }
+  if (GIFT_PICKER_EVENTS.has(event)) {
+    if (meta.source != null) out.source = safeToken(meta.source, 16, 'BAD_PICKER_SOURCE');
+    if (meta.styleCode != null) out.styleCode = safeToken(meta.styleCode, 16, 'BAD_PICKER_STYLE');
+    if (meta.tierCoverage != null) out.tierCoverage = safeToken(meta.tierCoverage, 8, 'BAD_TIER_COVERAGE');
   }
   for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']) {
     if (meta[key] != null) out[key] = redactAttributionDimension(key, meta[key], meta.utm_source);
