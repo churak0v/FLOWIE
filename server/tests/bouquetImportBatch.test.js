@@ -3,7 +3,20 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const sharp = require('sharp');
-const { composeImportNotes, createBouquetBatchSubmitter, prepareBouquetImportBatch } = require('../services/bouquetImportBatch');
+const { composeImportNotes, createBouquetBatchSubmitter, createOpenAIBatchProvider, prepareBouquetImportBatch } = require('../services/bouquetImportBatch');
+
+test('ordinary photo requests use configured relay and preserve response usage', async () => {
+  const body = { model: 'gpt-6-luna', input: 'photo draft' };
+  const provider = createOpenAIBatchProvider({ apiKey: 'test-only', baseUrl: 'https://relay.example/flowie-openai', fetchImpl: async (url, init) => {
+    assert.equal(url, 'https://relay.example/flowie-openai/v1/responses');
+    assert.equal(init.method, 'POST');
+    assert.equal(init.headers['idempotency-key'], 'photo-1');
+    assert.deepEqual(JSON.parse(init.body), body);
+    return { ok: true, json: async () => ({ id: 'r1', usage: { input_tokens: 100, output_tokens: 40 } }) };
+  } });
+  const response = await provider.respond({ body, idempotencyKey: 'photo-1' });
+  assert.equal(response.usage.input_tokens, 100);
+});
 
 test('prepares one low-detail request per unique original only after finalization', async () => {
   const original = await sharp({ create: { width: 20, height: 20, channels: 3, background: '#ee7799' } }).png().toBuffer();

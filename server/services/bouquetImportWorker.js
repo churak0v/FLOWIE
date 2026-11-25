@@ -4,12 +4,13 @@ const { DEFAULT_MODEL, prepareBouquetImportBatch } = require('./bouquetImportBat
 const { isImportSettled } = require('./bouquetImportRepository');
 const { getTelegramBouquetImportConfig } = require('./telegramBouquetImport');
 
-const ACTIVE_STATUSES = ['PREPARING', 'SUBMITTING', 'POLLING'];
+const ACTIVE_STATUSES = ['PREPARING', 'SUBMITTING', 'POLLING', 'PROCESSING_SYNC'];
 const PROVIDER_PENDING = new Set(['validating', 'in_progress', 'finalizing', 'cancelling']);
 const PROVIDER_TERMINAL_FAILURE = new Set(['failed', 'expired', 'cancelled']);
 // Normalizing a finalized import can legitimately take several minutes for a large
 // set. Keep the crash lease comfortably above provider and image-operation bounds.
 const DEFAULT_STALE_PHASE_MS = 30 * 60_000;
+const SYNC_STALE_PHASE_MS = 2 * 60_000;
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value || {}));
@@ -17,6 +18,15 @@ function clone(value) {
 
 function safeError(error) {
   return String(error?.code || error?.message || error || 'unknown').slice(0, 300);
+}
+
+function aiMode(env) {
+  return String(env.FLOWIE_IMPORT_AI_MODE || 'sync').trim().toLowerCase() === 'batch' ? 'batch' : 'sync';
+}
+
+function syncConcurrency(env) {
+  const parsed = Number(env.FLOWIE_IMPORT_AI_CONCURRENCY || 2);
+  return Number.isSafeInteger(parsed) && parsed >= 1 ? Math.min(parsed, 3) : 2;
 }
 
 function manifestOf(prepared) {
@@ -115,7 +125,8 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
       const active = await tx.bouquetImportBatch.findFirst({ where: { status: { in: ACTIVE_STATUSES } }, orderBy: { updatedAt: 'asc' } });
       if (active) {
         const age = now().getTime() - new Date(active.updatedAt || 0).getTime();
-        const leaseMs = active.status === 'PREPARING' ? stalePhaseMs
+        const leaseMs = active.status === 'PROCESSING_SYNC' ? SYNC_STALE_PHASE_MS
+          : active.status === 'PREPARING' ? stalePhaseMs
           : Math.min(stalePhaseMs, active.status === 'POLLING' ? 90000 : 120000);
         if (age < leaseMs) return null;
         const recovery = active.status === 'SUBMITTING' ? 'UNCERTAIN'
@@ -125,6 +136,16 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
         if (active.status === 'SUBMITTING') {
           state.aiBatch ||= {};
           state.aiBatch.submissionState = 'UNCERTAIN';
+        }
+        if (active.status === 'PROCESSING_SYNC') {
+          state.syncResponses ||= {};
+          for (const response of Object.values(state.syncResponses)) {
+            if (response?.status === 'RUNNING') {
+              response.status = 'UNCERTAIN';
+              response.error = 'WORKER_INTERRUPTED';
+              response.finishedAt = now().toISOString();
+            }
+          }
         }
         await tx.bouquetImportBatch.update({ where: { id: active.id }, data: { status: recovery, state } });
         return { recovered: active.id, status: recovery };
@@ -140,8 +161,8 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
         }
       }
       let row = await tx.bouquetImportBatch.findFirst({ where: { status: 'QUEUED' }, orderBy: { createdAt: 'asc' } });
-      let nextStatus = 'PREPARING';
-      if (!row && env.BOUQUET_IMPORT_AI_BATCH_ENABLED === 'true') {
+      let nextStatus = aiMode(env) === 'sync' ? 'PROCESSING_SYNC' : 'PREPARING';
+      if (!row && aiMode(env) === 'batch' && env.BOUQUET_IMPORT_AI_BATCH_ENABLED === 'true') {
         row = await tx.bouquetImportBatch.findFirst({ where: { status: 'PREPARED' }, orderBy: { createdAt: 'asc' } });
       }
       if (!row) {
@@ -158,6 +179,18 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
 
   async function persist(id, status, state) {
     return prisma.bouquetImportBatch.update({ where: { id }, data: { status, state } });
+  }
+
+  async function mutateState(id, callback) {
+    return prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `bouquet-import:${id}`);
+      const latest = await tx.bouquetImportBatch.findUnique({ where: { id } });
+      if (!latest) throw new Error('BOUQUET_IMPORT_NOT_FOUND');
+      const state = clone(latest.state);
+      const result = await callback(state, latest, tx);
+      await tx.bouquetImportBatch.update({ where: { id }, data: { state, status: latest.status } });
+      return { state, result };
+    });
   }
 
   async function prepare(row, forSubmission) {
@@ -202,6 +235,40 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
     }
   }
 
+  async function persistParsed(row, parsed, details = {}) {
+    const status = parsed.complete ? 'REVIEW_REQUIRED' : 'PARTIAL_REVIEW_REQUIRED';
+    return prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', `bouquet-import:${row.id}`);
+      const latest = await tx.bouquetImportBatch.findUnique({ where: { id: row.id } });
+      if (!latest) throw new Error('BOUQUET_IMPORT_NOT_FOUND');
+      const state = clone(latest.state);
+      state.drafts = parsed.drafts;
+      if (details.mode === 'sync') {
+        state.syncCompletedAt = now().toISOString();
+        state.syncErrors = parsed.errors;
+      } else {
+        state.aiBatch ||= {};
+        state.aiBatch.outputFileId = details.outputFileId;
+        state.aiBatch.outputErrors = parsed.errors;
+        state.aiBatch.completedAt = now().toISOString();
+      }
+      for (const draft of parsed.drafts) {
+        const lines = confirmedLinesFor(state, draft.photoIds);
+        draft.needsComposition = lines.length === 0;
+        const recipe = await tx.bouquetRecipe.create({ data: {
+          importId: row.id,
+          name: draft.draft_name || 'Bouquet draft',
+          lines,
+          costs: {},
+          confirmedAt: null,
+        } });
+        draft.recipeId = recipe.id;
+      }
+      await tx.bouquetImportBatch.update({ where: { id: row.id }, data: { status, state } });
+      return { status, id: row.id, drafts: parsed.drafts.length };
+    });
+  }
+
   async function finish(row, providerBatch) {
     const state = clone(row.state);
     state.aiBatch ||= {};
@@ -224,27 +291,91 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
     }
 
     const parsed = parseBatchOutput(await provider.downloadOutput(providerBatch.output_file_id), state.aiBatch.manifest || []);
-    state.drafts = parsed.drafts;
-    state.aiBatch.outputFileId = providerBatch.output_file_id;
-    state.aiBatch.outputErrors = parsed.errors;
-    state.aiBatch.completedAt = now().toISOString();
-    const status = parsed.complete ? 'REVIEW_REQUIRED' : 'PARTIAL_REVIEW_REQUIRED';
-    await prisma.$transaction(async (tx) => {
-      for (const draft of parsed.drafts) {
-        const lines = confirmedLinesFor(state, draft.photoIds);
-        draft.needsComposition = lines.length === 0;
-        const recipe = await tx.bouquetRecipe.create({ data: {
-          importId: row.id,
-          name: draft.draft_name || 'Bouquet draft',
-          lines,
-          costs: {},
-          confirmedAt: null,
-        } });
-        draft.recipeId = recipe.id;
-      }
-      await tx.bouquetImportBatch.update({ where: { id: row.id }, data: { status, state } });
+    return persistParsed(row, parsed, { mode: 'batch', outputFileId: providerBatch.output_file_id });
+  }
+
+  async function processSync(row) {
+    const prepared = await prepareBouquetImportBatch({
+      importId: row.id,
+      state: 'FINALIZED',
+      photos: photosFrom(row),
+      storage,
+      model: String(env.FLOWIE_IMPORT_BATCH_MODEL || DEFAULT_MODEL).trim(),
     });
-    return { status, id: row.id, drafts: parsed.drafts.length };
+    const manifest = manifestOf(prepared);
+    await mutateState(row.id, (state) => {
+      state.syncModel = prepared.model;
+      state.syncManifest = manifest;
+      state.syncStartedAt ||= now().toISOString();
+      state.syncResponses ||= {};
+      for (const response of Object.values(state.syncResponses)) {
+        if (response?.status === 'RUNNING') {
+          response.status = 'UNCERTAIN';
+          response.error = 'WORKER_INTERRUPTED';
+          response.finishedAt = now().toISOString();
+        }
+      }
+    });
+
+    let cursor = 0;
+    async function consume() {
+      while (cursor < prepared.entries.length) {
+        const entry = prepared.entries[cursor++];
+        const customId = entry.request.custom_id;
+        const claimResult = await mutateState(row.id, (state) => {
+          state.syncResponses ||= {};
+          if (state.syncResponses[customId]) return false;
+          state.syncResponses[customId] = {
+            status: 'RUNNING',
+            photoIds: [...entry.photoIds],
+            originalSha256: entry.originalSha256,
+            startedAt: now().toISOString(),
+          };
+          return true;
+        });
+        if (!claimResult.result) continue;
+        try {
+          const response = await provider.respond({
+            body: entry.request.body,
+            idempotencyKey: `${prepared.sha256}:${customId}`,
+          });
+          await mutateState(row.id, (state) => {
+            state.syncResponses[customId] = {
+              ...state.syncResponses[customId],
+              status: 'DONE',
+              response,
+              usage: response?.usage || null,
+              finishedAt: now().toISOString(),
+            };
+          });
+        } catch (error) {
+          const explicitHttp = Number.isInteger(error?.status) && error.status >= 400;
+          await mutateState(row.id, (state) => {
+            state.syncResponses[customId] = {
+              ...state.syncResponses[customId],
+              status: explicitHttp ? 'FAILED' : 'UNCERTAIN',
+              error: safeError(error),
+              ...(explicitHttp ? { httpStatus: error.status } : {}),
+              finishedAt: now().toISOString(),
+            };
+          });
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: syncConcurrency(env) }, () => consume()));
+
+    const latest = await prisma.bouquetImportBatch.findUnique({ where: { id: row.id } });
+    const responses = latest?.state?.syncResponses || {};
+    const lines = [];
+    for (const item of manifest) {
+      const result = responses[item.customId];
+      if (result?.status === 'DONE') {
+        lines.push(JSON.stringify({ custom_id: item.customId, response: { status_code: 200, body: result.response } }));
+      } else if (result?.status === 'FAILED') {
+        lines.push(JSON.stringify({ custom_id: item.customId, error: { code: 'sync_request_failed' } }));
+      }
+    }
+    return persistParsed(row, parseBatchOutput(lines.join('\n'), manifest), { mode: 'sync' });
   }
 
   async function runOnce() {
@@ -260,6 +391,18 @@ function createBouquetImportWorker({ prisma, storage, provider, env = process.en
           const state = clone(row.state); state.aiBatch ||= {}; state.aiBatch.pollError = safeError(error);
           await persist(row.id, 'WAITING_PROVIDER', state);
           return { status: 'WAITING_PROVIDER', id: row.id };
+        }
+      }
+      if (row.status === 'PROCESSING_SYNC') {
+        try {
+          return await processSync(row);
+        } catch (error) {
+          const latest = await prisma.bouquetImportBatch.findUnique({ where: { id: row.id } });
+          const state = clone(latest?.state || row.state);
+          state.syncPrepareError = safeError(error);
+          state.syncPrepareFailedAt = now().toISOString();
+          await persist(row.id, 'PREPARE_FAILED', state);
+          return { status: 'PREPARE_FAILED', id: row.id };
         }
       }
       try {

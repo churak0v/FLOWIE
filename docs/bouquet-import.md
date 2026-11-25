@@ -16,7 +16,8 @@ Import is limited to explicitly configured numeric Telegram chat/user IDs. Adeli
    confirmation requires the current intake revision. Failed downloads block
    analysis; `/import_retry` retries failed/stale downloads. Old inline callbacks
    remain accepted for compatibility but new inline action buttons are not sent.
-4. A durable worker prepares an OpenAI Batch only after finalization. Exact-byte
+4. A durable worker sends ordinary OpenAI Responses requests only after finalization,
+   with two photos processed concurrently by default. Exact-byte
    duplicates cost one image request. Albums are transport groups, not bouquets.
    Similar but non-identical photos are not automatically merged in this version.
 5. The bot sends a ready notification to the uploading chat. The bottom buttons
@@ -51,17 +52,20 @@ Supplier price files will be parsed separately when supplied by the owner.
 
 Required environment is in compose.production.yml and bouquet-import-storage.md.
 `FLOWIE_BOUQUET_IMPORT_ENABLED` mounts the webhook, and
-`BOUQUET_IMPORT_AI_BATCH_ENABLED` enables paid submission after the florist's finish
-confirmation. `OPENAI_API_KEY` and backup S3 credentials are server-only.
+`FLOWIE_IMPORT_AI_MODE=sync` selects fast ordinary requests after the florist's finish
+confirmation. `FLOWIE_IMPORT_AI_CONCURRENCY` defaults to 2 and is capped at 3.
+Legacy Batch submission requires both mode `batch` and
+`BOUQUET_IMPORT_AI_BATCH_ENABLED=true`. `OPENAI_API_KEY` and backup S3 credentials are server-only.
 
 Originals stay private under `flowie-import/` in the explicitly approved backup
 bucket `speka-production-backups-20261116`. No bucket policy, lifecycle, media bucket,
-or existing SPEKA objects are changed. Normalized 768px JPEGs go to Batch; original
+or existing SPEKA objects are changed. Normalized 768px JPEGs go to OpenAI; original
 photos are preserved. HEIC conversion depends on the installed sharp/libvips codecs;
 normal Telegram photos arrive as JPEG and avoid this compatibility issue.
 
-Batch completion can take up to 24 hours. Uncertain submission is locked for manual
-reconciliation instead of retrying a potentially paid batch. Partial results and
+Each photo's response and token usage are persisted as it finishes. Interrupted or
+uncertain requests are locked for manual reconciliation instead of being submitted
+again automatically. Legacy Batch completion can take up to 24 hours. Partial results and
 failed conversions are explicit states. Prisma's additive migration must precede
 API recreation. Existing frontend/admin images can remain running.
 

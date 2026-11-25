@@ -150,6 +150,13 @@ function createOpenAIBatchProvider({ apiKey, fetchImpl = globalThis.fetch, baseU
       if (!batch.id) throw new Error('BOUQUET_IMPORT_BATCH_ID_MISSING');
       return { providerFileId: file.id, providerBatchId: batch.id };
     },
+    async respond({ body, idempotencyKey }) {
+      return json(await request(`${baseUrl}/v1/responses`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json', 'idempotency-key': idempotencyKey },
+        body: JSON.stringify(body),
+      }), 'RESPONSE');
+    },
     async retrieve(providerBatchId) {
       return json(await request(`${baseUrl}/v1/batches/${encodeURIComponent(providerBatchId)}`, {
         headers: { authorization: `Bearer ${apiKey}` },

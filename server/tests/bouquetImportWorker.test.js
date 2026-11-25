@@ -15,6 +15,7 @@ function fakePrisma(rows) {
   }
   const bouquetImportBatch = {
     async findFirst({ where }) { return rows.filter((row) => matchesStatus(row, where))[0] || null; },
+    async findUnique({ where }) { return rows.find((row) => row.id === where.id) || null; },
     async updateMany({ where, data }) {
       const row = rows.find((item) => item.id === where.id && item.status === where.status);
       if (!row) return { count: 0 };
@@ -64,7 +65,7 @@ test('promotes settled finalized uploads only after the Telegram backlog drains'
   let pending = 8;
   const bytes = await image();
   const worker = createBouquetImportWorker({ prisma: fakePrisma([row]), storage: { get: async () => ({ buffer: bytes }) },
-    provider: {}, now: () => clock, env: { TELEGRAM_ORDER_BOT_TOKEN: 'test', TELEGRAM_ORDER_API_BASE: 'https://telegram.test' },
+    provider: {}, now: () => clock, env: { FLOWIE_IMPORT_AI_MODE: 'batch', TELEGRAM_ORDER_BOT_TOKEN: 'test', TELEGRAM_ORDER_API_BASE: 'https://telegram.test' },
     telegramFetchImpl: async () => Response.json({ ok: true, result: { pending_update_count: pending } }),
   });
   assert.equal((await worker.runOnce()).status, 'IDLE');
@@ -79,7 +80,7 @@ test('atomically prepares a finalized queue row, deduplicates originals, and sto
   const bytes = await image();
   const storage = { get: async () => ({ buffer: bytes }) };
   let submitted = 0;
-  const worker = createBouquetImportWorker({ prisma, storage, provider: { submit: async () => { submitted++; } }, now: () => clock });
+  const worker = createBouquetImportWorker({ prisma, storage, provider: { submit: async () => { submitted++; } }, env: { FLOWIE_IMPORT_AI_MODE: 'batch' }, now: () => clock });
   assert.deepEqual(await worker.runOnce(), { status: 'PREPARED', id: 'import-1' });
   assert.equal(row.status, 'PREPARED');
   assert.equal(row.state.aiBatch.requestCount, 1);
@@ -96,7 +97,7 @@ test('submits only when explicitly enabled and persists provider ids', async () 
   const storage = { get: async () => ({ buffer: bytes }) };
   const calls = [];
   const worker = createBouquetImportWorker({
-    prisma, storage, env: { BOUQUET_IMPORT_AI_BATCH_ENABLED: 'true' }, now: () => clock,
+    prisma, storage, env: { FLOWIE_IMPORT_AI_MODE: 'batch', BOUQUET_IMPORT_AI_BATCH_ENABLED: 'true' }, now: () => clock,
     provider: { submit: async (value) => { calls.push(value); return { providerFileId: 'file-1', providerBatchId: 'batch-1' }; } },
   });
   await worker.runOnce();
@@ -114,7 +115,7 @@ test('a stale SUBMITTING row becomes UNCERTAIN and is never resubmitted', async 
   let submitted = 0;
   const worker = createBouquetImportWorker({
     prisma: fakePrisma([row]), storage: {}, now: () => clock,
-    env: { BOUQUET_IMPORT_AI_BATCH_ENABLED: 'true' },
+    env: { FLOWIE_IMPORT_AI_MODE: 'batch', BOUQUET_IMPORT_AI_BATCH_ENABLED: 'true' },
     provider: { submit: async () => { submitted++; } },
   });
   const result = await worker.runOnce();
@@ -131,6 +132,7 @@ test('preparation failure is explicit and is not silently retried', async () => 
     prisma: fakePrisma([row]),
     storage: { get: async () => { throw new Error('private object unavailable'); } },
     provider: {},
+    env: { FLOWIE_IMPORT_AI_MODE: 'batch' },
     now: () => clock,
   });
   const result = await worker.runOnce();
