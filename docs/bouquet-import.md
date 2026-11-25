@@ -58,3 +58,23 @@ Batch completion can take up to 24 hours. Uncertain submission is locked for man
 reconciliation instead of retrying a potentially paid batch. Partial results and
 failed conversions are explicit states. Prisma's additive migration must precede
 API recreation. Existing frontend/admin images can remain running.
+
+## Deployment verification — 25 November 2026
+
+- API release `221863471f2e79074b7bb31424d9b68f4afc04ed` deployed on `flowie-prod`.
+  `API_RELEASE_TAG` is pinned separately; web/admin remain on `219cd708…`.
+- Applied behavior analytics and bouquet import additive migrations (23 total).
+  Pre-release backup: `/srv/flowie/app/backups/20261125T155642Z`.
+- Public health returns 200. Unsigned webhook returns 403; signed non-message probe
+  returns 200. Private procurement API without authentication returns 401.
+- Existing `@flowieadmin_bot` webhook changed to the `flowie.art` URL, one connection,
+  no dropped pending updates. Telegram reported zero pending updates and no error.
+- Real S3 PUT/GET readback succeeded for a 38-byte import connectivity probe in the
+  approved backup bucket. Anonymous HEAD returned 403. No SPEKA media objects touched.
+- OpenAI is not active yet: server key empty; known FLOWIE/SPEKA saved keys return
+  HTTP 401 on free model-list checks. No paid batch submitted. Owner's logged-in
+  API billing UI showed $5.95 credit in Content Zavod Organization. A valid key is
+  required before AI work starts; photo intake and composition editing are deployed.
+- Full automated server suite after retry coverage: 183 passed, 3 infrastructure
+  tests skipped. A real florist photo → AI → review flow still needs a valid key
+  and a first archive; live verification above does not claim that flow passed.

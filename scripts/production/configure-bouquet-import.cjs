@@ -26,6 +26,9 @@ values=json.load(sys.stdin)
 assert values['FLOWIE_IMPORT_S3_BUCKET']=='speka-production-backups-20261116'
 old=p.read_text()
 current={line.split('=',1)[0]:line.split('=',1)[1] for line in old.splitlines() if '=' in line and not line.startswith('#')}
+for k,v in list(current.items()):
+ if v.startswith(chr(34)) and v.endswith(chr(34)):
+  current[k]=json.loads(v)
 values.update({'FLOWIE_BOUQUET_IMPORT_ENABLED':'true','BOUQUET_IMPORT_AI_BATCH_ENABLED':'true','TELEGRAM_BOUQUET_IMPORT_CHAT_IDS':'1780687976','TELEGRAM_BOUQUET_IMPORT_USER_IDS':'1780687976','FLOWIE_IMPORT_BATCH_MODEL':'gpt-6-luna','TELEGRAM_BOUQUET_IMPORT_WEBHOOK_SECRET':current.get('TELEGRAM_BOUQUET_IMPORT_WEBHOOK_SECRET') or secrets.token_hex(32)})
 backup=p.with_name('.env.production.bouquet-before-'+datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
 shutil.copy2(p,backup);os.chmod(backup,0o600)
