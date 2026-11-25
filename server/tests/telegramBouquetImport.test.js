@@ -228,3 +228,41 @@ test('an old finish button cannot finalize a newer active import', async () => {
   assert.equal(fixture.repository.state.imports[0].finalizeRequested, false);
   assert.equal(fixture.queued.length, 0);
 });
+
+test('releases a claimed photo update after transient reserve failure so Telegram retry succeeds', async () => {
+  const repository = createRepository();
+  const originalReserve = repository.reserveFile.bind(repository);
+  let failOnce = true;
+  repository.reserveFile = async (input) => {
+    if (failOnce) { failOnce = false; throw new Error('temporary database failure'); }
+    return originalReserve(input);
+  };
+  const fixture = createFixture({ repository });
+  await fixture.service.handleUpdate(messageUpdate(1, { text: '/import' }));
+  const photo = messageUpdate(2, {
+    photo: [{ file_id: 'a', file_unique_id: 'a', width: 10, height: 10 }],
+  });
+  await assert.rejects(fixture.service.handleUpdate(photo), /temporary database failure/);
+  assert.equal(repository.state.updates.has(2), false);
+
+  assert.equal((await fixture.service.handleUpdate(photo)).status, 'file_pending');
+  await fixture.service.waitForIdle();
+  assert.equal(repository.state.files.length, 1);
+});
+
+test('releases a claimed import command after transient create failure', async () => {
+  const repository = createRepository();
+  const originalCreate = repository.createImport.bind(repository);
+  let failOnce = true;
+  repository.createImport = async (input) => {
+    if (failOnce) { failOnce = false; throw new Error('temporary create failure'); }
+    return originalCreate(input);
+  };
+  const fixture = createFixture({ repository });
+  const start = messageUpdate(1, { text: '/import' });
+  await assert.rejects(fixture.service.handleUpdate(start), /temporary create failure/);
+  assert.equal(repository.state.updates.has(1), false);
+
+  assert.equal((await fixture.service.handleUpdate(start)).status, 'started');
+  assert.equal(repository.state.imports.length, 1);
+});
