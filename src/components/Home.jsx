@@ -134,7 +134,7 @@ export function Home({ onLogin, registrationGift }) {
             onRefresh={registrationGift?.onRefresh}
             onLogin={onLogin}
           />
-          <HomeStoryBanner bannerId="home-photo-proof" eyebrow="Спокойнее выбирать" title="Сначала фото. Потом доставка." text="Перед отправкой пришлём фото готового букета." image={feed.photoBanner?.image || feed.photoBanner?.images?.[0]} href="/catalog" />
+          <HomeStoryBanner bannerId="home-photo-proof" eyebrow="Спокойнее выбирать" title="Перед доставкой покажем ваш букет" text="Сравните фото в карточке с готовым букетом перед доставкой." image={feed.photoBanner?.image || feed.photoBanner?.images?.[0]} href="/catalog" />
           <HomeBudgetExplorer products={feed.budgetPool} />
           <HomeStoryBanner bannerId="home-clear-price" eyebrow="Без сюрпризов в корзине" title="Красивый жест. Понятная цена." text="Стоимость доставки рассчитывается по адресу." image={feed.priceBanner?.image || feed.priceBanner?.images?.[0]} product={feed.priceBanner} href="/catalog" />
           <HomeFeedSection title="Розы в разных характерах" subtitle="От спокойных до выразительных сочетаний" products={feed.roses} href="/catalog?flower=roses&flower=spray-roses&flower=peony-roses" />

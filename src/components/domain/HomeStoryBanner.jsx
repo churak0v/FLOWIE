@@ -7,8 +7,8 @@ const panel = { background: '#fff', borderRadius: 15, padding: 7, boxShadow: '0 
 const photo = { display: 'block', width: '100%', objectFit: 'cover', borderRadius: 10 };
 
 export function HomeStoryBanner({ bannerId, eyebrow, title, text, image, product, href = '/catalog' }) {
-  if (!image) return null;
   const isPhotoStory = bannerId === 'home-photo-proof';
+  if (!image && !isPhotoStory) return null;
   return (
     <Link to={href} onClick={() => trackAnalytics('home_banner_click', { meta: { bannerId } })}
       style={{ position: 'relative', marginTop: 30, borderRadius: 25, overflow: 'hidden', display: 'block', color: '#51273a', textDecoration: 'none', background: '#f6dfe5' }}>
@@ -18,14 +18,20 @@ export function HomeStoryBanner({ bannerId, eyebrow, title, text, image, product
         <h2 style={{ margin: '9px 0', maxWidth: 280, fontSize: 30, fontWeight: 900, lineHeight: 1.04, letterSpacing: '-.035em' }}>{title}</h2>
         <p style={{ margin: 0, maxWidth: 275, fontSize: 14, lineHeight: 1.4 }}>{text}</p>
         {isPhotoStory ? (
-          <div aria-label="Наш букет и его детали — фотографии из архива FLOWIE" style={{ display: 'grid', gridTemplateColumns: '1fr 1.12fr', gap: 12, alignItems: 'center', margin: '22px 0 16px' }}>
+          <div aria-label="Букет в карточке и готовый букет перед доставкой" style={{ display: 'grid', gridTemplateColumns: '1fr 1.12fr', gap: 12, alignItems: 'center', margin: '22px 0 16px' }}>
             <div style={{ ...panel, transform: 'rotate(-5deg)' }}>
-              <img src="/banners/review/basket-card.webp" alt="Букет FLOWIE в корзине на розовом диване" loading="lazy" style={{ ...photo, aspectRatio: '1 / 1.12' }} />
-              <div style={{ padding: '8px 3px 3px', fontSize: 12, fontWeight: 800 }}>Наш букет</div>
+              <picture>
+                <source type="image/avif" srcSet="/banners/review/photo-proof-card-640.avif" />
+                <img src="/banners/review/photo-proof-card-640.webp" alt="Букет на фотографии в карточке" loading="lazy" decoding="async" style={{ ...photo, aspectRatio: '1 / 1.12' }} />
+              </picture>
+              <div style={{ padding: '8px 3px 3px', fontSize: 12, fontWeight: 800 }}>В карточке</div>
             </div>
             <div style={{ ...panel, transform: 'rotate(5deg)' }}>
-              <img src="/banners/review/basket-detail.webp" alt="Тот же букет крупным планом" loading="lazy" style={{ ...photo, aspectRatio: '1 / 1.12' }} />
-              <div style={{ padding: '8px 3px 3px', fontSize: 12, fontWeight: 800 }}>Красота в деталях</div>
+              <picture>
+                <source type="image/avif" srcSet="/banners/review/photo-proof-delivery-640.avif" />
+                <img src="/banners/review/photo-proof-delivery-640.webp" alt="Готовый букет перед доставкой" loading="lazy" decoding="async" style={{ ...photo, aspectRatio: '1 / 1.12' }} />
+              </picture>
+              <div style={{ padding: '8px 3px 3px', fontSize: 12, fontWeight: 800 }}>Перед доставкой</div>
             </div>
           </div>
         ) : (
