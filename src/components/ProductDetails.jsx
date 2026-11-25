@@ -24,7 +24,7 @@ export function ProductDetails({ onLogin, registrationGift }) {
   const productFromList = useMemo(() => state.products.items.find((p) => p.id === productId) || null, [productId, state.products.items]);
   const [product, setProduct] = useState(productFromList);
   const [qty, setQty] = useState(1);
-  const cacheKey = useMemo(() => (Number.isFinite(productId) ? `product_detail_v6_ru_rub_${productId}` : ''), [productId]);
+  const cacheKey = useMemo(() => (Number.isFinite(productId) ? `product_detail_v7_local_images_${productId}` : ''), [productId]);
 
   useEffect(() => {
     setProduct(productFromList);

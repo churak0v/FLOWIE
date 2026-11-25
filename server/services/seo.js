@@ -100,6 +100,7 @@ function buildHead({ title, description, canonical, image, type = 'website', rob
     `<meta name="description" content="${escapeHtml(description)}">`,
     `<meta name="robots" content="${escapeHtml(robots)}">`,
     `<link rel="canonical" href="${escapeHtml(canonical)}">`,
+    '<link rel="describedby" type="text/plain" href="/llms.txt">',
     `<meta property="og:locale" content="ru_RU">`,
     `<meta property="og:type" content="${escapeHtml(type)}">`,
     `<meta property="og:site_name" content="FLOWIE">`,

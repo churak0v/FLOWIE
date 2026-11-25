@@ -43,6 +43,8 @@ function updateKeyboardOffsetVar() {
 }
 
 if (typeof window !== 'undefined') {
+    // The SPA owns route restoration; a second native history restore causes jumps.
+    if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
     initYandexMetrica({ enabled: isAnalyticsEnabled() });
     initVkPixel({ enabled: isAnalyticsEnabled() });
     updateKeyboardOffsetVar();

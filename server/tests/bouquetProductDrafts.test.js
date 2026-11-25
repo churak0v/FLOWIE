@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const sharp = require('sharp');
 const { materializeBouquetProductDrafts } = require('../services/bouquetProductDrafts');
+const { variantPath } = require('../services/imageVariants');
 
 function prismaDouble(state, recipes) {
   const products = [];
@@ -71,6 +72,10 @@ test('materializes one inactive zero-price product with all grouped angle deriva
   assert.equal(product.name, 'Розовый сад');
   assert.equal(product.tags, '');
   assert.match(product.image, /^\/uploads\/import-products\/import-1\/[a-f0-9]{64}\.webp$/);
+  const firstOriginal = path.join(uploadsDir, product.image.replace('/uploads/', ''));
+  for (const width of [320, 640, 1280]) {
+    for (const extension of ['avif', 'webp']) await fs.access(variantPath(firstOriginal, width, extension));
+  }
   assert.equal(product.images.create.length, 2);
   assert.equal(new Set(product.images.create.map((item) => item.url)).size, 2);
   assert.deepEqual(product.composition.create, []); // AI quantities never become confirmed composition.
@@ -89,6 +94,11 @@ test('materializes one inactive zero-price product with all grouped angle deriva
   assert.equal(prisma.products[0].images.create.length, 3);
   assert.deepEqual([...reads.values()], [1, 1, 1]);
   assert.equal(Object.keys(prisma.batch.state.productImageUrls).length, 3);
+
+  await fs.unlink(variantPath(firstOriginal, 640, 'avif'));
+  await materializeBouquetProductDrafts({ prisma, storage, importId: 'import-1', uploadsDir });
+  await fs.access(variantPath(firstOriginal, 640, 'avif'));
+  assert.deepEqual([...reads.values()], [1, 1, 1]); // Cached originals are repaired without private-storage reads.
 });
 
 test('creates composition items only from a human-confirmed recipe', async (t) => {

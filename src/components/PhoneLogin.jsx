@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { persistPersonalDataConsent } from '../lib/authUi';
+import {
+  formatRussianPhoneInput,
+  normalizeRussianPhoneDigits,
+  resolveRussianPhoneEdit,
+  toRussianPhoneE164,
+} from '../lib/phoneMask';
 import { Text } from './ui/Text';
 
-function normalizePhoneInput(raw) {
-  const digits = String(raw || '').replace(/\D/g, '');
-  if (digits.length === 11 && (digits.startsWith('7') || digits.startsWith('8'))) return `+7${digits.slice(1)}`;
-  if (digits.length >= 10 && digits.length <= 15) return `+${digits}`;
-  return '';
-}
 function errorText(error) {
   const code = error?.data?.error || error?.message;
   if (code === 'SMS_AUTH_DISABLED') return 'Вход по телефону временно недоступен.';
@@ -23,7 +23,7 @@ function errorText(error) {
 
 export function PhoneLogin({ initialPhone = '', onSuccess, onCancel }) {
   const [step, setStep] = useState('phone');
-  const [phone, setPhone] = useState(initialPhone || '+7');
+  const [phoneDigits, setPhoneDigits] = useState(() => normalizeRussianPhoneDigits(initialPhone));
   const [code, setCode] = useState('');
   const [challengeId, setChallengeId] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,6 +32,8 @@ export function PhoneLogin({ initialPhone = '', onSuccess, onCancel }) {
   const [now, setNow] = useState(Date.now());
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [verifiedUser, setVerifiedUser] = useState(null);
+  const phoneInputRef = useRef(null);
+  const pendingPhoneCursor = useRef(null);
 
   useEffect(() => {
     if (!retryAt) return undefined;
@@ -39,8 +41,27 @@ export function PhoneLogin({ initialPhone = '', onSuccess, onCancel }) {
     return () => clearInterval(timer);
   }, [retryAt]);
 
-  const normalizedPhone = useMemo(() => normalizePhoneInput(phone), [phone]);
+  const phoneInput = useMemo(() => formatRussianPhoneInput(phoneDigits), [phoneDigits]);
+  const normalizedPhone = useMemo(() => toRussianPhoneE164(phoneDigits), [phoneDigits]);
   const retrySeconds = Math.max(0, Math.ceil((retryAt - now) / 1000));
+
+  useEffect(() => {
+    if (pendingPhoneCursor.current == null || !phoneInputRef.current) return;
+    const cursor = pendingPhoneCursor.current;
+    pendingPhoneCursor.current = null;
+    phoneInputRef.current.setSelectionRange(cursor, cursor);
+  }, [phoneInput]);
+
+  function updatePhone(event) {
+    const edit = resolveRussianPhoneEdit({
+      previous: phoneInput,
+      next: event.target.value,
+      cursor: event.target.selectionStart,
+      inputType: event.nativeEvent?.inputType,
+    });
+    pendingPhoneCursor.current = edit.cursor;
+    setPhoneDigits(edit.digits);
+  }
 
   async function requestCode() {
     if (!normalizedPhone || !consentAccepted || busy || retrySeconds > 0) return;
@@ -105,15 +126,22 @@ export function PhoneLogin({ initialPhone = '', onSuccess, onCancel }) {
       </div>
 
       {step === 'phone' ? (
-        <input
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          inputMode="tel"
-          autoComplete="tel"
-          autoFocus
-          placeholder="+7 999 000-00-00"
-          style={{ width: '100%', marginTop: 16, border: '1px solid var(--border)', borderRadius: 16, padding: 12, background: 'var(--c-white)' }}
-        />
+        <div style={{ width: '100%', marginTop: 16, display: 'flex', alignItems: 'center', gap: 7, border: '1px solid var(--border)', borderRadius: 16, padding: '0 12px', background: 'var(--c-white)' }}>
+          <span aria-hidden="true" style={{ flexShrink: 0, fontSize: 17, fontWeight: 800 }}>+7</span>
+          <input
+            ref={phoneInputRef}
+            type="tel"
+            value={phoneInput}
+            onChange={updatePhone}
+            inputMode="tel"
+            autoComplete="tel"
+            autoFocus
+            maxLength={18}
+            placeholder="(999) 000-00-00"
+            aria-label="Номер телефона после +7"
+            style={{ width: '100%', minWidth: 0, height: 48, border: 0, padding: 0, outline: 'none', background: 'transparent', fontSize: 17, fontWeight: 800 }}
+          />
+        </div>
       ) : (
         <input
           value={code}
