@@ -119,9 +119,9 @@ export function MoreProductsCard({ products, href, collectionTitle, label = 'П�
 
       <span style={{ padding: 14, minWidth: 0, display: 'flex', flex: 1, flexDirection: 'column' }}>
         <Text variant="subtitle" style={{ minWidth: 0, lineHeight: 1.16 }}>Ещё букеты</Text>
-        <span style={{ minHeight: 36, marginTop: 'auto', paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, color: 'var(--accent)', fontSize: 14, fontWeight: 1000 }}>
+        <span style={{ minHeight: 36, marginTop: 'auto', paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 5, whiteSpace: 'nowrap', color: 'var(--accent)', fontSize: 12, fontWeight: 1000 }}>
           {label}
-          <span aria-hidden="true" style={{ width: 36, height: 36, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 12, background: 'var(--accent)', color: 'var(--c-accent-contrast)', boxShadow: 'var(--shadow-accent)' }}>
+          <span aria-hidden="true" style={{ width: 30, height: 36, flexShrink: 0, display: 'grid', placeItems: 'center', borderRadius: 12, background: 'var(--accent)', color: 'var(--c-accent-contrast)', boxShadow: 'var(--shadow-accent)' }}>
             <ChevronRight size={19} strokeWidth={3} />
           </span>
         </span>

@@ -1,64 +1,15 @@
-import React from 'react';
 import { ShoppingBag } from 'lucide-react';
 import { QuantityStepper } from '../ui/QuantityStepper';
 import { formatMoney } from '../../lib/money';
 
-export function ProductAddBar({ qty, onDec, onInc, sum, onAdd, added = false, onViewCart }) {
+export function ProductAddBar({ qty, onDec, onInc, sum, onAdd, added = false, onViewCart, disabled = false }) {
   return (
-    <div
-      style={{
-        position: 'fixed',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        bottom: 'calc(0px - var(--app-keyboard-offset))',
-        width: 'min(100%, var(--app-max))',
-        padding: 'var(--sp-4) var(--sp-4) calc(var(--sp-4) + var(--app-inset-bottom))',
-        zIndex: 55,
-        background: 'transparent',
-      }}
-    >
-      <div
-        style={{
-          height: 64,
-          borderRadius: 'var(--r-lg)',
-          background: 'var(--accent)',
-          boxShadow: '0 -8px 20px var(--c-ink-12)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 12px',
-          gap: 12,
-        }}
-      >
-        <div style={{ background: 'var(--c-white-18)', borderRadius: 'var(--r-md)', flexShrink: 0 }}>
-          <QuantityStepper value={qty} onDec={onDec} onInc={onInc} min={1} />
-        </div>
-
-        <button
-          type="button"
-          onClick={added ? onViewCart : onAdd}
-          style={{
-            border: 0,
-            background: added ? 'var(--c-white)' : 'var(--c-white-22)',
-            color: added ? 'var(--accent)' : 'var(--c-accent-contrast)',
-            height: 44,
-            padding: '0 14px',
-            borderRadius: 'var(--r-md)',
-            cursor: 'pointer',
-            fontWeight: 900,
-            fontSize: 'clamp(13px, 3.6vw, 15px)',
-            whiteSpace: 'nowrap',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            flex: '1 1 auto',
-            minWidth: 0,
-            overflow: 'hidden',
-          }}
-        >
-          <ShoppingBag size={17} strokeWidth={2.6} />
-          {added ? 'В корзину' : `Добавить · ${formatMoney(sum)}`}
+    <div role="region" aria-label="Букет в корзине" style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: 'calc(8px + var(--app-inset-bottom) - var(--app-keyboard-offset))', width: 'min(100%, var(--app-max))', padding: '0 var(--sp-4)', boxSizing: 'border-box', zIndex: 55, background: 'transparent', pointerEvents: disabled ? 'none' : 'auto' }}>
+      <div aria-disabled={disabled || undefined} style={{ minHeight: 64, padding: 8, borderRadius: 22, background: 'rgba(255,255,255,0.96)', border: '1px solid rgba(13,13,13,0.07)', boxShadow: '0 16px 42px rgba(31,15,22,0.2)', display: 'flex', alignItems: 'center', gap: 8, opacity: disabled ? 0.55 : 1, backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+        {added ? <fieldset disabled={disabled} style={{ margin: 0, padding: 0, border: 0, flexShrink: 0 }}><QuantityStepper value={qty} onDec={onDec} onInc={onInc} min={0} /></fieldset> : null}
+        <button data-analytics-element="product_add" data-analytics-placement="floating" type="button" disabled={disabled} onClick={added ? onViewCart : onAdd} style={{ width: '100%', minWidth: 0, height: 48, padding: '0 16px', border: 0, borderRadius: 16, background: 'var(--accent)', color: 'var(--c-accent-contrast)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 'clamp(14px, 3.8vw, 16px)', fontWeight: 1000, whiteSpace: 'nowrap', cursor: disabled ? 'default' : 'pointer', boxShadow: 'var(--shadow-accent)' }}>
+          <ShoppingBag size={18} strokeWidth={2.7} />
+          {added ? 'В корзину' : `Добавить в корзину · ${formatMoney(sum)}`}
         </button>
       </div>
     </div>

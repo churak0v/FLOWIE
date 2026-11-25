@@ -17,6 +17,34 @@ function elementPosition(element, selector, ownerDocument = document) {
   return index >= 0 && index < 200 ? index + 1 : undefined;
 }
 
+function isActuallyVisible(element, ownerDocument) {
+  if (typeof element?.getBoundingClientRect !== 'function' || typeof ownerDocument?.elementFromPoint !== 'function') return true;
+  const rect = element.getBoundingClientRect();
+  const viewportWidth = Math.max(0, Number(window.innerWidth) || 0);
+  const viewportHeight = Math.max(0, Number(window.innerHeight) || 0);
+  const left = Math.max(0, Number(rect.left) || 0);
+  const top = Math.max(0, Number(rect.top) || 0);
+  const right = Math.min(viewportWidth, Number(rect.right) || 0);
+  const bottom = Math.min(viewportHeight, Number(rect.bottom) || 0);
+  if (right - left < 2 || bottom - top < 2) return false;
+
+  const xInset = Math.min(10, (right - left) * 0.2);
+  const yInset = Math.min(10, (bottom - top) * 0.2);
+  const points = [
+    [(left + right) / 2, (top + bottom) / 2],
+    [left + xInset, top + yInset],
+    [right - xInset, top + yInset],
+    [left + xInset, bottom - yInset],
+    [right - xInset, bottom - yInset],
+  ];
+  let visiblePoints = 0;
+  for (const [x, y] of points) {
+    const topElement = ownerDocument.elementFromPoint(x, y);
+    if (topElement === element || element.contains?.(topElement)) visiblePoints += 1;
+  }
+  return visiblePoints >= Math.ceil(points.length / 2);
+}
+
 export function installBehaviorAnalytics(root = document) {
   if (!root || typeof window === 'undefined') return () => {};
   const ownerDocument = root.ownerDocument || root;
@@ -36,6 +64,16 @@ export function installBehaviorAnalytics(root = document) {
   const observed = new WeakSet();
   const sectionElements = new Set();
   const dwellTimers = new WeakMap();
+  const pendingImpressions = new Set();
+  const impressionVisibility = new WeakMap();
+  let impressionObserver = null;
+  let cleanedUp = false;
+
+  const clearDwellTimer = (element) => {
+    const timer = dwellTimers.get(element);
+    if (timer !== undefined) window.clearTimeout(timer);
+    dwellTimers.delete(element);
+  };
 
   const sample = () => {
     const now = performance.now();
@@ -43,7 +81,9 @@ export function installBehaviorAnalytics(root = document) {
     if (pageIsActive) {
       activeMs += delta;
       for (const [sectionKey, elements] of visibleSectionElements) {
-        if (elements.size) sectionActiveMs.set(sectionKey, (sectionActiveMs.get(sectionKey) || 0) + delta);
+        if ([...elements].some((element) => isActuallyVisible(element, ownerDocument))) {
+          sectionActiveMs.set(sectionKey, (sectionActiveMs.get(sectionKey) || 0) + delta);
+        }
       }
     }
     lastSample = now;
@@ -79,8 +119,14 @@ export function installBehaviorAnalytics(root = document) {
     pageIsActive = ownerDocument.visibilityState === 'visible'
       && (typeof ownerDocument.hasFocus !== 'function' || ownerDocument.hasFocus());
   };
+  let refreshImpressionTimers = () => {};
   const tick = () => {
     const now = sample();
+    refreshImpressionTimers();
+    if (!pageIsActive) {
+      lastHeartbeat = now;
+      return;
+    }
     if (now - lastHeartbeat >= 10_000) {
       snapshot('heartbeat');
       lastHeartbeat = now;
@@ -88,14 +134,18 @@ export function installBehaviorAnalytics(root = document) {
   };
   const interval = window.setInterval(tick, 1_000);
 
-  const onBlur = () => { sample(); pageIsActive = false; snapshot('blur'); };
-  const onFocus = () => { refreshActiveState(); };
+  const onBlur = () => { sample(); pageIsActive = false; refreshImpressionTimers(); snapshot('blur'); };
+  const onFocus = () => { refreshActiveState(); refreshImpressionTimers(); };
   const onVisibilityChange = () => {
     if (ownerDocument.visibilityState !== 'visible') {
       sample();
       pageIsActive = false;
+      refreshImpressionTimers();
       snapshot('hidden');
-    } else refreshActiveState();
+    } else {
+      refreshActiveState();
+      refreshImpressionTimers();
+    }
   };
   const onPageHide = () => snapshot('pagehide');
   const onBeforeUnload = () => snapshot('unload');
@@ -116,31 +166,58 @@ export function installBehaviorAnalytics(root = document) {
         trackAnalytics('scroll_depth', { pageViewId, meta: { percent: depth } }, { dedupeKey: `${pageViewId}:scroll:${depth}` });
       }
     }
+    refreshImpressionTimers();
   };
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
 
-  const impressionObserver = typeof IntersectionObserver === 'function' ? new IntersectionObserver((entries) => {
+  const sendImpression = (element) => {
+    const sectionKey = element.dataset.analyticsSection;
+    const kind = element.dataset.analyticsImpression;
+    const placementKey = element.dataset.analyticsPlacement;
+    const position = elementPosition(element, kind === 'product' ? '[data-analytics-impression="product"]' : '[data-analytics-impression="banner"]', ownerDocument);
+    if (sectionKey) trackAnalytics('section_view', { pageViewId, meta: { sectionKey } }, { dedupeKey: `${pageViewId}:section:${sectionKey}` });
+    if (kind === 'banner') trackAnalytics('banner_view', { pageViewId, meta: { bannerId: element.dataset.analyticsBanner, placementKey, position } }, { dedupeKey: `${pageViewId}:banner:${element.dataset.analyticsBanner}:${placementKey}` });
+    if (kind === 'product') trackAnalytics('product_card_view', { pageViewId, productId: datasetNumber(element.dataset.analyticsProduct), meta: { placementKey, position } }, { dedupeKey: `${pageViewId}:product:${element.dataset.analyticsProduct}:${placementKey}` });
+  };
+
+  refreshImpressionTimers = () => {
+    if (cleanedUp) return;
+    for (const element of pendingImpressions) {
+      const eligible = impressionVisibility.get(element) === true
+        && pageIsActive
+        && isActuallyVisible(element, ownerDocument);
+      if (!eligible) {
+        clearDwellTimer(element);
+        continue;
+      }
+      if (dwellTimers.has(element)) continue;
+      const dwellMs = element.dataset.analyticsImpression === 'product' ? 750 : 1_000;
+      const timer = window.setTimeout(() => {
+        dwellTimers.delete(element);
+        if (cleanedUp || !pendingImpressions.has(element)) return;
+        if (!pageIsActive || impressionVisibility.get(element) !== true || !isActuallyVisible(element, ownerDocument)) return;
+        sendImpression(element);
+        pendingImpressions.delete(element);
+        impressionObserver?.unobserve(element);
+      }, dwellMs);
+      dwellTimers.set(element, timer);
+    }
+  };
+
+  impressionObserver = typeof IntersectionObserver === 'function' ? new IntersectionObserver((entries) => {
     for (const entry of entries) {
       const element = entry.target;
       if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-        if (dwellTimers.has(element)) continue;
-        const impressionKind = element.dataset.analyticsImpression;
-        dwellTimers.set(element, window.setTimeout(() => {
-          const sectionKey = element.dataset.analyticsSection;
-          const kind = element.dataset.analyticsImpression;
-          const placementKey = element.dataset.analyticsPlacement;
-          const position = elementPosition(element, kind === 'product' ? '[data-analytics-impression="product"]' : '[data-analytics-impression="banner"]', ownerDocument);
-          if (sectionKey) trackAnalytics('section_view', { pageViewId, meta: { sectionKey } }, { dedupeKey: `${pageViewId}:section:${sectionKey}` });
-          if (kind === 'banner') trackAnalytics('banner_view', { pageViewId, meta: { bannerId: element.dataset.analyticsBanner, placementKey, position } }, { dedupeKey: `${pageViewId}:banner:${element.dataset.analyticsBanner}:${placementKey}` });
-          if (kind === 'product') trackAnalytics('product_card_view', { pageViewId, productId: datasetNumber(element.dataset.analyticsProduct), meta: { placementKey, position } }, { dedupeKey: `${pageViewId}:product:${element.dataset.analyticsProduct}:${placementKey}` });
-          impressionObserver.unobserve(element);
-        }, impressionKind === 'product' ? 750 : 1_000));
+        impressionVisibility.set(element, true);
+        pendingImpressions.add(element);
       } else {
-        window.clearTimeout(dwellTimers.get(element));
-        dwellTimers.delete(element);
+        impressionVisibility.set(element, false);
+        pendingImpressions.delete(element);
+        clearDwellTimer(element);
       }
     }
+    refreshImpressionTimers();
   }, { threshold: [0.5] }) : null;
 
   const sectionObserver = typeof IntersectionObserver === 'function' ? new IntersectionObserver((entries) => {
@@ -173,6 +250,11 @@ export function installBehaviorAnalytics(root = document) {
       sectionVisibility.set(element, false);
       visibleSectionElements.get(String(element.dataset.analyticsSection || ''))?.delete(element);
     }
+    for (const element of pendingImpressions) {
+      if (element.isConnected !== false) continue;
+      pendingImpressions.delete(element);
+      clearDwellTimer(element);
+    }
     root.querySelectorAll('[data-analytics-section],[data-analytics-impression]').forEach((element) => {
       if (observed.has(element)) return;
       observed.add(element);
@@ -201,6 +283,9 @@ export function installBehaviorAnalytics(root = document) {
   root.addEventListener('click', onClick, true);
 
   return () => {
+    cleanedUp = true;
+    for (const element of pendingImpressions) clearDwellTimer(element);
+    pendingImpressions.clear();
     snapshot('route_leave');
     window.clearInterval(interval);
     window.removeEventListener('scroll', onScroll);

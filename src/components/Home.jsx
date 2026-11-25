@@ -98,6 +98,7 @@ export function Home({ onLogin, registrationGift }) {
       <main className="homeScene" style={{ position: 'relative', isolation: 'isolate', width: '100%', '--home-hero-overlap': '28px', paddingBottom: `calc(var(--app-bottom-nav-space) + ${hasMiniCart ? '64px' : '0px'})` }}>
         <section
           aria-label="Главные предложения"
+          data-analytics-section="hero"
           style={{
             // Keep this containing box paint-free: Safari may extend an opaque
             // fixed/sticky background into viewport edges. Media is clipped by
@@ -125,7 +126,7 @@ export function Home({ onLogin, registrationGift }) {
             <div style={{ display: 'grid', gap: 10 }}>{activeOrders.map((order) => <ActiveOrderCard key={order.id} order={order} onClick={() => navigate(`/pay/${encodeURIComponent(String(order.id))}`)} />)}</div>
           </section> : null}
 
-          <HomeFeedSection title="Выбрать букет" subtitle="Цветы для ваших людей" products={feed.opening} href="/catalog" marginTop={activeOrders.length || isAuthenticated ? 30 : 0} />
+          <HomeFeedSection sectionKey="home_opening" title="Выбрать букет" subtitle="Цветы для ваших людей" products={feed.opening} href="/catalog" marginTop={activeOrders.length || isAuthenticated ? 30 : 0} />
           <RegistrationGiftOffer
             status={registrationGift?.status}
             user={state.auth.me}
@@ -136,11 +137,11 @@ export function Home({ onLogin, registrationGift }) {
           />
           <HomeStoryBanner bannerId="home-photo-proof" eyebrow="Спокойнее выбирать" title="Перед доставкой покажем ваш букет" text="Сравните фото в карточке с готовым букетом перед доставкой." image={feed.photoBanner?.image || feed.photoBanner?.images?.[0]} href="/catalog" />
           <HomeBudgetExplorer products={feed.budgetPool} />
-          <HomeStoryBanner bannerId="home-clear-price" eyebrow="Без сюрпризов в корзине" title="Красивый жест. Понятная цена." text="Стоимость доставки рассчитывается по адресу." image={feed.priceBanner?.image || feed.priceBanner?.images?.[0]} product={feed.priceBanner} href="/catalog" />
-          <HomeFeedSection title="Розы в разных характерах" subtitle="От спокойных до выразительных сочетаний" products={feed.roses} href="/catalog?flower=roses&flower=spray-roses&flower=peony-roses" />
+          <HomeStoryBanner bannerId="home-clear-price" eyebrow="Выбирайте под свой бюджет" title="Сначала выберите сумму. Потом — свой букет." text="Покажем букеты от 3 000, 5 000 и 7 000 ₽. Доставка рассчитывается отдельно по адресу." image={feed.priceBanner?.image || feed.priceBanner?.images?.[0]} product={feed.priceBanner} href="/catalog" />
+          <HomeFeedSection sectionKey="home_roses" title="Розы в разных характерах" subtitle="От спокойных до выразительных сочетаний" products={feed.roses} href="/catalog?flower=roses&flower=spray-roses&flower=peony-roses" />
           <HomeCareGuide />
-          <HomeFeedSection title="Для большого жеста" subtitle="Крупные и выразительные букеты" products={feed.premium} href="/catalog?min=7000" />
-          <HomeFeedSection title="Ещё идеи" subtitle="Другие стили из актуального каталога" products={feed.more} href="/catalog" />
+          <HomeFeedSection sectionKey="home_premium" title="Для большого жеста" subtitle="Крупные и выразительные букеты" products={feed.premium} href="/catalog?min=7000" />
+          <HomeFeedSection sectionKey="home_more" title="Ещё идеи" subtitle="Другие стили из актуального каталога" products={feed.more} href="/catalog" />
         </Surface>
       </main>
     </AppShell>

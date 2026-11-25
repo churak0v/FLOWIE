@@ -6,6 +6,7 @@ export const SECTION_KEYS = new Set([
   'catalog_results', 'product_details', 'cart_items', 'checkout_form', 'payment_status',
   'gallery', 'summary', 'composition', 'dimensions', 'care', 'promotion',
   'motivation', 'similar', 'same_flowers', 'upsells',
+  'home_opening', 'home_budget', 'home_roses', 'home_premium', 'home_more',
 ]);
 
 export const ENGAGEMENT_REASONS = new Set([
@@ -15,7 +16,7 @@ export const ENGAGEMENT_REASONS = new Set([
 export const ELEMENT_KEYS = new Set([
   'hero_cta', 'mothers_day_cta', 'quick_pick', 'product_card', 'product_add',
   'mini_cart', 'nav_home', 'nav_catalog', 'nav_favorites', 'nav_recipients',
-  'nav_account', 'cart_checkout', 'checkout_submit', 'payment_retry',
+  'nav_account', 'cart_checkout', 'checkout_submit', 'payment_retry', 'care_open', 'gallery_open', 'gallery_thumbnail', 'favorite_toggle',
 ]);
 
 export const PLACEMENT_KEYS = new Set([

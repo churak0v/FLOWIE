@@ -19,7 +19,7 @@ export function HomeBudgetExplorer({ products }) {
       <div aria-label="Выбрать бюджет" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
         {available.map((band) => <button key={band.id} type="button" aria-pressed={band.id === active.id} onClick={() => { setSelected(band.id); trackAnalytics('filter_change', { meta: { filter: 'home_budget', value: band.id } }); }} style={{ minHeight: 40, padding: '0 12px', flexShrink: 0, borderRadius: 999, border: `1px solid ${band.id === active.id ? 'var(--accent)' : 'var(--border)'}`, background: band.id === active.id ? 'var(--accent)' : 'var(--surface)', color: band.id === active.id ? 'var(--c-accent-contrast)' : 'var(--text)', fontSize: 13, fontWeight: 950, cursor: 'pointer' }}>{band.label}</button>)}
       </div>
-      <HomeFeedSection title={`Букеты ${active.label.toLowerCase()}`} subtitle="Цена букета указана в карточке" products={active.products.slice(0, 9)} href={active.href} />
+      <HomeFeedSection sectionKey="home_budget" title={`Букеты ${active.label.toLowerCase()}`} subtitle="Цена букета указана в карточке" products={active.products.slice(0, 9)} href={active.href} />
     </section>
   );
 }

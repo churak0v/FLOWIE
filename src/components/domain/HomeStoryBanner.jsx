@@ -10,7 +10,7 @@ export function HomeStoryBanner({ bannerId, eyebrow, title, text, image, product
   const isPhotoStory = bannerId === 'home-photo-proof';
   if (!image && !isPhotoStory) return null;
   return (
-    <Link to={href} onClick={() => trackAnalytics('home_banner_click', { meta: { bannerId } })}
+    <Link data-analytics-impression="banner" data-analytics-banner={bannerId} data-analytics-placement="home_recommendations" to={href} onClick={() => trackAnalytics('home_banner_click', { meta: { bannerId } })}
       style={{ position: 'relative', marginTop: 30, borderRadius: 25, overflow: 'hidden', display: 'block', color: '#51273a', textDecoration: 'none', background: '#f6dfe5' }}>
       <img src="/banners/review/paper-ribbon-background.webp" alt="" loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
       <div style={{ position: 'relative', padding: '23px 21px 21px' }}>

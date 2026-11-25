@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Heart, Minus, Plus } from 'lucide-react';
 import { Surface } from '../ui/Surface';
 import { Text } from '../ui/Text';
@@ -8,8 +9,10 @@ import { useAppState } from '../../state/AppState';
 import { trackAnalytics } from '../../lib/analytics';
 import { getProductCardLayout } from '../../lib/productCardLayout';
 
-export function ProductCard({ id, title, price, image, images, onAdd, onOpen, view = 'grid' }) {
+export function ProductCard({ id, title, price, image, images, onAdd, onOpen, view = 'grid', placement }) {
   const { state, actions } = useAppState();
+  const { pathname } = useLocation();
+  const analyticsPlacement = placement || (pathname === '/catalog' ? (view === 'list' ? 'catalog_list' : 'catalog_grid') : pathname.startsWith('/product/') ? 'product_recommendations' : 'home_recommendations');
   const isSaved = state.favorites.productIds.includes(id);
   const cartItem = state.cart.items.find((item) => String(item.productId) === String(id));
   const cartQty = Number(cartItem?.qty || 0);
@@ -30,6 +33,9 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
   return (
     <Surface
       className="productCard"
+      data-analytics-impression="product"
+      data-analytics-product={id}
+      data-analytics-placement={analyticsPlacement}
       style={{
         height: '100%',
         padding: 0,
@@ -81,6 +87,7 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
 
         {!isList ? <button
           type="button"
+          data-analytics-element="favorite_toggle"
           aria-label={isSaved ? 'Убрать из сохранённого' : 'Сохранить'}
           onClick={(e) => {
             e.stopPropagation();
@@ -140,7 +147,8 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
           {isList ? (
             <button
               type="button"
-              aria-label={isSaved ? 'Убрать из сохранённого' : 'Сохранить'}
+              data-analytics-element="favorite_toggle"
+          aria-label={isSaved ? 'Убрать из сохранённого' : 'Сохранить'}
               onClick={(event) => {
                 event.stopPropagation();
                 trackAnalytics(isSaved ? 'favorite_remove' : 'favorite_add', { productId: id });
@@ -213,7 +221,7 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
           ) : (
             <button
               type="button"
-              aria-label="Добавить"
+              data-analytics-element="product_add" aria-label="Добавить"
               onClick={(event) => {
                 event.stopPropagation();
                 onAdd?.(id);
