@@ -61,7 +61,7 @@ API recreation. Existing frontend/admin images can remain running.
 
 ## Deployment verification — 25 November 2026
 
-- API release `221863471f2e79074b7bb31424d9b68f4afc04ed` deployed on `flowie-prod`.
+- API release `636e97ab125e49c22b06e6b5d683d69a6f22af08` deployed on `flowie-prod`.
   `API_RELEASE_TAG` is pinned separately; web/admin remain on `219cd708…`.
 - Applied behavior analytics and bouquet import additive migrations (23 total).
   Pre-release backup: `/srv/flowie/app/backups/20261125T155642Z`.
@@ -80,6 +80,6 @@ API recreation. Existing frontend/admin images can remain running.
   the FLOWIE VPS IP and required OpenAI paths, forwarding HTTPS to api.openai.com.
   Both model access and Batch listing from the live FLOWIE container returned 200;
   external access to the relay returned 403, and SPEKA health remained 200.
-- Full automated server suite after retry coverage: 183 passed, 3 infrastructure
+- Full automated server suite including relay coverage: 185 passed, 3 infrastructure
   tests skipped. A real florist photo → AI → review flow still needs a first
   finalized archive; live verification above does not claim that flow passed.
