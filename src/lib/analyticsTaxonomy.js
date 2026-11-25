@@ -15,6 +15,7 @@ export const ENGAGEMENT_REASONS = new Set([
 
 export const ELEMENT_KEYS = new Set([
   'hero_cta', 'mothers_day_cta', 'quick_pick', 'product_card', 'product_add',
+  'care_guide',
   'mini_cart', 'nav_home', 'nav_catalog', 'nav_favorites', 'nav_recipients',
   'nav_account', 'cart_checkout', 'checkout_submit', 'payment_retry', 'care_open', 'gallery_open', 'gallery_thumbnail', 'favorite_toggle',
 ]);

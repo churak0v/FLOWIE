@@ -187,6 +187,30 @@ function mothersDayPage({ baseUrl }) {
   };
 }
 
+function carePage({ products, baseUrl }) {
+  const canonical = `${baseUrl}/care`;
+  const description = 'Уход за букетом по составу: розы, гортензии, тюльпаны, герберы, эустома и хризантемы. Чистая ваза, срез и вода без универсальных обещаний.';
+  const crumbs = [{ name: 'Главная', href: '/' }, { name: 'Уход за цветами' }];
+  return {
+    title: 'Как ухаживать за букетом и цветами | FLOWIE',
+    description,
+    canonical,
+    image: productImages(products[0], baseUrl)[0],
+    structuredData: [breadcrumbJsonLd(baseUrl, crumbs), {
+      '@context': 'https://schema.org', '@type': 'Article', headline: 'Как ухаживать за букетом и цветами',
+      description, mainEntityOfPage: canonical, author: { '@type': 'Organization', name: 'FLOWIE' },
+    }],
+    content: `${breadcrumbs(crumbs)}<article><h1>Как ухаживать за букетом и цветами</h1>
+      <p>${escapeHtml(description)}</p>
+      <h2>Базовый уход за срезанными цветами</h2>
+      <ol><li>Вымойте вазу и удалите листья ниже линии воды.</li><li>Обновите срез чистым острым ножом или секатором.</li><li>Средство для цветов дозируйте только по инструкции на упаковке.</li><li>Держите букет вдали от батареи, прямого солнца, сквозняка и созревающих фруктов.</li></ol>
+      <h2>Уход зависит от состава</h2><p>Гортензии и эустома требуют частого контроля уровня воды. Для роз обновляют 2–5 см стебля, для тюльпанов, гербер и хризантем — 2–3 см. Указание около 0,5 л относится к отдельному букету гербер, а не к смешанной композиции.</p>
+      <p>Интерактивный гид позволяет выбрать цветок и рассчитать геометрический объём воды в цилиндрической вазе. Расчёт не является рекомендацией уровня.</p>
+      <h2>Букеты из актуального каталога</h2><div class="seo-grid">${products.map((product) => productCard(product, baseUrl)).join('')}</div>
+      <h2>Источники</h2><ul><li><a href="https://www.rhs.org.uk/plants/for-places/cut-flowers-conditioning">RHS: подготовка срезанных цветов</a></li><li><a href="https://www.chrysal.com/knowledge/flower-care/what-are-the-best-cut-flower-care-tips-consumers">Chrysal: уход за срезанными цветами дома</a></li></ul></article>`,
+  };
+}
+
 function catalogPage({ products, collection, collections, baseUrl }) {
   const canonical = collection ? canonicalCollectionUrl(baseUrl, collection) : `${baseUrl}/catalog`;
   const title = collection ? `${collection.title} — цветы с доставкой | FLOWIE` : 'Каталог цветов с доставкой | FLOWIE';
@@ -265,6 +289,7 @@ module.exports = {
   breadcrumbJsonLd,
   canonicalCollectionUrl,
   catalogPage,
+  carePage,
   createShellLoader,
   escapeHtml,
   escapeXml,

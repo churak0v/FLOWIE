@@ -152,6 +152,20 @@ test('campaign landing exposes the offer without JavaScript or a catalog databas
   });
 });
 
+test('care article is crawlable, canonical and backed by live product links', async () => {
+  await withServer(seoRouter(), async (base) => {
+    const response = await fetch(`${base}/care`, { headers: { host: 'flowie.test' } });
+    const html = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(html, /<title>Как ухаживать за букетом и цветами \| FLOWIE<\/title>/);
+    assert.match(html, /<link rel="canonical" href="https:\/\/flowie\.test\/care">/);
+    assert.match(html, /"@type":"Article"/);
+    assert.match(html, /Указание около 0,5 л относится к отдельному букету гербер/);
+    assert.match(html, /href="\/product\/7"/);
+    assert.doesNotMatch(html, /свеж(?:есть|им) \d+|гарант/iu);
+  });
+});
+
 test('campaign landing is routed to the SEO renderer by both storefront ingress configurations', () => {
   const root = path.join(__dirname, '..', '..');
   for (const filename of ['default.conf', 'production-edge.conf.template']) {
@@ -205,6 +219,7 @@ test('sitemap contains only active canonical products and collections', async ()
     assert.match(xml, /<loc>https:\/\/flowie\.test\/product\/7<\/loc>/);
     assert.doesNotMatch(xml, /product\/8/);
     assert.match(xml, /catalog\?collection=romantic/);
+    assert.match(xml, /<loc>https:\/\/flowie\.test\/care<\/loc>/);
     assert.match(xml, /<lastmod>2026-11-17T10:00:00\.000Z<\/lastmod>/);
   });
 });
@@ -215,6 +230,16 @@ test('robots advertises the absolute sitemap without blocking noindex routes', a
     assert.equal(text, 'User-agent: *\nAllow: /\nSitemap: https://flowie.test/sitemap.xml\n');
     assert.doesNotMatch(text, /Disallow/);
   });
+});
+
+test('care article is routed to the SEO renderer by both storefront ingress configurations', () => {
+  const root = path.join(__dirname, '..', '..');
+  for (const filename of ['default.conf', 'production-edge.conf.template']) {
+    const config = fs.readFileSync(path.join(root, 'nginx', filename), 'utf8');
+    const block = config.match(/location = \/care \{([^}]+)\}/)?.[1];
+    assert.ok(block, filename);
+    assert.match(block, /proxy_pass http:\/\/(?:api:3001|\$api_host);/);
+  }
 });
 
 test('legacy unauthenticated product creation is closed', async () => {

@@ -2,6 +2,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const {
   catalogPage,
+  carePage,
   createShellLoader,
   escapeXml,
   homePage,
@@ -134,6 +135,7 @@ function createSeoRouter({ prisma = new PrismaClient(), loadShell = createShellL
       const entries = [
         { loc: `${baseUrl}/` },
         { loc: `${baseUrl}/catalog` },
+        { loc: `${baseUrl}/care` },
         ...collections.filter((item) => item.slug && item.items?.length).map((item) => ({
           loc: `${baseUrl}/catalog?${item.type === 'scenario' ? 'scenario' : 'collection'}=${encodeURIComponent(item.slug)}`,
           lastmod: item.updatedAt,
@@ -165,6 +167,15 @@ function createSeoRouter({ prisma = new PrismaClient(), loadShell = createShellL
   router.get('/mothers-day', async (req, res, next) => {
     try {
       return await sendPage(req, res, 200, mothersDayPage({ baseUrl: requestBaseUrl(req) }));
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.get('/care', async (req, res, next) => {
+    try {
+      const products = await prisma.product.findMany({ where: activeProductWhere(), include: productInclude(), orderBy: [{ sort: 'asc' }, { createdAt: 'desc' }, { id: 'desc' }], take: 8 });
+      return await sendPage(req, res, 200, carePage({ products, baseUrl: requestBaseUrl(req) }));
     } catch (error) {
       return next(error);
     }

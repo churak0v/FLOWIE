@@ -83,7 +83,7 @@ const SECTION_KEYS = new Set([
   'home_opening', 'home_budget', 'home_roses', 'home_premium', 'home_more',
 ]);
 const ENGAGEMENT_REASONS = new Set(['heartbeat', 'route_leave', 'pagehide', 'blur', 'hidden', 'unload']);
-const ELEMENT_KEYS = new Set(['hero_cta', 'mothers_day_cta', 'quick_pick', 'product_card', 'product_add', 'mini_cart', 'nav_home', 'nav_catalog', 'nav_favorites', 'nav_recipients', 'nav_account', 'cart_checkout', 'checkout_submit', 'payment_retry', 'care_open', 'gallery_open', 'gallery_thumbnail', 'favorite_toggle']);
+const ELEMENT_KEYS = new Set(['hero_cta', 'mothers_day_cta', 'quick_pick', 'product_card', 'product_add', 'mini_cart', 'nav_home', 'nav_catalog', 'nav_favorites', 'nav_recipients', 'nav_account', 'cart_checkout', 'checkout_submit', 'payment_retry', 'care_guide', 'care_open', 'gallery_open', 'gallery_thumbnail', 'favorite_toggle']);
 const PLACEMENT_KEYS = new Set(['home_hero', 'home_mothers_day', 'home_quick_picks', 'home_recommendations', 'catalog_grid', 'catalog_list', 'product_recommendations', 'recipient_recommendations', 'cart', 'checkout', 'payment', 'bottom_nav', 'floating']);
 const GIFT_PICKER_EVENTS = new Set([...CLIENT_EVENTS].filter((event) => event.startsWith('gift_picker_')));
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9:_-]{7,95}$/;
@@ -152,7 +152,7 @@ function normalizePath(value) {
     const parsed = new URL(raw, 'https://flowie.invalid');
     const path = parsed.pathname.replace(/\/{2,}/g, '/') || '/';
     const exact = new Set([
-      '/', '/catalog', '/shop', '/cart', '/checkout', '/favorites', '/recipients', '/account', '/mothers-day', '/mothers-day/picker',
+      '/', '/catalog', '/shop', '/cart', '/checkout', '/favorites', '/recipients', '/account', '/care', '/mothers-day', '/mothers-day/picker',
       '/legal/privacy', '/legal/consent', '/legal/offer', '/success',
       '/product/:id', '/recipients/:id', '/pay/:id',
     ]);

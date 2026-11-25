@@ -1,24 +1,30 @@
-import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ArrowUpRight, Droplets } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAppState } from '../../state/AppState';
 import { trackAnalytics } from '../../lib/analytics';
-
-const TIPS = [
-  ['Чистая ваза и прохладная вода', 'Вымойте вазу, налейте свежую прохладную воду и уберите листья, которые окажутся ниже уровня воды.'],
-  ['Обновить срез', 'Подрежьте стебли чистым острым инструментом перед тем, как поставить букет в воду.'],
-  ['Подальше от тепла и фруктов', 'Не ставьте букет рядом с батареей, прямым солнцем и созревающими фруктами.'],
-];
+import { AppImage } from '../ui/AppImage';
 
 export function HomeCareGuide() {
-  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+  const { state } = useAppState();
+  const image = state.products.items.find((product) => product?.image)?.image;
+  const openGuide = () => {
+    trackAnalytics('element_click', { meta: { elementKey: 'care_guide', placementKey: 'home_recommendations' } });
+    navigate('/care');
+  };
+
   return (
-    <section style={{ marginTop: 30, padding: 20, borderRadius: 24, background: 'linear-gradient(135deg, rgba(255,224,234,0.82), rgba(255,246,249,0.96))', border: '1px solid rgba(161,50,85,0.14)' }}>
-      <p style={{ margin: 0, color: 'var(--accent)', fontSize: 12, fontWeight: 1000, letterSpacing: '0.07em', textTransform: 'uppercase' }}>После вручения</p>
-      <h2 style={{ margin: '7px 0 0', fontSize: 25, lineHeight: 1.05 }}>Как продлить жизнь букету</h2>
-      <p style={{ margin: '8px 0 0', color: 'var(--muted)', fontSize: 14, lineHeight: 1.4 }}>Три простых шага без сложных средств.</p>
-      <button type="button" aria-expanded={open} onClick={() => setOpen((value) => { const next = !value; trackAnalytics('filter_change', { meta: { filter: 'care_guide', value: next ? 'open' : 'closed' } }); return next; })} style={{ width: '100%', minHeight: 46, marginTop: 15, padding: '0 14px', borderRadius: 14, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontWeight: 950, cursor: 'pointer' }}>
-        {open ? 'Скрыть советы' : 'Показать советы'} <ChevronDown size={18} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 160ms ease' }} />
+    <section style={{ marginTop: 30 }}>
+      <button type="button" onClick={openGuide} aria-label="Открыть гид по уходу за цветами" style={{ position: 'relative', width: '100%', minHeight: 250, overflow: 'hidden', padding: 0, border: 0, borderRadius: 28, background: '#492a35', color: '#fff', textAlign: 'left', cursor: 'pointer', boxShadow: '0 22px 52px rgba(70, 34, 46, 0.2)' }}>
+        {image ? <AppImage src={image} alt="" loading="lazy" variant="card" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
+        <span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(105deg, rgba(52,22,31,.93) 5%, rgba(52,22,31,.66) 58%, rgba(52,22,31,.18))' }} />
+        <span style={{ position: 'relative', zIndex: 1, minHeight: 250, padding: 22, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <span style={{ width: 42, height: 42, display: 'grid', placeItems: 'center', borderRadius: 14, background: 'rgba(255,255,255,.16)', backdropFilter: 'blur(10px)' }}><Droplets size={22} /></span>
+          <span style={{ marginTop: 'auto', maxWidth: 310, fontSize: 30, lineHeight: 1.02, fontWeight: 1000 }}>Уход — по цветку, а не по одному шаблону</span>
+          <span style={{ marginTop: 10, maxWidth: 320, fontSize: 14, lineHeight: 1.45, color: 'rgba(255,255,255,.82)' }}>Выберите состав букета и узнайте, как обновить срез и следить за водой.</span>
+          <span style={{ marginTop: 18, display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 950 }}>Открыть гид <ArrowUpRight size={18} /></span>
+        </span>
       </button>
-      {open ? <ol style={{ margin: '16px 0 0', paddingLeft: 20, display: 'grid', gap: 13 }}>{TIPS.map(([title, text]) => <li key={title} style={{ paddingLeft: 4 }}><strong>{title}</strong><div style={{ marginTop: 3, color: 'var(--muted)', fontSize: 13, lineHeight: 1.4 }}>{text}</div></li>)}</ol> : null}
     </section>
   );
 }
