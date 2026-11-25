@@ -1,5 +1,6 @@
 import { sendYandexMetricaEvent } from './yandexMetrica.js';
 import { sendVkPixelEvent } from './vkPixel.js';
+import { ELEMENT_KEYS, ENGAGEMENT_SECONDS, PLACEMENT_KEYS, SCROLL_DEPTHS, SECTION_KEYS, allowedTaxonomyValue, normalizeRouteKey } from './analyticsTaxonomy.js';
 
 const API_BASE = import.meta.env?.VITE_API_URL || '/api';
 
@@ -21,6 +22,14 @@ const ALLOWED_EVENTS = new Set([
   'checkout_start',
   'checkout_error',
   'payment_start',
+  'engagement_milestone',
+  'scroll_depth',
+  'section_view',
+  'element_click',
+  'banner_view',
+  'banner_click',
+  'product_card_view',
+  'product_card_click',
 ]);
 
 const META_LIMITS = {
@@ -33,11 +42,19 @@ const META_LIMITS = {
   utm_medium: 80,
   utm_campaign: 80,
   utm_content: 80,
+  utm_term: 80,
+  yclid: 256,
+  mt_click_id: 256,
   referrerHost: 255,
   bannerId: 32,
+  sectionKey: 48,
+  elementKey: 48,
+  placementKey: 48,
+  routeKey: 64,
+  deviceClass: 12,
 };
 
-const ATTRIBUTION_KEYS = ['path', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'referrerHost'];
+const ATTRIBUTION_KEYS = ['path', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'yclid', 'mt_click_id', 'referrerHost'];
 const EVENT_META_KEYS = {
   page_view: new Set(ATTRIBUTION_KEYS),
   home_banner_click: new Set([...ATTRIBUTION_KEYS, 'bannerId']),
@@ -51,6 +68,14 @@ const EVENT_META_KEYS = {
   checkout_start: new Set(ATTRIBUTION_KEYS),
   checkout_error: new Set([...ATTRIBUTION_KEYS, 'errorCode']),
   payment_start: new Set(ATTRIBUTION_KEYS),
+  engagement_milestone: new Set([...ATTRIBUTION_KEYS, 'seconds', 'routeKey', 'deviceClass']),
+  scroll_depth: new Set([...ATTRIBUTION_KEYS, 'percent', 'routeKey', 'deviceClass']),
+  section_view: new Set([...ATTRIBUTION_KEYS, 'sectionKey', 'routeKey', 'deviceClass']),
+  element_click: new Set([...ATTRIBUTION_KEYS, 'elementKey', 'placementKey', 'routeKey', 'deviceClass']),
+  banner_view: new Set([...ATTRIBUTION_KEYS, 'bannerId', 'placementKey', 'position', 'routeKey', 'deviceClass']),
+  banner_click: new Set([...ATTRIBUTION_KEYS, 'bannerId', 'placementKey', 'position', 'routeKey', 'deviceClass']),
+  product_card_view: new Set([...ATTRIBUTION_KEYS, 'placementKey', 'position', 'routeKey', 'deviceClass']),
+  product_card_click: new Set([...ATTRIBUTION_KEYS, 'placementKey', 'position', 'routeKey', 'deviceClass']),
 };
 
 const MAX_QUEUE_SIZE = 40;
@@ -62,6 +87,8 @@ let flushTimer = null;
 let flushing = false;
 let bootstrapReady = false;
 let memorySessionId = '';
+let currentPageViewId = '';
+let currentRouteKey = '/';
 const recordedPurchases = new Set();
 
 function safeStorage(storageName) {
@@ -128,6 +155,22 @@ export function getAnalyticsSessionId() {
   }
 }
 
+export function beginAnalyticsPageView(pathname = globalThis.location?.pathname || '/') {
+  currentPageViewId = createAnalyticsUuid();
+  currentRouteKey = normalizeRouteKey(pathname);
+  return { pageViewId: currentPageViewId, routeKey: currentRouteKey };
+}
+
+export function getAnalyticsContext() {
+  if (!currentPageViewId) beginAnalyticsPageView();
+  return { sessionId: getAnalyticsSessionId(), pageViewId: currentPageViewId, routeKey: currentRouteKey };
+}
+
+export function getAnalyticsOrderContext() {
+  const context = getAnalyticsContext();
+  return { sessionId: context.sessionId, attribution: extractAnalyticsAttribution() };
+}
+
 export function isDoNotTrackEnabled() {
   try {
     return globalThis.navigator?.doNotTrack === '1'
@@ -167,6 +210,8 @@ export function sanitizeAnalyticsPayload(event, input = {}) {
     event,
     eventId: createAnalyticsUuid(),
     sessionId: getAnalyticsSessionId(),
+    pageViewId: boundedString(input.pageViewId || currentPageViewId, 96) || undefined,
+    routeKey: normalizeRouteKey(input.routeKey || currentRouteKey),
   };
 
   const productId = entityId(input.productId);
@@ -184,6 +229,19 @@ export function sanitizeAnalyticsPayload(event, input = {}) {
     if (key === 'path') {
       value = value.split(/[?#]/, 1)[0] || '/';
       meta[key] = value.startsWith('/') ? value : `/${value}`;
+    } else if (key === 'sectionKey') {
+      value = allowedTaxonomyValue(SECTION_KEYS, value);
+      if (value) meta[key] = value;
+    } else if (key === 'elementKey') {
+      value = allowedTaxonomyValue(ELEMENT_KEYS, value);
+      if (value) meta[key] = value;
+    } else if (key === 'placementKey') {
+      value = allowedTaxonomyValue(PLACEMENT_KEYS, value);
+      if (value) meta[key] = value;
+    } else if (key === 'routeKey') {
+      meta[key] = normalizeRouteKey(value);
+    } else if (key === 'deviceClass') {
+      if (['mobile', 'tablet', 'desktop'].includes(value)) meta[key] = value;
     } else if (key === 'filter' || key === 'errorCode') {
       const token = value.replace(/[^A-Za-z0-9_.:-]+/g, '_').replace(/^_+|_+$/g, '');
       if (token) meta[key] = token;
@@ -194,6 +252,12 @@ export function sanitizeAnalyticsPayload(event, input = {}) {
     let value = positiveInteger(rawMeta[key]);
     if (key === 'quantity' && value !== undefined) value = Math.min(99, value);
     if (value !== undefined) meta[key] = value;
+  }
+  if (event === 'engagement_milestone' && ENGAGEMENT_SECONDS.has(Number(rawMeta.seconds))) meta.seconds = Number(rawMeta.seconds);
+  if (event === 'scroll_depth' && SCROLL_DEPTHS.has(Number(rawMeta.percent))) meta.percent = Number(rawMeta.percent);
+  if (['banner_view', 'banner_click', 'product_card_view', 'product_card_click'].includes(event)) {
+    const position = positiveInteger(rawMeta.position);
+    if (position !== undefined && position <= 200) meta.position = position;
   }
   if (Object.keys(meta).length) payload.meta = meta;
   return payload;
@@ -212,12 +276,16 @@ export function extractAnalyticsAttribution(locationLike = globalThis.location, 
   const campaign = {};
   try {
     const params = new URLSearchParams(locationLike?.search || '');
-    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) {
+    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'yclid', 'mt_click_id']) {
       const value = boundedString(params.get(key) || '', META_LIMITS[key]);
       if (value) campaign[key] = value;
     }
+    if (!campaign.mt_click_id) {
+      const legacyVkClick = boundedString(params.get('vk_click_id') || '', META_LIMITS.mt_click_id);
+      if (legacyVkClick) campaign.mt_click_id = legacyVkClick;
+    }
     if (Object.keys(campaign).length) {
-      for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) delete meta[key];
+      for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'yclid', 'mt_click_id']) delete meta[key];
       Object.assign(meta, campaign);
     }
   } catch {
@@ -261,6 +329,8 @@ export function trackAnalytics(event, input = {}, options = {}) {
     ...input,
     meta: {
       ...extractAnalyticsAttribution(),
+      routeKey: currentRouteKey,
+      deviceClass: globalThis.innerWidth < 640 ? 'mobile' : globalThis.innerWidth < 1024 ? 'tablet' : 'desktop',
       ...(input.meta && typeof input.meta === 'object' ? input.meta : {}),
     },
   });

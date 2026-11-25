@@ -215,6 +215,8 @@ model Order {
   courierId              Int?
   courier                User?     @relation("OrderCourier", fields: [courierId], references: [id])
   deliveredAt            DateTime?
+  analyticsSessionId     String?   @db.VarChar(96)
+  analyticsAttribution   Json?
 
   // Financials
   itemsTotal     Int
@@ -247,6 +249,7 @@ model Order {
 
   @@index([courierId])
   @@index([referralLinkId, createdAt])
+  @@index([analyticsSessionId])
 }
 
 model TelegramOrderNotification {
@@ -413,6 +416,10 @@ model WorkingHoursException {
 model AnalyticsEvent {
   id        Int      @id @default(autoincrement())
   eventId   String?  @unique @db.VarChar(96)
+  schemaVersion Int   @default(1)
+  sessionId String?   @db.VarChar(96)
+  pageViewId String?  @db.VarChar(96)
+  routeKey  String?   @db.VarChar(64)
   userId    Int?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   event     String
@@ -423,6 +430,9 @@ model AnalyticsEvent {
 
   @@index([event, createdAt])
   @@index([createdAt])
+  @@index([sessionId, createdAt])
+  @@index([event, routeKey, createdAt])
+  @@index([productId, event, createdAt])
 }
 
 model ReferralLink {

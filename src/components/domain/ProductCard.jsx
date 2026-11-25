@@ -8,7 +8,7 @@ import { useAppState } from '../../state/AppState';
 import { trackAnalytics } from '../../lib/analytics';
 import { formatUiSizeLabel } from '../../lib/productUi';
 
-export function ProductCard({ id, title, price, image, images, size, composition, onAdd, onOpen, view = 'grid' }) {
+export function ProductCard({ id, title, price, image, images, size, composition, onAdd, onOpen, view = 'grid', analyticsPlacement, analyticsPosition }) {
   const { state, actions } = useAppState();
   const isSaved = state.favorites.productIds.includes(id);
   const cartItem = state.cart.items.find((item) => String(item.productId) === String(id));
@@ -30,6 +30,11 @@ export function ProductCard({ id, title, price, image, images, size, composition
 
   return (
     <Surface
+      data-analytics-impression="product"
+      data-analytics-product={id}
+      data-analytics-placement={analyticsPlacement || (view === 'list' ? 'catalog_list' : 'catalog_grid')}
+      data-analytics-position={analyticsPosition}
+      data-analytics-element="product_card"
       className="productCard"
       style={{
         height: '100%',
@@ -156,6 +161,8 @@ export function ProductCard({ id, title, price, image, images, size, composition
 
           {isList ? (
             <button
+              data-analytics-element="product_add"
+              data-analytics-placement={analyticsPlacement || (view === 'list' ? 'catalog_list' : 'catalog_grid')}
               type="button"
               aria-label={isSaved ? 'Убрать из сохранённого' : 'Сохранить'}
               onClick={(event) => {

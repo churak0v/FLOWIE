@@ -85,6 +85,28 @@ function normalizeItems(items) {
         .sort((a, b) => a.productId - b.productId);
 }
 
+function normalizeAnalytics(value) {
+    if (value == null) return { sessionId: null, attribution: null };
+    if (typeof value !== 'object' || Array.isArray(value)) throw new OrderCreationError('BAD_ANALYTICS');
+    const sessionId = String(value.sessionId || '').trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9:_-]{7,95}$/.test(sessionId)) throw new OrderCreationError('BAD_ANALYTICS_SESSION');
+    const source = value.attribution && typeof value.attribution === 'object' && !Array.isArray(value.attribution) ? value.attribution : {};
+    const attribution = {};
+    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'referrerHost']) {
+        const item = String(source[key] || '').trim();
+        if (!item) continue;
+        if (item.length > (key === 'referrerHost' ? 255 : 80) || /[\u0000-\u001f\u007f]/.test(item)) throw new OrderCreationError('BAD_ANALYTICS_ATTRIBUTION');
+        attribution[key] = item;
+    }
+    for (const key of ['yclid', 'mt_click_id']) {
+        const item = String(source[key] || '').trim();
+        if (!item) continue;
+        if (item.length > 256 || !/^[A-Za-z0-9._:-]+$/.test(item)) throw new OrderCreationError('BAD_ANALYTICS_ATTRIBUTION');
+        attribution[`${key}Hash`] = crypto.createHash('sha256').update(`${key}:${item}`).digest('hex');
+    }
+    return { sessionId, attribution: Object.keys(attribution).length ? attribution : null };
+}
+
 function normalizeOrderRequest(body) {
     if (body?.consentPersonal !== true) throw new OrderCreationError('CONSENT_REQUIRED');
     const checkoutKey = boundedString(body?.checkoutKey, { code: 'BAD_CHECKOUT_KEY', min: 1, max: 64 }).toLowerCase();
@@ -120,6 +142,7 @@ function normalizeOrderRequest(body) {
         senderPhone: normalizePhone(body?.senderPhone, true, 'BAD_SENDER_PHONE'),
         floristComment: boundedString(body?.floristComment, { code: 'BAD_FLORIST_COMMENT', max: 1000 }) || null,
         consentPersonal: true,
+        analytics: normalizeAnalytics(body?.analytics),
     };
 }
 
@@ -134,6 +157,7 @@ function stableJson(value) {
 function payloadDigest(normalized) {
     const payload = { ...normalized };
     delete payload.checkoutKey;
+    delete payload.analytics;
     return crypto.createHash('sha256').update(stableJson(payload)).digest('hex').slice(0, 24);
 }
 
@@ -238,6 +262,8 @@ async function createOrder({ prisma, userId, body, now = () => new Date(), env =
                 itemsTotal,
                 deliveryCost,
                 totalPrice,
+                analyticsSessionId: normalized.analytics.sessionId,
+                analyticsAttribution: normalized.analytics.attribution,
                 referralLinkId: user.referralLinkId ?? null,
                 deliveryAddress: normalized.deliveryAddress,
                 deliveryCoords: quote?.coords || normalized.deliveryCoords,

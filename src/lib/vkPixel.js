@@ -53,6 +53,7 @@ export function initVkPixel({ enabled = true } = {}) {
 
 export function sendVkPixelEvent(event, payload = {}) {
   if (!initialized || typeof window?._tmr?.push !== 'function') return false;
+  if (!new Set(['page_view', 'product_view', 'cart_add', 'checkout_start', 'payment_start', 'purchase']).has(event)) return false;
   if (event === 'page_view') {
     const currentUrl = window.location.href;
     const isInitialLanding = currentUrl === lastPageUrl;

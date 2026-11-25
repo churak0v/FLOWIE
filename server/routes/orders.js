@@ -16,6 +16,8 @@ function publicOrder(order) {
     // field through customer order endpoints.
     delete safe.paymentChargeId;
     delete safe.paymentMeta;
+    delete safe.analyticsSessionId;
+    delete safe.analyticsAttribution;
     const recipientDetailsRequested = Boolean(order.askRecipientAddress || order.askRecipientTime);
     safe.recipientDetailsReceived = recipientDetailsRequested &&
         (!order.askRecipientAddress || Boolean(String(order.deliveryAddress || '').trim())) &&
@@ -150,6 +152,8 @@ router.post('/', requireAuth, async (req, res) => {
             event: 'order_created',
             userId: req.user.id,
             orderId: result.order.id,
+            sessionId: result.order.analyticsSessionId,
+            attribution: result.order.analyticsAttribution,
         });
         return res.status(result.replayed ? 200 : 201).json(publicOrder(result.order));
     } catch (error) {

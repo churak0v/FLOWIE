@@ -17,6 +17,8 @@ export function CheckoutFooterCTA({ total, disabled, loading = false, deliverySe
       }}
     >
       <button
+        data-analytics-element="checkout_submit"
+        data-analytics-placement="checkout"
         type="button"
         onClick={disabled ? undefined : onClick}
         disabled={disabled}

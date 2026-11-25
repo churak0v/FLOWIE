@@ -33,13 +33,23 @@ export function createYandexMetricaGoal(event, payload = {}) {
   for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) {
     if (typeof payload?.meta?.[key] === 'string') params[key] = payload.meta[key].slice(0, 80);
   }
-  const rawGoal = event === 'page_view' ? 'landing_view' : event;
+  const rawGoal = event === 'page_view'
+    ? 'landing_view'
+    : event === 'engagement_milestone'
+      ? `engaged_${Number(payload?.meta?.seconds) || 0}s`
+      : event === 'scroll_depth'
+        ? `scroll_${Number(payload?.meta?.percent) || 0}`
+        : event;
   const goal = String(rawGoal || '').replace(/[^a-z0-9_-]/gi, '_').slice(0, 64);
   return goal ? { goal, params } : null;
 }
 
 export function sendYandexMetricaEvent(event, payload = {}) {
   if (!initialized || typeof window?.ym !== 'function') return false;
+  const externalEvents = new Set(['page_view', 'engagement_milestone', 'scroll_depth', 'banner_click', 'product_card_click', 'product_view', 'cart_add', 'checkout_start', 'payment_start', 'purchase']);
+  if (!externalEvents.has(event)) return false;
+  if (event === 'engagement_milestone' && Number(payload?.meta?.seconds) !== 15) return false;
+  if (event === 'scroll_depth' && Number(payload?.meta?.percent) !== 50) return false;
   const command = createYandexMetricaGoal(event, payload);
   if (!command) return false;
   if (event === 'page_view') {

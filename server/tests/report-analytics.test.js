@@ -29,10 +29,15 @@ test('report keeps event counts, session cohorts and confirmed money as separate
     { userId: 1, event: 'payment_success', meta: { source: 'client', sessionId: 'session-001' } },
     { userId: 1, event: 'payment_success', meta: { source: 'server', sessionId: 'session-001' } },
     { userId: 1, event: 'order_created', meta: { source: 'server', sessionId: 'session-001' } },
+    { userId: 1, event: 'engagement_milestone', sessionId: 'session-001', meta: { seconds: 15 } },
+    { userId: 1, event: 'scroll_depth', sessionId: 'session-001', meta: { percent: 50 } },
+    { userId: 1, event: 'section_view', sessionId: 'session-001', meta: { sectionKey: 'hero' } },
+    { userId: 1, event: 'banner_view', sessionId: 'session-001', meta: { bannerId: 'mother' } },
+    { userId: 1, event: 'banner_click', sessionId: 'session-001', meta: { bannerId: 'mother' } },
     { userId: 99, event: 'page_view', meta: { sessionId: 'staff-session' } },
   ];
   const orders = [
-    { userId: 1, totalPrice: 5_000, user: { staffRole: null }, referralLink: { tag: 'tg_november' } },
+    { userId: 1, totalPrice: 5_000, user: { staffRole: null }, referralLink: { tag: 'tg_november' }, analyticsAttribution: { utm_source: 'vk_ads', utm_campaign: '42', utm_content: '7' } },
     { userId: 2, totalPrice: 3_000, user: { staffRole: null }, referralLink: null },
     { userId: 99, totalPrice: 99_000, user: { staffRole: 'admin' }, referralLink: { tag: 'internal' } },
   ];
@@ -69,6 +74,11 @@ test('report keeps event counts, session cohorts and confirmed money as separate
   assert.equal(report.funnel.totalConfirmedReceipts, 8_700);
   assert.deepEqual(report.paidAttribution.provenReferralLinks, [{ tag: 'tg_november', orders: 1, revenue: 5_000 }]);
   assert.deepEqual(report.paidAttribution.unknown, { orders: 1, revenue: 3_000 });
+  assert.equal(report.behavior.engagement.find((row) => row.seconds === 15).sessions, 1);
+  assert.equal(report.behavior.scroll.find((row) => row.percent === 50).sessions, 1);
+  assert.deepEqual(report.behavior.sections, [{ key: 'hero', count: 1 }]);
+  assert.equal(report.behavior.banners[0].ctr, 1);
+  assert.deepEqual(report.paidAttribution.campaigns[0], { source: 'vk_ads', campaign: '42', content: '7', orders: 1, revenue: 5_000 });
   assert.equal(Object.hasOwn(report.funnel, 'conversion'), false);
 });
 

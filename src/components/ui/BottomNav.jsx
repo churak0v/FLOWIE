@@ -1,4 +1,3 @@
-import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Heart, House, MapPin, ShoppingBag, User } from 'lucide-react';
 
@@ -8,6 +7,8 @@ function Tab({ to, label, icon: Icon }) {
   const isActive = to === '/' ? location.pathname === '/' : location.pathname.startsWith(to);
   return (
     <button
+      data-analytics-element={`nav_${to === '/' ? 'home' : to.slice(1)}`}
+      data-analytics-placement="bottom_nav"
       type="button"
       onClick={() => navigate(to)}
       className={isActive ? 'ui-bottomNavLink ui-bottomNavLink--active' : 'ui-bottomNavLink'}

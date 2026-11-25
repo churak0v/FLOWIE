@@ -83,6 +83,7 @@ export function PhoneLogin({ initialPhone = '', onSuccess, onCancel }) {
 
       {step === 'phone' ? (
         <input
+          className="ym-disable-keys"
           value={phone}
           onChange={(event) => setPhone(event.target.value)}
           inputMode="tel"
@@ -92,6 +93,7 @@ export function PhoneLogin({ initialPhone = '', onSuccess, onCancel }) {
         />
       ) : (
         <input
+          className="ym-disable-keys"
           value={code}
           onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
           inputMode="numeric"

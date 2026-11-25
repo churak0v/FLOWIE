@@ -38,6 +38,7 @@ export function HeroCarousel({ slides, className }) {
 
   return (
     <div
+      data-analytics-section="hero"
       className={cx(className)}
       role={!safeSlides.length ? 'status' : undefined}
       aria-busy={!safeSlides.length}
@@ -80,6 +81,10 @@ export function HeroCarousel({ slides, className }) {
         {safeSlides.map((s, idx) => (
           <div
             key={s.id || idx}
+            data-analytics-impression="banner"
+            data-analytics-banner={String(s.id || idx)}
+            data-analytics-placement="home_hero"
+            data-analytics-position={idx + 1}
             style={{
               minWidth: '100%',
               height: '100%',
@@ -124,6 +129,9 @@ export function HeroCarousel({ slides, className }) {
             <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
               background: 'linear-gradient(180deg, rgba(40,20,25,0.10), rgba(40,20,25,0.16) 42%, rgba(40,20,25,0.58))' }} />
             {s.href ? <button type="button" aria-label={'Открыть баннер: ' + (s.caption || '')}
+              data-analytics-element="hero_cta" data-analytics-placement="home_hero"
+              data-analytics-impression="banner" data-analytics-banner={String(s.id || idx)}
+              data-analytics-position={idx + 1}
               tabIndex={idx === active ? 0 : -1} onClick={() => openSlide(s)}
               style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'transparent', border: 0,
                 cursor: 'pointer', touchAction: 'pan-x' }} /> : null}

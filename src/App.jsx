@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Home } from './components/Home';
 import { BottomNav } from './components/ui/BottomNav';
@@ -6,7 +6,8 @@ import { MiniCartBar } from './components/domain/MiniCartBar';
 import { ActiveOrderFab } from './components/domain/ActiveOrderFab';
 import { api } from './api';
 import { AppStateProvider, useAppState } from './state/AppState';
-import { extractAnalyticsAttribution, markAnalyticsReady, trackAnalytics } from './lib/analytics';
+import { beginAnalyticsPageView, extractAnalyticsAttribution, markAnalyticsReady, trackAnalytics } from './lib/analytics';
+import { installBehaviorAnalytics } from './lib/behaviorAnalytics';
 
 const lazyNamed = (loader, name) => lazy(() => loader().then((module) => ({ default: module[name] })));
 const ProductDetails = lazyNamed(() => import('./components/ProductDetails'), 'ProductDetails');
@@ -68,14 +69,21 @@ function AppRoutes() {
     const location = useLocation();
     const navigate = useNavigate();
     const { pathname } = location;
+    const analyticsLocationRef = useRef('');
 
     useEffect(() => {
+        const analyticsLocation = `${pathname}${location.search}`;
+        if (analyticsLocationRef.current !== analyticsLocation) {
+            analyticsLocationRef.current = analyticsLocation;
+            beginAnalyticsPageView(pathname);
+        }
         trackAnalytics('page_view', {
             meta: {
                 path: pathname,
                 ...extractAnalyticsAttribution(window.location, document.referrer),
             },
-        }, { dedupeKey: `${pathname}${location.search}` });
+        }, { dedupeKey: analyticsLocation });
+        return installBehaviorAnalytics(document);
     }, [location.search, pathname]);
 
     // Load products from DB-backed API so the client vitrine reflects admin toggles (isActive).

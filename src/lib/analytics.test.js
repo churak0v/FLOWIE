@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import {
   ANALYTICS_OPT_OUT_KEY,
   ANALYTICS_PURCHASE_KEY_PREFIX,
+  beginAnalyticsPageView,
   clearAnalyticsQueue,
   createAnalyticsUuid,
   extractAnalyticsAttribution,
@@ -121,6 +122,16 @@ test('tracks the required funnel events and rejects unknown events', () => {
     restoreNavigator();
     restoreStorage();
   }
+});
+
+test('behavior payload includes stable page context and rejects arbitrary taxonomy', () => {
+  beginAnalyticsPageView('/product/42');
+  const accepted = sanitizeAnalyticsPayload('scroll_depth', { meta: { percent: 50 } });
+  assert.equal(accepted.routeKey, '/product/:id');
+  assert.match(accepted.pageViewId, /^[0-9a-f-]{36}$/i);
+  assert.equal(accepted.meta.percent, 50);
+  const rejectedDimension = sanitizeAnalyticsPayload('section_view', { meta: { sectionKey: 'customer name' } });
+  assert.equal(rejectedDimension.meta?.sectionKey, undefined);
 });
 
 test('records a confirmed purchase once per order in the same browser', () => {

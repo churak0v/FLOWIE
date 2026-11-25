@@ -39,7 +39,7 @@ export function Cart() {
 
   return (
     <>
-      <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '140px' }}>
+      <AppShell data-analytics-section="cart_items" style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '140px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <IconButton onClick={() => navigate(-1)} aria-label="Назад">
             <ChevronLeft size={22} />

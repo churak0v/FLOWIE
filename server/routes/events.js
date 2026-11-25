@@ -40,6 +40,10 @@ async function persistClientEvent(identity, normalized) {
     await tx.analyticsEvent.create({
       data: {
         eventId: normalized.eventId,
+        schemaVersion: 2,
+        sessionId: normalized.sessionId,
+        pageViewId: normalized.pageViewId,
+        routeKey: normalized.routeKey,
         userId: identity.userId,
         event: normalized.event,
         productId: normalized.productId,

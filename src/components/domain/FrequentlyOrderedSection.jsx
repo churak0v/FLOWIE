@@ -3,16 +3,16 @@ import { useAppState } from '../../state/AppState';
 import { Grid } from '../layout/Grid';
 import { ProductCard } from './ProductCard';
 
-export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMoreLabel = 'Показать ещё', view = 'grid' }) {
+export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMoreLabel = 'Показать ещё', view = 'grid', analyticsPlacement = 'home_recommendations' }) {
   const navigate = useNavigate();
   const { actions } = useAppState();
   const shownProducts = typeof limit === 'number' ? (products || []).slice(0, limit) : (products || []);
   const hasMore = typeof limit === 'number' && (products || []).length > shownProducts.length;
 
   return (
-    <>
+    <div data-analytics-section={analyticsPlacement.startsWith('catalog_') ? 'catalog_results' : 'frequently_ordered'}>
       <Grid style={view === 'list' ? { gridTemplateColumns: 'minmax(0, 1fr)', gap: 10 } : undefined}>
-        {shownProducts.map((p) => (
+        {shownProducts.map((p, index) => (
           <ProductCard
             key={p.id}
             id={p.id}
@@ -24,6 +24,8 @@ export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMo
             size={p.size}
             composition={p.composition}
             view={view}
+            analyticsPlacement={analyticsPlacement}
+            analyticsPosition={index + 1}
             onOpen={() => navigate(`/product/${p.id}`)}
             onAdd={() => actions.addToCart(p.id, 1)}
           />
@@ -51,6 +53,6 @@ export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMo
           {showMoreLabel}
         </button>
       ) : null}
-    </>
+    </div>
   );
 }

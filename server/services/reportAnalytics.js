@@ -2,6 +2,8 @@ const REPORT_DAYS = new Set([7, 30]);
 const EVENT_LIMIT = 50_000;
 
 const FUNNEL_STAGES = [
+  ['page_view', 'Визит'],
+  ['engagement_milestone', 'Вовлечение'],
   ['product_view', 'Просмотр товара'],
   ['cart_add', 'Добавление в корзину'],
   ['checkout_start', 'Начало оформления'],
@@ -17,8 +19,8 @@ function objectMeta(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
-function safeSessionId(meta) {
-  const value = objectMeta(meta).sessionId;
+function safeSessionId(row) {
+  const value = row?.sessionId || objectMeta(row?.meta).sessionId;
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return /^[A-Za-z0-9._:-]{8,128}$/.test(trimmed) ? trimmed : null;
@@ -86,10 +88,19 @@ function buildAnalyticsReport({ events = [], orders = [], deliveryInvoices = [],
   const errors = new Map();
   const eventCounts = new Map();
   const stageSessions = new Map(FUNNEL_STAGES.map(([event]) => [event, new Set()]));
+  const engagementSessions = new Map([5, 15, 30, 60].map((seconds) => [seconds, new Set()]));
+  const scrollSessions = new Map([25, 50, 75, 90].map((depth) => [depth, new Set()]));
+  const sectionViews = new Map();
+  const elementClicks = new Map();
+  const bannerViews = new Map();
+  const bannerClicks = new Map();
+  const productCardViews = new Map();
+  const productCardClicks = new Map();
 
   for (const row of cleanEvents) {
     const event = String(row.event || '');
-    const sessionId = safeSessionId(row.meta);
+    const sessionId = safeSessionId(row);
+    const meta = objectMeta(row.meta);
     increment(eventCounts, event);
 
     if (event === 'page_view') {
@@ -106,6 +117,14 @@ function buildAnalyticsReport({ events = [], orders = [], deliveryInvoices = [],
     }
 
     if (stageSessions.has(event) && sessionId) stageSessions.get(event).add(sessionId);
+    if (event === 'engagement_milestone' && engagementSessions.has(Number(meta.seconds)) && sessionId) engagementSessions.get(Number(meta.seconds)).add(sessionId);
+    if (event === 'scroll_depth' && scrollSessions.has(Number(meta.percent)) && sessionId) scrollSessions.get(Number(meta.percent)).add(sessionId);
+    if (event === 'section_view') increment(sectionViews, safeLabel(meta.sectionKey, 48) || 'unknown');
+    if (event === 'element_click') increment(elementClicks, safeLabel(meta.elementKey, 48) || 'unknown');
+    if (event === 'banner_view') increment(bannerViews, safeLabel(meta.bannerId, 32) || 'unknown');
+    if (event === 'banner_click' || event === 'home_banner_click') increment(bannerClicks, safeLabel(meta.bannerId, 32) || 'unknown');
+    if (event === 'product_card_view') increment(productCardViews, Number(row.productId) || 0);
+    if (event === 'product_card_click') increment(productCardClicks, Number(row.productId) || 0);
 
     if (['product_view', 'favorite_add', 'cart_add'].includes(event) && row.productId != null && Number.isInteger(Number(row.productId)) && Number(row.productId) > 0) {
       const id = Number(row.productId);
@@ -143,16 +162,41 @@ function buildAnalyticsReport({ events = [], orders = [], deliveryInvoices = [],
     sessions: sourceSessions.get(row.source)?.size || 0,
   }));
 
+  const sessionDenominator = visitSessions.size || 1;
+  const behavior = {
+    engagement: [5, 15, 30, 60].map((seconds) => ({ seconds, sessions: engagementSessions.get(seconds).size, rate: engagementSessions.get(seconds).size / sessionDenominator })),
+    scroll: [25, 50, 75, 90].map((percent) => ({ percent, sessions: scrollSessions.get(percent).size, rate: scrollSessions.get(percent).size / sessionDenominator })),
+    sections: sortedCounts(sectionViews, 'key'),
+    elements: sortedCounts(elementClicks, 'key'),
+    banners: [...new Set([...bannerViews.keys(), ...bannerClicks.keys()])].map((bannerId) => {
+      const views = bannerViews.get(bannerId) || 0;
+      const clicks = bannerClicks.get(bannerId) || 0;
+      return { bannerId, views, clicks, ctr: views ? clicks / views : null };
+    }).sort((a, b) => b.views - a.views || b.clicks - a.clicks),
+    productCards: [...new Set([...productCardViews.keys(), ...productCardClicks.keys()])].filter(Boolean).map((productId) => ({
+      productId, name: names.get(productId) || `Товар #${productId}`, views: productCardViews.get(productId) || 0, clicks: productCardClicks.get(productId) || 0,
+    })).sort((a, b) => b.views - a.views || b.clicks - a.clicks).slice(0, 50),
+  };
+
   const confirmedOrders = cleanOrders.length;
   const confirmedRevenue = cleanOrders.reduce((sum, order) => sum + Number(order.totalPrice || 0), 0);
   const confirmedDeliveryPayments = cleanDeliveryInvoices.length;
   const confirmedDeliveryRevenue = cleanDeliveryInvoices.reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0);
   const referralAttribution = new Map();
+  const campaignAttribution = new Map();
   let unknownOrders = 0;
   let unknownRevenue = 0;
   for (const order of cleanOrders) {
     const tag = safeLabel(order.referralLink?.tag, 64);
     const revenue = Number(order.totalPrice || 0);
+    const attribution = objectMeta(order.analyticsAttribution);
+    const source = safeLabel(attribution.utm_source, 80) || 'unknown';
+    const campaign = safeLabel(attribution.utm_campaign, 80) || 'unknown';
+    const content = safeLabel(attribution.utm_content, 80) || 'unknown';
+    const campaignKey = `${source}\u0000${campaign}\u0000${content}`;
+    if (!campaignAttribution.has(campaignKey)) campaignAttribution.set(campaignKey, { source, campaign, content, orders: 0, revenue: 0 });
+    campaignAttribution.get(campaignKey).orders += 1;
+    campaignAttribution.get(campaignKey).revenue += revenue;
     if (!tag) {
       unknownOrders += 1;
       unknownRevenue += revenue;
@@ -199,8 +243,10 @@ function buildAnalyticsReport({ events = [], orders = [], deliveryInvoices = [],
     },
     paidAttribution: {
       provenReferralLinks: [...referralAttribution.values()].sort((a, b) => b.revenue - a.revenue || a.tag.localeCompare(b.tag, 'ru')),
+      campaigns: [...campaignAttribution.values()].sort((a, b) => b.revenue - a.revenue || b.orders - a.orders),
       unknown: { orders: unknownOrders, revenue: unknownRevenue },
     },
+    behavior,
     dataQuality: {
       eventsTruncated: Boolean(truncated),
       staffExcluded: true,
@@ -232,7 +278,7 @@ async function loadAnalyticsReport(prisma, { days, now = new Date() }) {
     prisma.user.findMany({ where: { staffRole: { not: null } }, select: { id: true } }),
     prisma.analyticsEvent.findMany({
       where: { createdAt: { gte: from, lt: to } },
-      select: { userId: true, event: true, productId: true, orderId: true, meta: true, createdAt: true },
+      select: { userId: true, event: true, productId: true, orderId: true, sessionId: true, pageViewId: true, routeKey: true, meta: true, createdAt: true },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: EVENT_LIMIT + 1,
     }),
@@ -243,6 +289,8 @@ async function loadAnalyticsReport(prisma, { days, now = new Date() }) {
         userId: true,
         totalPrice: true,
         paidAt: true,
+        analyticsSessionId: true,
+        analyticsAttribution: true,
         user: { select: { staffRole: true } },
         referralLink: { select: { tag: true } },
       },

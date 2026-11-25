@@ -117,6 +117,22 @@ test('eventId and sessionId are mandatory and commerce identifiers are positive 
   assert.throws(() => normalizeClientEvent(payload({ orderId: -1 })), (error) => error.code === 'BAD_ORDER_ID');
 });
 
+test('behavior v2 accepts only fixed taxonomy and hashes click identifiers', () => {
+  const normalized = normalizeClientEvent(payload({
+    event: 'product_card_view',
+    productId: 42,
+    pageViewId: '123e4567-e89b-42d3-a456-426614174111',
+    routeKey: '/catalog',
+    meta: { placementKey: 'catalog_grid', position: 3, routeKey: '/catalog', deviceClass: 'mobile', yclid: 'opaque-click-123' },
+  }));
+  assert.equal(normalized.pageViewId, '123e4567-e89b-42d3-a456-426614174111');
+  assert.equal(normalized.routeKey, '/catalog');
+  assert.equal(normalized.meta.placementKey, 'catalog_grid');
+  assert.match(normalized.meta.yclidHash, /^[a-f0-9]{64}$/);
+  assert.equal(JSON.stringify(normalized).includes('opaque-click-123'), false);
+  assert.throws(() => normalizeClientEvent(payload({ event: 'section_view', meta: { sectionKey: 'user-supplied-value' } })), (error) => error.code === 'BAD_SECTION_KEY');
+});
+
 test('legacy referral input is minimized without retaining raw href or trusted source', () => {
   const normalized = normalizeClientEvent(payload({
     event: 'ref_open',

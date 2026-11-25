@@ -5,6 +5,7 @@ import { Surface } from '../../src/components/ui/Surface';
 import { Text } from '../../src/components/ui/Text';
 
 const rub = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 });
+const pct = (value) => `${Math.round(Number(value || 0) * 100)}%`;
 
 function Card({ title, value, caption }) {
   return (
@@ -100,6 +101,27 @@ export function AnalyticsPage() {
             <div style={{ marginTop: 12 }}><Text variant="caption" muted>Серверные события: создано заказов — {report.funnel?.serverOrderCreatedEvents ?? 0}; успешных оплат — {report.funnel?.serverPaymentSuccessEvents ?? 0}. Финансовый итог выше всегда берётся из Order.</Text></div>
           </Section>
 
+          <Section title="Вовлечённость" note="Активное время считается только при видимой вкладке в фокусе; процент — от известных сессий с page_view.">
+            <Rows rows={report.behavior?.engagement} render={(row) => <Line key={row.seconds} label={`Не менее ${row.seconds} секунд`} values={`${row.sessions} · ${pct(row.rate)}`} />} />
+          </Section>
+
+          <Section title="Глубина просмотра" note="Порог отправляется один раз для каждого просмотра страницы.">
+            <Rows rows={report.behavior?.scroll} render={(row) => <Line key={row.percent} label={`${row.percent}% страницы`} values={`${row.sessions} · ${pct(row.rate)}`} />} />
+          </Section>
+
+          <Section title="Блоки и действия" note="Только фиксированные технические ключи; тексты и селекторы элементов не сохраняются.">
+            <Rows rows={report.behavior?.sections} render={(row) => <Line key={`s-${row.key}`} label={`Блок: ${row.key}`} values={`${row.count} просмотров`} />} />
+            <div style={{ marginTop: 12 }}><Rows rows={report.behavior?.elements} render={(row) => <Line key={`e-${row.key}`} label={`Действие: ${row.key}`} values={`${row.count} кликов`} />} /></div>
+          </Section>
+
+          <Section title="Баннеры" note="CTR считается только когда есть first-party impression.">
+            <Rows rows={report.behavior?.banners} render={(row) => <Line key={row.bannerId} label={row.bannerId} values={`${row.views} → ${row.clicks}${row.ctr == null ? '' : ` · ${pct(row.ctr)}`}`} />} />
+          </Section>
+
+          <Section title="Карточки товаров" note="Показ — не менее 50% карточки в viewport в течение 750 мс.">
+            <Rows rows={report.behavior?.productCards} render={(row) => <Line key={row.productId} label={row.name} values={`${row.views} показов → ${row.clicks} открытий`} />} />
+          </Section>
+
           <Section title="Популярные товары" note="Просмотры, добавления в избранное и корзину — количества действий, не уникальные люди.">
             <Rows rows={report.products} render={(row) => <Line key={row.productId} label={row.name} values={`${row.views} · ♡ ${row.favoriteAdds} · корзина ${row.cartAdds}`} />} />
           </Section>
@@ -115,6 +137,10 @@ export function AnalyticsPage() {
           <Section title="Доказанная атрибуция оплат" note="Только сохранённая связь Order.referralLinkId. Всё остальное остаётся unknown.">
             <Rows rows={report.paidAttribution?.provenReferralLinks} render={(row) => <Line key={row.tag} label={row.tag} values={`${row.orders} · ${rub.format(row.revenue)}`} />} />
             <div style={{ marginTop: 12 }}><Line label="unknown" values={`${report.paidAttribution?.unknown?.orders ?? 0} · ${rub.format(report.paidAttribution?.unknown?.revenue ?? 0)}`} /></div>
+          </Section>
+
+          <Section title="Оплаты по рекламной сессии" note="Источник сохранён на Order при создании; click ID хранится только как hash и здесь не показывается.">
+            <Rows rows={report.paidAttribution?.campaigns} render={(row) => <Line key={`${row.source}:${row.campaign}:${row.content}`} label={`${row.source} / ${row.campaign} / ${row.content}`} values={`${row.orders} · ${rub.format(row.revenue)}`} />} />
           </Section>
 
           <Section title="Ошибки оформления" note="Только безопасные коды errorCode/code; тексты, stack trace и персональные данные не читаются.">

@@ -29,6 +29,8 @@ function cachedHomeSlides() {
 function PickTile({ title, subtitle, image, href, accent = false }) {
   return (
     <Link
+      data-analytics-element="quick_pick"
+      data-analytics-placement="home_quick_picks"
       to={href}
       style={{
         position: 'relative',
@@ -125,7 +127,7 @@ function QuickPicks({ products }) {
   if (!cards.length) return null;
 
   return (
-    <section style={{ marginTop: 18 }}>
+    <section data-analytics-section="quick_picks" style={{ marginTop: 18 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
         <Text variant="subtitle">Выбрать по настроению</Text>
         <Text variant="caption" muted>без долгих поисков</Text>

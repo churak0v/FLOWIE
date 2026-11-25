@@ -12,7 +12,7 @@ import { Surface } from './ui/Surface';
 import { PriceBreakdown } from './domain/PriceBreakdown';
 import { CheckoutFooterCTA } from './domain/CheckoutFooterCTA';
 import { AppImage } from './ui/AppImage';
-import { trackAnalytics } from '../lib/analytics';
+import { getAnalyticsOrderContext, trackAnalytics } from '../lib/analytics';
 import { buildCheckoutDeliveryTime, calculateCheckoutPayment, isValidCheckoutPhone, normalizeCheckoutPhone } from '../lib/checkoutDelivery';
 import { YandexDeliveryMap } from './domain/YandexDeliveryMap';
 import { isMothersDayCampaignActive, MOTHERS_DAY_DELIVERY_DATE } from '../lib/mothersDayCampaign';
@@ -438,7 +438,7 @@ export function Checkout() {
 
   return (
     <>
-      <AppShell style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '140px' }}>
+      <AppShell className="ym-hide-content" data-analytics-section="checkout_form" style={{ '--app-shell-bottom-space': '0px', '--app-shell-extra-bottom': '140px' }}>
         <div style={{ display: 'grid', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <IconButton onClick={() => navigate(-1)} aria-label="Назад">
@@ -784,6 +784,7 @@ export function Checkout() {
               floristComment: state.cart.floristComment || '',
               senderPhone,
               consentPersonal: consentChecked,
+              analytics: getAnalyticsOrderContext(),
             };
             const fingerprint = JSON.stringify(payload);
             const checkoutKey = getCheckoutKey(fingerprint);

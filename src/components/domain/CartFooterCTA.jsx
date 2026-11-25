@@ -1,4 +1,3 @@
-import React from 'react';
 import { formatMoney } from '../../lib/money';
 
 export function CartFooterCTA({ total, disabled, onClick, label }) {
@@ -17,6 +16,8 @@ export function CartFooterCTA({ total, disabled, onClick, label }) {
       }}
     >
       <button
+        data-analytics-element="cart_checkout"
+        data-analytics-placement="cart"
         type="button"
         onClick={disabled ? undefined : onClick}
         disabled={disabled}
