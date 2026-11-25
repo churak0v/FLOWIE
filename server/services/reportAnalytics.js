@@ -39,7 +39,15 @@ function safeLabel(value, maxLength) {
 
 function safeSource(meta) {
   const data = objectMeta(meta);
-  return safeLabel(data.utmSource, 80) || safeLabel(data.utm_source, 80) || 'unknown';
+  return safeLabel(data.trafficSource, 255) || safeLabel(data.utmSource, 80) || safeLabel(data.utm_source, 80) || safeLabel(data.referrerHost, 255) || 'direct_or_unknown';
+}
+
+function safeChannel(meta) {
+  const data = objectMeta(meta);
+  const channel = safeLabel(data.trafficChannel, 32);
+  return ['paid_search', 'paid_social', 'organic_search', 'organic_social', 'email', 'campaign', 'referral', 'direct_or_unknown'].includes(channel)
+    ? channel
+    : (safeLabel(data.utmSource, 80) || safeLabel(data.utm_source, 80) ? 'campaign' : safeLabel(data.referrerHost, 255) ? 'referral' : 'direct_or_unknown');
 }
 
 function safeSearch(meta) {
@@ -183,6 +191,7 @@ function buildAnalyticsReport({ events = [], orders = [], deliveryInvoices = [],
   const productMetrics = new Map();
   const searchRows = new Map();
   const sources = new Map();
+  const channels = new Map();
   const sourceSessions = new Map();
   const errors = new Map();
   const eventCounts = new Map();
@@ -208,7 +217,9 @@ function buildAnalyticsReport({ events = [], orders = [], deliveryInvoices = [],
       else visitsWithoutSession += 1;
 
       const source = safeSource(row.meta);
+      const channel = safeChannel(row.meta);
       increment(sources, source);
+      increment(channels, channel);
       if (sessionId) {
         if (!sourceSessions.has(source)) sourceSessions.set(source, new Set());
         sourceSessions.get(source).add(sessionId);
@@ -289,11 +300,12 @@ function buildAnalyticsReport({ events = [], orders = [], deliveryInvoices = [],
     const tag = safeLabel(order.referralLink?.tag, 64);
     const revenue = Number(order.totalPrice || 0);
     const attribution = objectMeta(order.analyticsAttribution);
-    const source = safeLabel(attribution.utm_source, 80) || 'unknown';
+    const channel = safeChannel(attribution);
+    const source = safeLabel(attribution.utm_source, 80) || safeSource(attribution);
     const campaign = safeLabel(attribution.utm_campaign, 80) || 'unknown';
     const content = safeLabel(attribution.utm_content, 80) || 'unknown';
-    const campaignKey = `${source}\u0000${campaign}\u0000${content}`;
-    if (!campaignAttribution.has(campaignKey)) campaignAttribution.set(campaignKey, { source, campaign, content, orders: 0, revenue: 0 });
+    const campaignKey = `${channel}\u0000${source}\u0000${campaign}\u0000${content}`;
+    if (!campaignAttribution.has(campaignKey)) campaignAttribution.set(campaignKey, { channel, source, campaign, content, orders: 0, revenue: 0 });
     campaignAttribution.get(campaignKey).orders += 1;
     campaignAttribution.get(campaignKey).revenue += revenue;
     if (!tag) {
@@ -329,6 +341,7 @@ function buildAnalyticsReport({ events = [], orders = [], deliveryInvoices = [],
       emptyResults: allSearches.reduce((sum, item) => sum + item.emptyResults, 0),
     },
     sources: sourceRows,
+    channels: sortedCounts(channels, 'channel'),
     checkoutErrors: sortedCounts(errors, 'code'),
     funnel: {
       stages: funnel,
@@ -359,7 +372,7 @@ function buildAnalyticsReport({ events = [], orders = [], deliveryInvoices = [],
       productMetrics: 'Просмотры, добавления в избранное и корзину — отдельные события, не уникальные пользователи.',
       funnel: 'eventCount — число событий; knownSessionCohort — уникальные известные sessionId на этапе. Это не проценты конверсии.',
       finance: 'Основная выручка — Order с paymentStatus=CONFIRMED; доплаты доставки — только PAID DeliveryInvoice. Обе суммы отбираются по своему paidAt и не смешиваются.',
-      attribution: 'Оплата относится к кампании только при сохранённом Order.referralLinkId; остальные оплаты показаны как unknown.',
+      attribution: 'Канал определяется в порядке click id/UTM, внешний referrer, direct_or_unknown. Исходные UTM сохраняются отдельно; provenReferralLinks остаётся только доказанной атрибуцией по Order.referralLinkId.',
       activeTime: 'activeMs — максимум накопительного снимка на pageViewId, а не сумма heartbeat. Считается только видимое окно в фокусе; исторические просмотры без снимков остаются пустыми.',
       sectionTime: 'Времена секций могут пересекаться и не складываются в длительность страницы.',
       journey: 'Визиты не равны людям. Ordered funnel использует только известные sessionId и порядок событий. Предшествующие показы — ассоциации, а не доказательство причинного влияния.',

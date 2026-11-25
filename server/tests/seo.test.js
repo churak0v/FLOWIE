@@ -163,6 +163,17 @@ test('campaign landing is routed to the SEO renderer by both storefront ingress 
   }
 });
 
+test('public home is routed to indexable SEO HTML by both storefront ingress configurations', () => {
+  const root = path.join(__dirname, '..', '..');
+  for (const filename of ['default.conf', 'production-edge.conf.template']) {
+    const config = fs.readFileSync(path.join(root, 'nginx', filename), 'utf8');
+    const block = config.match(/location = \/ \{([^}]+)\}/)?.[1];
+    assert.ok(block, filename);
+    assert.match(block, /proxy_pass http:\/\/(?:api:3001|\$api_host);/);
+    assert.doesNotMatch(block, /noindex|proxy_pass http:\/\/web:8080/);
+  }
+});
+
 test('collection pages use real collection products and canonical slug', async () => {
   await withServer(seoRouter(), async (base) => {
     const response = await fetch(`${base}/catalog?collection=romantic`, { headers: { host: 'flowie.test' } });

@@ -11,6 +11,7 @@ import { beginAnalyticsPageView, extractAnalyticsAttribution, markAnalyticsReady
 import { installBehaviorAnalytics } from './lib/behaviorAnalytics';
 import { initialLoginModalState, isVerifiedUser, loginModalReducer } from './lib/authUi';
 import { normalizeRegistrationGiftStatus } from './lib/registrationGift';
+import { updatePageMetadata } from './lib/pageMetadata';
 
 const lazyNamed = (loader, name) => lazy(() => loader().then((module) => ({ default: module[name] })));
 const ProductDetails = lazyNamed(() => import('./components/ProductDetails'), 'ProductDetails');
@@ -76,6 +77,15 @@ function AppRoutes() {
     const [loginModal, dispatchLoginModal] = useReducer(loginModalReducer, initialLoginModalState);
     const [registrationGiftStatus, setRegistrationGiftStatus] = useState(() => normalizeRegistrationGiftStatus(null));
     const verifiedUser = isVerifiedUser(state.auth.me);
+
+    useEffect(() => {
+        updatePageMetadata({
+            pathname,
+            search: location.search,
+            products: state.products.items,
+            origin: window.location.origin,
+        });
+    }, [location.search, pathname, state.products.items]);
 
     const refreshRegistrationGift = useCallback(async () => {
         const next = normalizeRegistrationGiftStatus(await api.getRegistrationGiftStatus());

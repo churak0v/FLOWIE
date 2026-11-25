@@ -92,7 +92,8 @@ test('extracts only UTM values and external referrer hostname', () => {
     utm_medium: 'bot',
     utm_campaign: 'november',
     utm_content: 'rose-video',
-    referrerHost: 'partner.example',
+    trafficChannel: 'campaign',
+    trafficSource: 'tg',
   });
   assert.equal(extractAnalyticsAttribution({ search: '', hostname: 'flowie.example' }, '').utm_content, 'rose-video');
   assert.deepEqual(extractAnalyticsAttribution(
@@ -101,9 +102,48 @@ test('extracts only UTM values and external referrer hostname', () => {
   ), {
     utm_source: 'vk_ads',
     utm_campaign: '123456789',
-    referrerHost: 'partner.example',
+    trafficChannel: 'campaign',
+    trafficSource: 'vk_ads',
   });
   restoreSession();
+});
+
+test('attributes click ids before referrers and never fabricates UTM values', () => {
+  const cases = [
+    [{ search: '?yclid=opaque-click', hostname: 'flowie.example' }, 'https://google.com/search?q=private', { trafficChannel: 'paid_search', trafficSource: 'yandex', yclid: 'opaque-click' }],
+    [{ search: '?vk_click_id=vk-click', hostname: 'flowie.example' }, 'https://yandex.ru/search/?text=private', { trafficChannel: 'paid_social', trafficSource: 'vk', mt_click_id: 'vk-click' }],
+    [{ search: '', hostname: 'flowie.example' }, 'https://www.google.com/search?q=private', { trafficChannel: 'organic_search', trafficSource: 'www.google.com', referrerHost: 'www.google.com' }],
+    [{ search: '', hostname: 'flowie.example' }, 'https://partner.example/private?email=person@example.test', { trafficChannel: 'referral', trafficSource: 'partner.example', referrerHost: 'partner.example' }],
+    [{ search: '?phone=79990000000', hostname: 'flowie.example' }, '', { trafficChannel: 'direct_or_unknown', trafficSource: 'direct_or_unknown' }],
+  ];
+  for (const [locationLike, referrer, expected] of cases) {
+    const restoreSession = replaceGlobal('sessionStorage', memoryStorage());
+    try {
+      const actual = extractAnalyticsAttribution(locationLike, referrer);
+      assert.deepEqual(actual, expected);
+      assert.equal(Object.keys(actual).some((key) => key.startsWith('utm_')), false);
+      assert.doesNotMatch(JSON.stringify(actual), /private|person@example|79990000000/);
+    } finally {
+      restoreSession();
+    }
+  }
+});
+
+test('redacts personal values before attribution reaches session storage', () => {
+  const sessionStorage = memoryStorage();
+  const restoreSession = replaceGlobal('sessionStorage', sessionStorage);
+  try {
+    const actual = extractAnalyticsAttribution({
+      search: '?utm_source=newsletter&utm_campaign=person@example.test&utm_term=%2B79991234567&yclid=bad%20click',
+      hostname: 'flowie.example',
+    }, '');
+    assert.equal(actual.utm_campaign, '[email]');
+    assert.equal(actual.utm_term, '[phone]');
+    assert.equal(actual.yclid, undefined);
+    assert.doesNotMatch(sessionStorage.getItem('flowie_analytics_attribution'), /person@example|79991234567|bad click/);
+  } finally {
+    restoreSession();
+  }
 });
 
 test('preserves privacy-safe session and route context through the deployed API validator', () => {

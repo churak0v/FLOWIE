@@ -124,11 +124,12 @@ test('order preserves analytics session and only hashed click attribution', asyn
     const result = await createOrder({
         prisma,
         userId: 7,
-        body: validBody({ analytics: { sessionId: 'session_analytics_123', attribution: { utm_source: 'vk_ads', utm_campaign: '42', mt_click_id: 'opaque-vk-click' } } }),
+        body: validBody({ analytics: { sessionId: 'session_analytics_123', attribution: { trafficChannel: 'paid_social', trafficSource: 'vk_ads', utm_source: 'vk_ads', utm_campaign: '42', mt_click_id: 'opaque-vk-click' } } }),
         env: { DELIVERY_TARIFF_RUB: '300' },
     });
     assert.equal(result.order.analyticsSessionId, 'session_analytics_123');
     assert.equal(result.order.analyticsAttribution.utm_source, 'vk_ads');
+    assert.equal(result.order.analyticsAttribution.trafficChannel, 'paid_social');
     assert.match(result.order.analyticsAttribution.mt_click_idHash, /^[a-f0-9]{64}$/);
     assert.equal(JSON.stringify(result.order.analyticsAttribution).includes('opaque-vk-click'), false);
 });
