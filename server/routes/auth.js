@@ -12,6 +12,7 @@ const {
     hashIp,
 } = require('../services/phoneOtp');
 const { reserveOtpChallenge, consumeOtpAttempt } = require('../services/otpStore');
+const { claimRegistrationGiftForVerifiedPhone } = require('../services/registrationGift');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -222,6 +223,8 @@ router.post('/phone/verify', requireSameOrigin, async (req, res) => {
         const user = await prisma.$transaction(async (tx) => {
             const current = req.user?.id ? await tx.user.findUnique({ where: { id: req.user.id } }) : null;
             const target = await tx.user.findUnique({ where: { verifiedPhone: challenge.phone } });
+            let verifiedUser;
+            let newlyVerifiedAccount = false;
 
             if (target) {
                 if (current && current.id !== target.id) {
@@ -233,18 +236,28 @@ router.post('/phone/verify', requireSameOrigin, async (req, res) => {
                     await mergeGuestData(tx, current.id, target.id);
                     await tx.authSession.updateMany({ where: { userId: current.id, revokedAt: null }, data: { revokedAt: now } });
                 }
-                return target;
-            }
-
-            if (current) {
-                return tx.user.update({
+                verifiedUser = target;
+            } else if (current) {
+                newlyVerifiedAccount = isGuestUser(current);
+                verifiedUser = await tx.user.update({
                     where: { id: current.id },
                     data: { verifiedPhone: challenge.phone, phone: challenge.phone, phoneVerifiedAt: now },
                 });
+            } else {
+                newlyVerifiedAccount = true;
+                verifiedUser = await tx.user.create({
+                    data: { name: 'Покупатель', verifiedPhone: challenge.phone, phone: challenge.phone, phoneVerifiedAt: now },
+                });
             }
-            return tx.user.create({
-                data: { name: 'Покупатель', verifiedPhone: challenge.phone, phone: challenge.phone, phoneVerifiedAt: now },
+
+            await claimRegistrationGiftForVerifiedPhone(tx, {
+                sourceUserId: current?.id || null,
+                targetUserId: verifiedUser.id,
+                verifiedPhone: challenge.phone,
+                newlyVerifiedAccount,
+                now: () => now,
             });
+            return verifiedUser;
         });
 
         await rotateSession(req, res, user.id);

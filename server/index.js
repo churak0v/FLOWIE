@@ -61,6 +61,9 @@ app.use('/api/delivery', deliveryRoutes);
 app.use('/api/delivery', require('./routes/deliveryMaps'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/gift-picker', require('./routes/giftPicker'));
+const { createRegistrationGiftRouter, createRegistrationGiftAdminRouter } = require('./routes/registrationGift');
+app.use('/api/registration-gift', createRegistrationGiftRouter({ prisma }));
+app.use('/api/admin/registration-gifts', createRegistrationGiftAdminRouter({ prisma }));
 app.use('/api/admin/bouquet-economics', require('./routes/bouquetEconomics').createBouquetEconomicsRouter({ prisma }));
 if (process.env.FLOWIE_BOUQUET_IMPORT_ENABLED === 'true') {
     const { createBouquetImportStorage } = require('./services/bouquetImportStorage');

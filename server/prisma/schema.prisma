@@ -107,6 +107,8 @@ model User {
   authSessions         AuthSession[]
   phoneOtpChallenges   PhoneOtpChallenge[]
   staffCredential      StaffCredential?
+  registrationGifts    RegistrationGiftLedger[] @relation("RegistrationGiftOwner")
+  giftsFulfilled       RegistrationGiftLedger[] @relation("RegistrationGiftFulfiller")
 }
 
 model StaffCredential {
@@ -153,6 +155,36 @@ model PhoneOtpChallenge {
   @@index([phone, createdAt])
   @@index([ipHash, createdAt])
   @@index([expiresAt])
+}
+
+model RegistrationGiftLedger {
+  id                 String    @id @default(cuid())
+  campaignId         String    @db.VarChar(80)
+  userId             Int
+  user               User      @relation("RegistrationGiftOwner", fields: [userId], references: [id], onDelete: Cascade)
+  verifiedPhone      String?   @db.VarChar(20)
+  giftName           String    @db.VarChar(120)
+  giftQuantity       Int       @default(1)
+  fulfillmentMode    String    @db.VarChar(20)
+  offerTitle         String    @db.VarChar(100)
+  offerBody          String    @db.VarChar(240)
+  offerTerms         String?   @db.VarChar(240)
+  termsVersion       String    @db.VarChar(80)
+  exposedAt          DateTime  @default(now())
+  claimedAt          DateTime?
+  fulfilledAt        DateTime?
+  fulfilledById      Int?
+  fulfilledBy        User?     @relation("RegistrationGiftFulfiller", fields: [fulfilledById], references: [id], onDelete: SetNull)
+  fulfillmentOrderId Int?
+  fulfillmentOrder   Order?    @relation("RegistrationGiftOrder", fields: [fulfillmentOrderId], references: [id], onDelete: SetNull)
+  fulfillmentNote    String?   @db.VarChar(300)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([campaignId, userId])
+  @@unique([campaignId, verifiedPhone])
+  @@index([claimedAt, fulfilledAt])
+  @@index([verifiedPhone])
 }
 
 model Address {
@@ -292,6 +324,7 @@ model Order {
   chats                 Chat[]
   promoCodes            PromoCode[]
   telegramNotifications TelegramOrderNotification[]
+  registrationGifts     RegistrationGiftLedger[]    @relation("RegistrationGiftOrder")
 
   @@index([courierId])
   @@index([referralLinkId, createdAt])

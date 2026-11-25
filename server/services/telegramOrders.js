@@ -47,6 +47,11 @@ function formatOrderMessage(order, event) {
   const deliveryTime = order.askRecipientTime
     ? 'уточнить у получателя'
     : (order.deliveryTime || 'не указано');
+  const firstPaidOrderId = order.user?.orders?.[0]?.id;
+  const gift = (order.user?.registrationGifts || []).find((row) => row.claimedAt && !row.fulfilledAt);
+  const giftLine = paid && Number(firstPaidOrderId) === Number(order.id) && gift
+    ? `🎁 <b>Подарок за регистрацию:</b> ${escapeHtml(gift.giftName)} × ${Number(gift.giftQuantity || 1)} — добавить к этому заказу`
+    : null;
 
   return [
     title,
@@ -58,6 +63,7 @@ function formatOrderMessage(order, event) {
     `<b>Адрес:</b> ${escapeHtml(delivery)}`,
     `<b>Сумма:</b> ${escapeHtml(rubles(order.totalPrice))}`,
     `<b>Оплата:</b> ${paid ? 'подтверждена' : 'ожидается'}`,
+    giftLine,
   ].filter((line) => line !== null).join('\n');
 }
 
@@ -123,7 +129,24 @@ async function processPending(prisma, env = process.env, fetchImpl = fetch) {
 
   const pending = await prisma.telegramOrderNotification.findMany({
     where: { status: 'PENDING', nextAttemptAt: { lte: new Date() } },
-    include: { order: { include: { user: true, items: { include: { product: true } } } } },
+    include: {
+      order: {
+        include: {
+          user: {
+            include: {
+              registrationGifts: { where: { claimedAt: { not: null }, fulfilledAt: null } },
+              orders: {
+                where: { paymentStatus: 'CONFIRMED', paidAt: { not: null }, status: { notIn: ['CANCELLED', 'cancelled'] } },
+                orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
+                take: 1,
+                select: { id: true },
+              },
+            },
+          },
+          items: { include: { product: true } },
+        },
+      },
+    },
     orderBy: { createdAt: 'asc' },
     take: 20,
   });

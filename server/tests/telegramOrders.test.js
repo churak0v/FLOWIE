@@ -30,6 +30,23 @@ test('formats order notification and escapes customer content', () => {
   assert.doesNotMatch(message, /<без открытки>/);
 });
 
+test('paid first order tells the manager to add the outstanding registration gift once', () => {
+  const order = {
+    id: 42,
+    totalPrice: 5999,
+    items: [],
+    user: {
+      orders: [{ id: 42 }],
+      registrationGifts: [{ giftName: 'Raffaello <gift>', giftQuantity: 1, claimedAt: new Date(), fulfilledAt: null }],
+    },
+  };
+  const first = formatOrderMessage(order, 'ORDER_PAID');
+  assert.match(first, /Подарок за регистрацию/);
+  assert.match(first, /Raffaello &lt;gift&gt;/);
+  assert.doesNotMatch(formatOrderMessage({ ...order, id: 43 }, 'ORDER_PAID'), /Подарок за регистрацию/);
+  assert.doesNotMatch(formatOrderMessage(order, 'ORDER_CREATED'), /Подарок за регистрацию/);
+});
+
 test('queues one idempotent notification per configured recipient', async () => {
   let call;
   const prisma = {
