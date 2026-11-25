@@ -4,6 +4,7 @@ const {
   enqueueOrderNotification,
   formatOrderMessage,
   parseChatIds,
+  processPending,
   sendTelegramMessage,
 } = require('../services/telegramOrders');
 
@@ -115,6 +116,71 @@ test('adds an idempotent fulfillment callback only for an enriched paid order gi
     return { ok: true, json: async () => ({ ok: true, result: { message_id: 2 } }) };
   });
   assert.equal(payload.reply_markup.inline_keyboard.length, 1);
+});
+
+test('processPending adds gift text and callback only to the first paid order after registration', async () => {
+  const claimedAt = new Date('2026-11-26T10:00:00.000Z');
+  const gift = { id: 'gift-1', userId: 7, giftName: 'Raffaello', giftQuantity: 1, claimedAt, fulfilledAt: null };
+  const notification = (id, orderId, paidAt) => ({
+    id,
+    orderId,
+    chatId: '100',
+    event: 'ORDER_PAID',
+    status: 'PENDING',
+    attempts: 0,
+    createdAt: new Date(`2026-11-26T10:0${id}:00.000Z`),
+    order: {
+      id: orderId,
+      userId: 7,
+      totalPrice: 5000,
+      paidAt,
+      items: [],
+      user: { registrationGifts: [gift] },
+    },
+  });
+  const pending = [
+    notification(1, 10, new Date('2026-11-26T09:00:00.000Z')),
+    notification(2, 11, new Date('2026-11-26T10:30:00.000Z')),
+    notification(3, 12, new Date('2026-11-26T11:00:00.000Z')),
+  ];
+  const sentPayloads = [];
+  const firstOrderQueries = [];
+  const prisma = {
+    telegramOrderNotification: {
+      updateMany: async ({ where }) => ({ count: where.id ? 1 : 0 }),
+      findMany: async () => pending,
+      update: async () => ({}),
+    },
+    order: {
+      findFirst: async (query) => {
+        firstOrderQueries.push(query);
+        return { id: 11 };
+      },
+    },
+  };
+
+  const handled = await processPending(prisma, {
+    TELEGRAM_ORDER_BOT_TOKEN: 'secret-token',
+    TELEGRAM_ORDER_CHAT_IDS: '100',
+    TELEGRAM_ORDER_API_BASE: 'https://telegram.test',
+  }, async (_url, options) => {
+    sentPayloads.push(JSON.parse(options.body));
+    return { ok: true, json: async () => ({ ok: true, result: { message_id: sentPayloads.length } }) };
+  });
+
+  assert.equal(handled, 3);
+  assert.equal(firstOrderQueries.length, 3);
+  assert.ok(firstOrderQueries.every((query) => query.where.paidAt.gte === claimedAt));
+  assert.ok(firstOrderQueries.every((query) => query.where.paymentStatus === 'CONFIRMED'));
+  assert.doesNotMatch(sentPayloads[0].text, /Подарок за регистрацию/);
+  assert.equal(sentPayloads[0].reply_markup.inline_keyboard.length, 1);
+  assert.match(sentPayloads[1].text, /Подарок за регистрацию/);
+  assert.deepEqual(sentPayloads[1].reply_markup.inline_keyboard[1], [{
+    text: 'Подарок передан',
+    callback_data: 'registration_gift_fulfill:gift-1:11',
+  }]);
+  assert.doesNotMatch(sentPayloads[2].text, /Подарок за регистрацию/);
+  assert.equal(sentPayloads[2].reply_markup.inline_keyboard.length, 1);
 });
 
 test('uses a configured Telegram relay base URL', async () => {
