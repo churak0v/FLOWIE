@@ -36,10 +36,11 @@ function RecommendationSection({ title, sectionKey, products, navigate, addToCar
   );
 }
 
-function UpsellSection({ items, qtyById, setUpsellQty }) {
+function UpsellSection({ items, qtyById, setUpsellQty, enabled }) {
   const upsells = (items || []).filter((item) => item?.isActive !== false).slice(0, 6);
   if (!upsells.length) return null;
   const changeQty = (item, next) => {
+    if (!enabled) return;
     const id = item.id;
     const current = Number(qtyById?.[String(id)] || 0);
     const quantity = Math.max(0, Math.min(99, next));
@@ -51,6 +52,7 @@ function UpsellSection({ items, qtyById, setUpsellQty }) {
   return (
     <section data-analytics-section="upsells" style={{ marginTop: 'var(--sp-8)' }}>
       <Text variant="title" style={{ marginBottom: 'var(--sp-4)' }}>Добавьте к букету</Text>
+      {!enabled ? <p style={{fontSize: 13, color: 'var(--muted)', lineHeight: 1.4}}>Сначала добавьте букет в корзину, затем выберите дополнения.</p> : null}
       <Carousel>
         {upsells.map((item) => {
           const key = String(item.id);
@@ -62,10 +64,10 @@ function UpsellSection({ items, qtyById, setUpsellQty }) {
               <div style={{ padding: 12 }}>
                 <Text variant="subtitle" style={{ minHeight: '2.32em', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.16 }}>{item.title}</Text>
                 <Text variant="body" muted style={{ marginTop: 6 }}>{Number(item.price) > 0 ? formatMoney(item.price) : 'Бесплатно'}</Text>
-                <div style={{ marginTop: 12 }}>
+                <fieldset disabled={!enabled} style={{ margin: '12px 0 0', border: 0, padding: 0, opacity: enabled ? 1 : 0.5 }}>
                   <QuantityStepper value={qty} min={0} max={99}
                     onDec={() => changeQty(item, qty - 1)} onInc={() => changeQty(item, qty + 1)} />
-                </div>
+                </fieldset>
               </div>
             </Surface>
           );
@@ -90,7 +92,7 @@ export function ProductRecommendations({ product }) {
         navigate={navigate} addToCart={actions.addToCart} />
       <RecommendationSection title="С этими цветами" sectionKey="same_flowers" products={recommendations.sameFlowers}
         navigate={navigate} addToCart={actions.addToCart} />
-      <UpsellSection items={state.upsells.items} qtyById={state.cart.upsells} setUpsellQty={actions.setUpsellQty} />
+      <UpsellSection enabled={state.cart.items.some(item => item.qty > 0)} items={state.upsells.items} qtyById={state.cart.upsells} setUpsellQty={actions.setUpsellQty} />
     </>
   );
 }
