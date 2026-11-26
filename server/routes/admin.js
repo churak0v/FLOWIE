@@ -16,6 +16,12 @@ const {
 const { loadAnalyticsReport } = require('../services/reportAnalytics');
 const { BANNER_IDS, normalizeBanner } = require('../services/homeBanners');
 const {
+  PRODUCT_MEDIA_BRANDING_CODE,
+  PRODUCT_MEDIA_BRANDING_MESSAGE,
+  assertPublishableProductMedia,
+  lockProductMedia,
+} = require('../services/productMediaBranding');
+const {
   DeliveryPaymentError,
   invoiceTtlMs,
   issueDeliveryQuote,
@@ -349,6 +355,8 @@ router.post('/products', requireAdmin, requireRoles(['admin', 'moderator']), asy
     const collectionIdsRaw = Array.isArray(body.collectionIds) ? body.collectionIds : [];
     const collectionIds = collectionIdsRaw.map(asInt).filter((x) => Number.isFinite(x));
 
+    assertPublishableProductMedia({ isActive, image, images });
+
 	    try {
 	      console.info('[admin] create product', {
 	        adminId: req.admin?.id,
@@ -430,6 +438,7 @@ router.post('/products', requireAdmin, requireRoles(['admin', 'moderator']), asy
 
 	    return res.json({ ok: true, product });
 	  } catch (e) {
+	    if (e?.code === PRODUCT_MEDIA_BRANDING_CODE) return res.status(422).json({ ok: false, error: PRODUCT_MEDIA_BRANDING_CODE, message: PRODUCT_MEDIA_BRANDING_MESSAGE });
 	    return res.status(500).json({ ok: false, error: e?.message || 'PRODUCT_CREATE_FAILED' });
 	  }
 	});
@@ -525,7 +534,19 @@ router.patch('/products/:id', requireAdmin, requireRoles(['admin', 'moderator'])
     }
 
     const product = await prisma.$transaction(async (tx) => {
-      const updated = await tx.product.update({
+      await lockProductMedia(tx, id);
+      const current = await tx.product.findUnique({
+        where: { id },
+        select: { image: true, isActive: true, images: { select: { url: true } } },
+      });
+      if (!current) return null;
+      assertPublishableProductMedia({
+        isActive: data.isActive ?? current.isActive,
+        image: data.image ?? current.image,
+        images: images ?? current.images,
+      });
+
+      await tx.product.update({
         where: { id },
         data,
         include: PRODUCT_INCLUDE,
@@ -594,6 +615,7 @@ router.patch('/products/:id', requireAdmin, requireRoles(['admin', 'moderator'])
 
     return res.json({ ok: true, product });
   } catch (e) {
+    if (e?.code === PRODUCT_MEDIA_BRANDING_CODE) return res.status(422).json({ ok: false, error: PRODUCT_MEDIA_BRANDING_CODE, message: PRODUCT_MEDIA_BRANDING_MESSAGE });
     return res.status(500).json({ ok: false, error: e?.message || 'PRODUCT_UPDATE_FAILED' });
   }
 });
@@ -639,15 +661,24 @@ router.post('/products/:id/images', requireAdmin, requireRoles(['admin', 'modera
       // ignore logging errors
     }
 
-    const last = await prisma.productImage.findFirst({
-      where: { productId },
-      orderBy: [{ sort: 'desc' }, { createdAt: 'desc' }],
+    const image = await prisma.$transaction(async (tx) => {
+      await lockProductMedia(tx, productId);
+      const product = await tx.product.findUnique({
+        where: { id: productId },
+        select: { image: true, isActive: true, images: { select: { url: true } } },
+      });
+      if (!product) return null;
+      assertPublishableProductMedia({ isActive: product.isActive, image: product.image, images: [...product.images, url] });
+      const last = await tx.productImage.findFirst({
+        where: { productId },
+        orderBy: [{ sort: 'desc' }, { createdAt: 'desc' }],
+      });
+      const sort = Number(last?.sort || 0) + 1;
+      return tx.productImage.create({
+        data: { productId, url, sort },
+      });
     });
-    const sort = Number(last?.sort || 0) + 1;
-
-    const image = await prisma.productImage.create({
-      data: { productId, url, sort },
-    });
+    if (!image) return res.status(404).json({ ok: false, error: 'NOT_FOUND' });
 
     await writeAudit({
       actorId: req.admin.id,
@@ -659,6 +690,7 @@ router.post('/products/:id/images', requireAdmin, requireRoles(['admin', 'modera
 
     return res.json({ ok: true, image });
   } catch (e) {
+    if (e?.code === PRODUCT_MEDIA_BRANDING_CODE) return res.status(422).json({ ok: false, error: PRODUCT_MEDIA_BRANDING_CODE, message: PRODUCT_MEDIA_BRANDING_MESSAGE });
     return res.status(500).json({ ok: false, error: e?.message || 'IMAGE_ADD_FAILED' });
   }
 });
