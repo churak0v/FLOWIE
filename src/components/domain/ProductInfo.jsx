@@ -1,7 +1,8 @@
-import { Camera, ChevronDown, Package, Ruler, Truck } from 'lucide-react';
+import { Camera, ChevronDown, Gift, Package, Ruler, Truck } from 'lucide-react';
 import { formatMoney } from '../../lib/money';
 import { cleanProductSubtitle } from '../../lib/productCopy';
 import { splitProductComposition } from '../../lib/productDetailsPresentation';
+import { premiumPairForProduct } from '../../lib/premiumPairs';
 
 function Condition({ icon: Icon, title, children, accent = false }) {
   return (
@@ -13,6 +14,7 @@ function Condition({ icon: Icon, title, children, accent = false }) {
 }
 
 export function ProductInfo({ product }) {
+  const pair = premiumPairForProduct(product);
   const { botanical, packaging } = splitProductComposition(product.compositionItems || product.composition);
   const subtitle = cleanProductSubtitle(product.subtitle);
   return (
@@ -25,9 +27,10 @@ export function ProductInfo({ product }) {
         {product.discount > 0 && product.basePrice > product.price ? <s style={{ fontSize: 16, color: 'var(--muted)' }}>{formatMoney(product.basePrice)}</s> : null}
       </div>
       <p style={{ margin: '6px 0 0', color: 'var(--muted)', fontSize: 12 }}>Оформление включено · Доставка рассчитывается отдельно</p>
+      {pair ? <div data-analytics-section="promotion" style={{ marginTop: 18, padding: '0 14px', borderRadius: 18, background: 'var(--c-accent-10)' }}><Condition icon={Gift} title={`${pair.gift} — в подарок`} accent>{pair.detail} Минибукет уже включён в комплект; привезём оба подарка вместе на один адрес.</Condition></div> : null}
       </div>
       <section data-analytics-section="dimensions" aria-label="Размер букета" style={{marginTop: 18}}>
-      <h2 style={{margin: 0, fontSize: 18}}>Размер</h2>
+      <h2 style={{margin: 0, fontSize: 18}}>{pair ? 'Размер основного подарка' : 'Размер'}</h2>
       {product.size ? <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginTop: 15, padding: '8px 11px', background: '#fff', borderRadius: 11, fontSize: 13, fontWeight: 750 }}><Ruler size={16} />{product.size} см · ширина × высота</div> : <p style={{fontSize: 13, color: 'var(--muted)', lineHeight: 1.4}}>Размер пока не указан. Уточните у флориста перед заказом.</p>}
       </section>
 

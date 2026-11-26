@@ -8,12 +8,14 @@ import { formatMoney } from '../../lib/money';
 import { useAppState } from '../../state/AppState';
 import { trackAnalytics } from '../../lib/analytics';
 import { getProductCardLayout } from '../../lib/productCardLayout';
+import { premiumPairForProduct } from '../../lib/premiumPairs';
 
 export function ProductCard({ id, title, price, image, images, onAdd, onOpen, view = 'grid', placement }) {
   const { state, actions } = useAppState();
   const { pathname } = useLocation();
   const analyticsPlacement = placement || (pathname === '/catalog' ? (view === 'list' ? 'catalog_list' : 'catalog_grid') : pathname.startsWith('/product/') ? 'product_recommendations' : 'home_recommendations');
   const isSaved = state.favorites.productIds.includes(id);
+  const pair = premiumPairForProduct(state.products.items.find(product => product.id === id));
   const cartItem = state.cart.items.find((item) => String(item.productId) === String(id));
   const cartQty = Number(cartItem?.qty || 0);
   const isList = view === 'list';
@@ -85,6 +87,7 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
           }}
         />
 
+        {pair ? <span style={{ position: 'absolute', bottom: 9, left: 9, right: 9, padding: '7px 8px', borderRadius: 10, background: 'rgba(255,255,255,.94)', color: 'var(--accent)', fontSize: 11, fontWeight: 900, textAlign: 'center' }}>+ минибукет в подарок</span> : null}
         {!isList ? <button
           type="button"
           data-analytics-element="favorite_toggle"

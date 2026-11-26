@@ -4,6 +4,7 @@ import { Surface } from '../ui/Surface';
 import { Text } from '../ui/Text';
 import { AppImage } from '../ui/AppImage';
 import { formatMoney } from '../../lib/money';
+import { premiumPairForProduct } from '../../lib/premiumPairs';
 
 export function CartItemsList({ items, productsById, onDec, onInc, onRemove }) {
   const products = productsById || new Map();
@@ -27,6 +28,7 @@ export function CartItemsList({ items, productsById, onDec, onInc, onRemove }) {
       {validItems.map((it) => {
         const p = products.get(String(it.productId));
         const rowSum = p.price * it.qty;
+        const pair = premiumPairForProduct(p);
         return (
           <Surface
             key={it.productId}
@@ -54,7 +56,8 @@ export function CartItemsList({ items, productsById, onDec, onInc, onRemove }) {
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <Text variant="subtitle" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.2 }}>{p.title}</Text>
-                  <div style={{ marginTop: 5 }}><Text variant="caption" muted>{formatMoney(p.price)} за букет</Text></div>
+                  <div style={{ marginTop: 5 }}><Text variant="caption" muted>{formatMoney(p.price)} за {pair ? 'комплект' : 'букет'}</Text></div>
+                  {pair ? <div style={{ marginTop: 6, fontSize: 11, color: 'var(--accent)', fontWeight: 800 }}>{pair.gift} × {it.qty} — в составе</div> : null}
                 </div>
                 <button type="button" onClick={() => onRemove(it.productId)} aria-label={`Удалить ${p.title}`} style={{ width: 32, height: 32, border: 0, borderRadius: 10, background: 'var(--surface-2)', color: 'var(--muted)', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
                   <Trash2 size={16} />

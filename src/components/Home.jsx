@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { Surface } from './ui/Surface';
 import { HeroBlock } from './domain/HeroBlock';
@@ -19,6 +19,9 @@ import { HomeBudgetExplorer } from './domain/HomeBudgetExplorer';
 import { HomeCareGuide } from './domain/HomeCareGuide';
 import { RegistrationGiftOffer } from './domain/RegistrationGiftOffer';
 import { shouldShowRegistrationGift } from '../lib/registrationGift';
+import { PREMIUM_PAIRS, premiumPairProducts, requestedPremiumPair, orderPremiumPairs, premiumPairSlide } from '../lib/premiumPairs';
+import { PremiumPairOffers } from './domain/PremiumPairOffers';
+import { FrequentlyOrderedSection } from './domain/FrequentlyOrderedSection';
 
 const HOME_BANNERS_CACHE_KEY = 'home_banners_v2';
 const HOME_BANNERS_TIMEOUT_MS = 4_000;
@@ -30,7 +33,11 @@ function cachedHomeSlides() {
 
 export function Home({ onLogin, registrationGift }) {
   const navigate = useNavigate();
+  const { search } = useLocation();
   const { state, actions } = useAppState();
+  const requestedPair = requestedPremiumPair(search);
+  const pairs = useMemo(() => orderPremiumPairs(premiumPairProducts(state.products.items), requestedPair), [state.products.items, requestedPair]);
+  const focusedPairs = requestedPair && requestedPair !== 'premium-pair' ? pairs.filter(pair => pair.code === requestedPair) : pairs;
   const [activeOrders, setActiveOrders] = useState([]);
   const [initialHeroSlides] = useState(() => {
     const cached = cachedHomeSlides();
@@ -110,6 +117,13 @@ export function Home({ onLogin, registrationGift }) {
 
   const feed = useMemo(() => buildHomeFeed(state.products.items), [state.products.items]);
   const hasMiniCart = Boolean(state.cart.items.length);
+  const offerLoading = state.products.loading || (!state.products.items.length && !state.products.error);
+  const requestedConfig = PREMIUM_PAIRS.find(pair => pair.code === requestedPair) || PREMIUM_PAIRS[0];
+  const displayedSlides = requestedPair ? [focusedPairs[0] ? premiumPairSlide(focusedPairs[0]) : {
+    id: `premium-pair-pending-${requestedPair}`, image: requestedConfig.image,
+    caption: offerLoading ? 'Большой подарок. Маленький — от нас.' : 'Этот комплект сейчас недоступен',
+    subtitle: offerLoading ? 'Загружаем комплекты' : 'Другие цветы — в каталоге ниже',
+  }] : slides;
 
   return (
     <AppShell style={{ padding: 0, '--app-content-inset-bottom': '0px' }}>
@@ -130,11 +144,12 @@ export function Home({ onLogin, registrationGift }) {
           }}
         >
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-            <HeroBlock slides={slides} isAuthenticated={isAuthenticated} onLogin={onLogin} />
+            <HeroBlock key={requestedPair || 'regular-home'} slides={displayedSlides} isAuthenticated={isAuthenticated} onLogin={onLogin} />
           </div>
         </section>
 
         <Surface variant="default" style={{ position: 'relative', zIndex: 1, marginTop: 'calc(-1 * var(--home-hero-overlap))', minHeight: '65dvh', borderTopLeftRadius: 28, borderTopRightRadius: 28, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, boxShadow: '0 -14px 36px rgba(31, 15, 22, 0.14)', paddingTop: 'var(--sp-6)', paddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))', paddingRight: 'calc(var(--sp-4) + var(--app-inset-right))', paddingBottom: 'var(--sp-4)', background: 'var(--bg)' }}>
+          {requestedPair ? <PremiumPairOffers pairs={focusedPairs} focused loading={offerLoading} /> : null}
           {isAuthenticated ? <SubscriptionRow /> : null}
 
           {activeOrders.length ? <section style={{ marginTop: 24 }}>
@@ -145,6 +160,7 @@ export function Home({ onLogin, registrationGift }) {
           </section> : null}
 
           <HomeFeedSection sectionKey="home_opening" title="Выбрать букет" subtitle="Цветы для ваших людей" products={feed.opening} href="/catalog" marginTop={activeOrders.length || isAuthenticated ? 30 : 0} />
+          {!requestedPair && pairs.length ? <section data-analytics-section="home_offer" style={{ marginTop: 30 }}><Text variant="title">Большой подарок. Маленький — от нас.</Text><Text variant="caption" muted style={{ marginTop: 5, marginBottom: 14 }}>Комплекты с минибукетом в той же палитре</Text><FrequentlyOrderedSection products={pairs.map(pair => pair.product)} /></section> : null}
           <HomeStoryBanner bannerId="home-photo-proof" eyebrow="Спокойнее выбирать" title="Перед доставкой покажем ваш букет" text="Сравните фото в карточке с готовым букетом перед доставкой." image={feed.photoBanner?.image || feed.photoBanner?.images?.[0]} href="/catalog" />
           <HomeBudgetExplorer products={feed.budgetPool} />
           <RegistrationGiftOffer

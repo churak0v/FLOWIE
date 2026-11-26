@@ -87,7 +87,7 @@ const SECTION_KEYS = new Set([
   'care_choice', 'care_water', 'care_steps', 'care_calculator', 'care_results',
   'gallery', 'summary', 'composition', 'dimensions', 'care', 'promotion',
   'motivation', 'similar', 'same_flowers', 'upsells',
-  'home_opening', 'home_budget', 'home_roses', 'home_premium', 'home_more', 'home_preserved',
+  'home_opening', 'home_budget', 'home_roses', 'home_premium', 'home_more', 'home_preserved', 'home_offer',
 ]);
 const ENGAGEMENT_REASONS = new Set(['heartbeat', 'route_leave', 'pagehide', 'blur', 'hidden', 'unload']);
 const ELEMENT_KEYS = new Set(['hero_cta', 'mothers_day_cta', 'quick_pick', 'product_card', 'product_add', 'mini_cart', 'nav_home', 'nav_catalog', 'nav_favorites', 'nav_recipients', 'nav_account', 'cart_checkout', 'checkout_submit', 'payment_retry', 'care_profile', 'care_calculator', 'care_catalog', 'upsell_add', 'care_guide', 'care_open', 'gallery_open', 'gallery_thumbnail', 'favorite_toggle']);

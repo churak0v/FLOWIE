@@ -569,6 +569,7 @@ export function AppStateProvider({ children }) {
         image: cover || images[0] || '',
         images,
         description: p.description || '',
+        tags: String(p.tags || ''),
         composition: toUiComposition(p.composition),
         size: toUiSize(p.width, p.height),
         categoryId: p.categoryId ?? null,
@@ -646,7 +647,7 @@ export function AppStateProvider({ children }) {
 
       // products
       loadProducts: async () => {
-        const cacheKey = 'products_ui_v14_brand_review';
+        const cacheKey = 'products_ui_v15_premium_pairs';
         const cached = readCacheEntry(cacheKey);
         const cachedItems = Array.isArray(cached?.data) ? cached.data : null;
         if (cachedItems?.length) {

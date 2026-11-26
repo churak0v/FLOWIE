@@ -1,7 +1,8 @@
 import { isPreservedComposition } from './catalogFilters.js';
+import { premiumPairForProduct } from './premiumPairs.js';
 
 function activeCatalogProducts(products) {
-  return (products || []).filter((product) => product && product.isActive !== false && !product.isUpsell
+  return (products || []).filter((product) => product && product.isActive !== false && !product.isUpsell && !premiumPairForProduct(product)
     && String(product.image || product.images?.[0] || '').trim());
 }
 

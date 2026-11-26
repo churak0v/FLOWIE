@@ -1,5 +1,6 @@
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
 const MAX_ATTEMPTS = 12;
+const { premiumPairGifts } = require('./premiumPair');
 
 function parseChatIds(value = process.env.TELEGRAM_ORDER_CHAT_IDS) {
   return [...new Set(String(value || '')
@@ -65,12 +66,14 @@ function formatOrderMessage(order, event) {
   const giftLine = gift
     ? `🎁 <b>Подарок за регистрацию:</b> ${escapeHtml(gift.giftName)} × ${Number(gift.giftQuantity || 1)} — добавить к этому заказу`
     : null;
+  const pairGifts = premiumPairGifts(order.items);
 
   return [
     title,
     '',
     '<b>Состав:</b>',
     ...(items.length ? items : ['• состав не указан']),
+    ...(pairGifts.length ? ['', '🎁 <b>Минибукеты комплектов — упаковать отдельно:</b>', ...pairGifts.map(gift => `• ${escapeHtml(gift.text)} × ${gift.quantity} — включено в комплект, на тот же адрес`)] : []),
     '',
     `<b>Дата и время:</b> ${escapeHtml(deliveryTime)}`,
     `<b>Адрес:</b> ${escapeHtml(delivery)}`,

@@ -7,7 +7,7 @@ export const SECTION_KEYS = new Set([
   'care_choice', 'care_water', 'care_steps', 'care_calculator', 'care_results',
   'gallery', 'summary', 'composition', 'dimensions', 'care', 'promotion',
   'motivation', 'similar', 'same_flowers', 'upsells',
-  'home_opening', 'home_budget', 'home_roses', 'home_premium', 'home_more', 'home_preserved',
+  'home_opening', 'home_budget', 'home_roses', 'home_premium', 'home_more', 'home_preserved', 'home_offer',
 ]);
 
 export const ENGAGEMENT_REASONS = new Set([

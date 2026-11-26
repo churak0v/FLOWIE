@@ -53,7 +53,7 @@ export function ProductDetails({ onLogin, registrationGift }) {
         id: Number(p.id), title: String(p.name || ''), subtitle: '',
         price: Math.max(0, basePrice - discount), basePrice, discount,
         image: p.image || images[0] || '', images,
-        description: p.description || '', composition: toUiComposition(p.composition),
+        description: p.description || '', tags: String(p.tags || ''), composition: toUiComposition(p.composition),
         compositionItems: p.composition, size: toUiSize(p.width, p.height),
         width: p.width, height: p.height, categoryId: p.categoryId ?? null,
       };
