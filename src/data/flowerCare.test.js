@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateCylindricalWaterMl, getFlowerCare, getProductFlowerCare } from './flowerCare.js';
+import { calculateCylindricalWaterMl, getFlowerCare, getProductFlowerCare, matchesCareProfile, careSelectionTitle } from './flowerCare.js';
 
 test('product care uses structured composition and never treats eucalyptus as a live flower profile', () => {
   const roses = getProductFlowerCare({ composition: [{ name: 'Роза Пинк Флойд', quantity: 9 }, { name: 'Стабилизированный эвкалипт', quantity: 2 }] });
@@ -69,4 +69,18 @@ test('fresh roses with stabilized eucalyptus remain a fresh bouquet', () => {
   const result = getProductFlowerCare({ title: 'Букет с розами', composition: [{ name: 'Роза', quantity: 9 }, { name: 'Стабилизированный эвкалипт', quantity: 2 }] });
   assert.equal(result.arrangementKey, 'bouquet');
   assert.equal(result.primary.key, 'roses');
+});
+
+test('care selections separate bouquets, fresh arrangements and preserved flowers', () => {
+  const bouquet = { title: 'Букет роз', composition: ['Роза · 9', 'Лента'] };
+  const arrangement = { title: 'Розы в коробке', composition: ['Роза · 9', 'Оазис'] };
+  const preserved = { title: 'Стабилизированная роза в колбе', composition: ['Роза'] };
+  assert.equal(matchesCareProfile(bouquet, 'roses'), true);
+  assert.equal(matchesCareProfile(arrangement, 'roses'), false);
+  assert.equal(matchesCareProfile({ title: 'Розы в сумочке', composition: ['Роза'] }, 'roses'), false);
+  assert.equal(matchesCareProfile(arrangement, 'bouquet'), false);
+  assert.equal(matchesCareProfile(arrangement, 'composition'), true);
+  assert.equal(matchesCareProfile(preserved, 'roses'), false);
+  assert.equal(matchesCareProfile(preserved, 'preserved'), true);
+  assert.equal(careSelectionTitle('roses'), 'Букеты с розами');
 });

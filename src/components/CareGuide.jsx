@@ -5,21 +5,13 @@ import { AppShell } from './layout/AppShell';
 import { FrequentlyOrderedSection } from './domain/FrequentlyOrderedSection';
 import { AppImage } from './ui/AppImage';
 import { useAppState } from '../state/AppState';
-import { getProductFlowers } from '../lib/catalogFilters';
+import { trackAnalytics } from '../lib/analytics';
 import {
   calculateCylindricalWaterMl,
   FLOWER_CARE_OPTIONS,
-  FLOWER_CARE_SOURCES,
-  isFloralFoamArrangement,
-  isPreservedComposition,
+  matchesCareProfile,
+  careSelectionTitle,
 } from '../data/flowerCare';
-
-function matchesCareProfile(product, selectedKey) {
-  if (selectedKey === 'bouquet') return true;
-  if (selectedKey === 'composition') return isFloralFoamArrangement(product) && !isPreservedComposition(product);
-  if (selectedKey === 'preserved') return isPreservedComposition(product);
-  return getProductFlowers(product).some((flower) => flower.key === selectedKey);
-}
 
 export function CareGuide() {
   const navigate = useNavigate();
@@ -34,7 +26,7 @@ export function CareGuide() {
   const volume = useMemo(() => calculateCylindricalWaterMl(diameter, waterHeight), [diameter, waterHeight]);
   const products = useMemo(() => (state.products.items || []).filter((product) => matchesCareProfile(product, selectedKey)).slice(0, 4), [selectedKey, state.products.items]);
   const heroImage = products[0]?.image || state.products.items.find((product) => product?.image)?.image;
-  const relatedTitle = selectedKey === 'preserved' ? 'Стабилизированные композиции и сухоцветы' : selectedKey === 'composition' ? 'Композиции в коробках и корзинах' : selectedKey === 'bouquet' ? 'Букеты FLOWIE' : `Букеты с ${selected.label.toLocaleLowerCase('ru-RU')}`;
+  const relatedTitle = careSelectionTitle(selectedKey);
 
   return (
     <AppShell style={{ padding: 0, background: '#fbf7f8' }}>
@@ -51,28 +43,28 @@ export function CareGuide() {
         </header>
 
         <div style={{ maxWidth: 1040, margin: '0 auto', padding: '34px calc(18px + var(--app-inset-right)) 0 calc(18px + var(--app-inset-left))' }}>
-          <section aria-labelledby="care-choice">
+          <section data-analytics-section="care_choice" aria-labelledby="care-choice">
             <p style={{ margin: 0, color: selected.accent, fontSize: 12, fontWeight: 1000, letterSpacing: '.1em', textTransform: 'uppercase' }}>Что у вас дома</p>
             <h2 id="care-choice" style={{ margin: '8px 0 18px', fontSize: 31, lineHeight: 1 }}>Выберите букет или композицию</h2>
-            <div style={{ display: 'flex', gap: 9, overflowX: 'auto', padding: '2px 0 8px', scrollbarWidth: 'none' }}>{FLOWER_CARE_OPTIONS.map((item) => <button key={item.key} type="button" aria-pressed={item.key === selectedKey} onClick={() => setSelectedKey(item.key)} style={{ flexShrink: 0, minHeight: 44, padding: '0 16px', borderRadius: 999, border: `1px solid ${item.key === selectedKey ? item.accent : 'rgba(43,30,35,.14)'}`, background: item.key === selectedKey ? item.accent : '#fff', color: item.key === selectedKey ? '#fff' : '#2b1e23', fontWeight: 900, cursor: 'pointer' }}>{item.label}</button>)}</div>
+            <div style={{ display: 'flex', gap: 9, overflowX: 'auto', padding: '2px 0 8px', scrollbarWidth: 'none' }}>{FLOWER_CARE_OPTIONS.map((item) => <button key={item.key} type="button" aria-pressed={item.key === selectedKey} data-analytics-element="care_profile" onClick={() => { setSelectedKey(item.key); trackAnalytics('filter_change', { meta: { filter: 'care_profile', value: item.key } }); }} style={{ flexShrink: 0, minHeight: 44, padding: '0 16px', borderRadius: 999, border: `1px solid ${item.key === selectedKey ? item.accent : 'rgba(43,30,35,.14)'}`, background: item.key === selectedKey ? item.accent : '#fff', color: item.key === selectedKey ? '#fff' : '#2b1e23', fontWeight: 900, cursor: 'pointer' }}>{item.label}</button>)}</div>
           </section>
 
-          <section style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(270px,1fr))', gap: 14 }}>
+          <section data-analytics-section="care_water" style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(270px,1fr))', gap: 14 }}>
             <div style={{ padding: 24, borderRadius: 28, background: selected.accent, color: '#fff', boxShadow: `0 20px 50px ${selected.accent}33` }}><Flower2 size={28} /><h2 style={{ margin: '22px 0 10px', fontSize: 30, lineHeight: 1 }}>{selected.title}</h2><p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, color: 'rgba(255,255,255,.84)' }}>{selected.lead}</p></div>
             <div style={{ padding: 24, borderRadius: 28, background: '#fff', border: '1px solid rgba(43,30,35,.08)' }}><Droplets size={28} color={selected.accent} /><p style={{ margin: '22px 0 6px', color: selected.accent, fontSize: 12, fontWeight: 1000, textTransform: 'uppercase', letterSpacing: '.08em' }}>Сколько воды</p><p style={{ margin: 0, fontSize: 16, lineHeight: 1.5 }}>{selected.water}</p></div>
           </section>
 
-          <section style={{ marginTop: 38 }}><h2 style={{ margin: 0, fontSize: 31 }}>Что сделать</h2><div style={{ marginTop: 18, display: 'grid', gap: 10 }}>{selected.steps.map(([title, text], index) => <article key={title} style={{ display: 'grid', gridTemplateColumns: '48px minmax(0,1fr)', gap: 14, padding: 18, borderRadius: 22, background: '#fff', border: '1px solid rgba(43,30,35,.07)' }}><span style={{ width: 48, height: 48, display: 'grid', placeItems: 'center', borderRadius: 16, background: `${selected.accent}14`, color: selected.accent, fontSize: 17, fontWeight: 1000 }}>{index + 1}</span><div><h3 style={{ margin: 2, fontSize: 18 }}>{title}</h3><p style={{ margin: '7px 2px 0', color: '#715f66', lineHeight: 1.5 }}>{text}</p></div></article>)}</div></section>
+          <section data-analytics-section="care_steps" style={{ marginTop: 38 }}><h2 style={{ margin: 0, fontSize: 31 }}>Что сделать</h2><div style={{ marginTop: 18, display: 'grid', gap: 10 }}>{selected.steps.map(([title, text], index) => <article key={title} style={{ display: 'grid', gridTemplateColumns: '48px minmax(0,1fr)', gap: 14, padding: 18, borderRadius: 22, background: '#fff', border: '1px solid rgba(43,30,35,.07)' }}><span style={{ width: 48, height: 48, display: 'grid', placeItems: 'center', borderRadius: 16, background: `${selected.accent}14`, color: selected.accent, fontSize: 17, fontWeight: 1000 }}>{index + 1}</span><div><h3 style={{ margin: 2, fontSize: 18 }}>{title}</h3><p style={{ margin: '7px 2px 0', color: '#715f66', lineHeight: 1.5 }}>{text}</p></div></article>)}</div></section>
 
-          {!['composition', 'preserved'].includes(selectedKey) ? <section style={{ marginTop: 38, padding: 24, borderRadius: 28, background: '#efe5e8' }}>
+          {!['composition', 'preserved'].includes(selectedKey) ? <section data-analytics-section="care_calculator" style={{ marginTop: 38, padding: 24, borderRadius: 28, background: '#efe5e8' }}>
             <Ruler size={28} color={selected.accent} /><h2 style={{ margin: '16px 0 8px', fontSize: 29 }}>Объём воды до нужной отметки</h2><p style={{ margin: 0, color: '#715f66', lineHeight: 1.5 }}>Укажите внутренний диаметр вазы и высоту воды — калькулятор посчитает объём для цилиндрической формы.</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12, marginTop: 18 }}><label style={{ fontSize: 13, fontWeight: 900 }}>Диаметр внутри, см<input type="number" inputMode="decimal" min="1" max="60" value={diameter} onChange={(event) => setDiameter(event.target.value)} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 7, minHeight: 48, padding: '0 12px', borderRadius: 14, border: '1px solid rgba(43,30,35,.14)', background: '#fff', fontSize: 17 }} /></label><label style={{ fontSize: 13, fontWeight: 900 }}>Высота воды, см<input type="number" inputMode="decimal" min="1" max="60" value={waterHeight} onChange={(event) => setWaterHeight(event.target.value)} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 7, minHeight: 48, padding: '0 12px', borderRadius: 14, border: '1px solid rgba(43,30,35,.14)', background: '#fff', fontSize: 17 }} /></label></div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12, marginTop: 18 }}><label style={{ fontSize: 13, fontWeight: 900 }}>Диаметр внутри, см<input type="number" inputMode="decimal" min="1" max="60" value={diameter} onChange={(event) => setDiameter(event.target.value)} onBlur={() => trackAnalytics('element_click', { meta: { elementKey: 'care_calculator', placementKey: 'care_guide' } })} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 7, minHeight: 48, padding: '0 12px', borderRadius: 14, border: '1px solid rgba(43,30,35,.14)', background: '#fff', fontSize: 17 }} /></label><label style={{ fontSize: 13, fontWeight: 900 }}>Высота воды, см<input type="number" inputMode="decimal" min="1" max="60" value={waterHeight} onChange={(event) => setWaterHeight(event.target.value)} onBlur={() => trackAnalytics('element_click', { meta: { elementKey: 'care_calculator', placementKey: 'care_guide' } })} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 7, minHeight: 48, padding: '0 12px', borderRadius: 14, border: '1px solid rgba(43,30,35,.14)', background: '#fff', fontSize: 17 }} /></label></div>
             <div aria-live="polite" style={{ marginTop: 16, padding: 18, borderRadius: 18, background: '#fff' }}>{volume == null ? <strong>Введите размеры от 1 до 60 см</strong> : <><span style={{ display: 'block', color: '#715f66', fontSize: 13 }}>π × (диаметр ÷ 2)² × высота</span><strong style={{ display: 'block', marginTop: 5, fontSize: 27 }}>≈ {volume >= 1000 ? `${(volume / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} л` : `${volume} мл`}</strong></>}</div>
           </section> : null}
 
-          {products.length ? <section style={{ marginTop: 42 }}><span style={{ color: selected.accent, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 1000, textTransform: 'uppercase', letterSpacing: '.08em' }}><Sparkles size={16} /> Из актуального каталога</span><h2 style={{ margin: '8px 0 17px', fontSize: 31 }}>{relatedTitle}</h2><FrequentlyOrderedSection products={products} /></section> : null}
+          {products.length ? <section data-analytics-section="care_results" style={{ marginTop: 42 }}><span style={{ color: selected.accent, display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 1000, textTransform: 'uppercase', letterSpacing: '.08em' }}><Sparkles size={16} /> Из актуального каталога</span><h2 style={{ margin: '8px 0 17px', fontSize: 31 }}>{relatedTitle}</h2><FrequentlyOrderedSection products={products} placement="care_recommendations" /><button type="button" data-analytics-element="care_catalog" data-analytics-placement="care_guide" onClick={() => navigate(`/catalog?care=${encodeURIComponent(selectedKey)}`)} style={{ width: '100%', marginTop: 18, minHeight: 48, border: 0, borderRadius: 16, background: 'var(--accent)', color: '#fff', fontSize: 16, fontWeight: 850 }}>Показать все</button></section> : null}
 
-          <section style={{ marginTop: 42, paddingTop: 26, borderTop: '1px solid rgba(43,30,35,.12)' }}><h2 style={{ margin: 0, fontSize: 25 }}>Источники рекомендаций</h2><p style={{ color: '#715f66', lineHeight: 1.5 }}>Рекомендации подготовлены по материалам профессиональных организаций и производителей средств для срезанных цветов.</p><ul style={{ margin: '16px 0 0', paddingLeft: 20, display: 'grid', gap: 9 }}>{FLOWER_CARE_SOURCES.map(([label, href]) => <li key={href}><a href={href} target="_blank" rel="noreferrer" style={{ color: selected.accent, fontWeight: 850 }}>{label}</a></li>)}</ul></section>
+
         </div>
       </main>
     </AppShell>

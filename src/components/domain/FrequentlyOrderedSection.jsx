@@ -3,7 +3,7 @@ import { useAppState } from '../../state/AppState';
 import { Grid } from '../layout/Grid';
 import { ProductCard } from './ProductCard';
 
-export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMoreLabel = 'Показать ещё', view = 'grid', trailingCard = null }) {
+export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMoreLabel = 'Показать ещё', view = 'grid', trailingCard = null, placement }) {
   const navigate = useNavigate();
   const { actions } = useAppState();
   const shownProducts = typeof limit === 'number' ? (products || []).slice(0, limit) : (products || []);
@@ -22,6 +22,7 @@ export function FrequentlyOrderedSection({ products, limit, showMoreHref, showMo
             image={p.image}
             images={p.images}
             view={view}
+            placement={placement}
             onOpen={() => navigate(`/product/${p.id}`)}
             onAdd={() => actions.addToCart(p.id, 1)}
           />

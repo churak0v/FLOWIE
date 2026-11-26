@@ -116,7 +116,7 @@ export const RegistrationGiftOffer = forwardRef(function RegistrationGiftOffer({
           alignItems: 'center',
           minHeight: illustrated ? 208 : undefined,
           padding: illustrated ? 20 : 14,
-          border: illustrated ? '1px solid rgba(57, 37, 31, 0.12)' : '1px solid var(--border)',
+          border: illustrated ? '0' : '1px solid var(--border)',
           borderRadius: illustrated ? 24 : 20,
           backgroundColor: illustrated ? '#ead7c7' : 'var(--c-accent-06, #fff7fa)',
 

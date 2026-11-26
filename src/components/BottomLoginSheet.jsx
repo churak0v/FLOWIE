@@ -3,7 +3,7 @@ import { PhoneLogin } from './PhoneLogin';
 
 export function BottomLoginSheet({ open, initialPhone, onClose, onSuccess }) {
   return (
-    <BottomSheet open={open} onClose={onClose} ariaLabel="Вход по телефону">
+    <BottomSheet open={open} onClose={onClose} ariaLabel="Вход по телефону" initialFocus="panel">
       <div style={{ minHeight: 0, paddingBottom: 8 }}>
         <PhoneLogin initialPhone={initialPhone} onCancel={onClose} onSuccess={onSuccess} />
       </div>

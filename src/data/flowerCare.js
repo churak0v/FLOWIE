@@ -63,7 +63,7 @@ function searchableProductText(product) {
 }
 
 export function isFloralFoamArrangement(product) {
-  return /флористическ[а-я]*\s+губ|(^|[^\p{L}])оазис([^\p{L}]|$)|корзин[а-я]*|коробк[а-я]*/u.test(searchableProductText(product));
+  return /флористическ[а-я]*\s+губ|(^|[^\p{L}])оазис([^\p{L}]|$)|корзин[а-я]*|коробк[а-я]*|сумочк[а-я]*|биофлор[а-я]*/u.test(searchableProductText(product));
 }
 
 export function getProductFlowerCare(product) {
@@ -83,4 +83,18 @@ export function calculateCylindricalWaterMl(diameterCm, waterHeightCm) {
   const height = Number(waterHeightCm);
   if (!Number.isFinite(diameter) || !Number.isFinite(height) || diameter <= 0 || height <= 0 || diameter > 60 || height > 60) return null;
   return Math.round(Math.PI * ((diameter / 2) ** 2) * height);
+}
+
+// Shared by the care preview and its full catalog selection.
+export function matchesCareProfile(product, selectedKey) {
+  if (selectedKey === 'preserved') return isPreservedComposition(product);
+  const arrangement = isFloralFoamArrangement(product) || /композици/iu.test(String(product?.title || product?.name || ''));
+  if (selectedKey === 'composition') return arrangement && !isPreservedComposition(product);
+  if (arrangement || isPreservedComposition(product)) return false;
+  if (selectedKey === 'bouquet') return true;
+  return getProductFlowers(product).some(flower => flower.key === selectedKey);
+}
+
+export function careSelectionTitle(key) {
+  return ({ bouquet: 'Букеты FLOWIE', composition: 'Композиции в коробках и корзинах', preserved: 'Композиции надолго', roses: 'Букеты с розами', hydrangeas: 'Букеты с гортензиями', tulips: 'Букеты с тюльпанами', gerberas: 'Букеты с герберами', eustoma: 'Букеты с эустомой', chrysanthemums: 'Букеты с хризантемами' })[key] || 'Букеты FLOWIE';
 }

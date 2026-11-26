@@ -14,6 +14,8 @@ import { buildFlowerOptions, filterCatalogProducts, isPreservedComposition, norm
 import { MothersDayPreorder } from './domain/MothersDayPreorder';
 import { isMothersDayCampaignActive } from '../lib/mothersDayCampaign';
 
+import { matchesCareProfile, careSelectionTitle, FLOWER_CARE_OPTIONS } from '../data/flowerCare';
+
 const SORT_OPTIONS = [
   { value: 'default', label: 'По умолчанию' },
   { value: 'price_asc', label: 'Сначала дешевле' },
@@ -45,6 +47,7 @@ export function Catalog() {
   const [draftSort, setDraftSort] = useState('default');
   const [draftView, setDraftView] = useState('grid');
 
+  const careKey = FLOWER_CARE_OPTIONS.some(p => p.key === query.get('care')) ? query.get('care') : '';
   const preservedOnly = query.get('preserved') === '1';
   const hasPreserved = useMemo(() => state.products.items.some(isPreservedComposition), [state.products.items]);
   const collectionId = query.get('collection');
@@ -64,7 +67,7 @@ export function Catalog() {
   const scenarios = state.collections.scenarios || [];
   const activeCollection = findBySlugOrId(collections, collectionId);
   const activeScenario = findBySlugOrId(scenarios, scenarioId);
-  const title = preservedOnly ? 'Композиции надолго' : activeCollection?.title || activeScenario?.title || (isMothersDay ? 'Букеты ко Дню матери' : 'Каталог цветов');
+  const title = careKey ? careSelectionTitle(careKey) : preservedOnly ? 'Композиции надолго' : activeCollection?.title || activeScenario?.title || (isMothersDay ? 'Букеты ко Дню матери' : 'Каталог цветов');
 
   const baseProducts = useMemo(() => {
     const allProducts = state.products.items || [];
@@ -74,8 +77,9 @@ export function Catalog() {
         ? (activeScenario?.productIds || [])
         : null;
     const scoped = selectCatalogScopeProducts(allProducts, ids);
-    return preservedOnly ? scoped.filter(isPreservedComposition) : scoped;
-  }, [activeCollection, activeScenario, collectionId, scenarioId, preservedOnly, state.products.items]);
+    const eligible = careKey ? scoped.filter(product => matchesCareProfile(product, careKey)) : scoped;
+    return preservedOnly ? eligible.filter(isPreservedComposition) : eligible;
+  }, [activeCollection, activeScenario, collectionId, scenarioId, preservedOnly, careKey, state.products.items]);
 
   const flowerOptions = useMemo(() => buildFlowerOptions(state.products.items || []), [state.products.items]);
   const searchResult = useCatalogSearch({
@@ -135,6 +139,7 @@ export function Catalog() {
     params.delete('collection');
     params.delete('scenario');
     params.delete('preserved');
+    params.delete('care');
     if (type && value != null) params.set(type, String(value));
     trackAnalytics('filter_change', { meta: { filter: type || 'scope', value: String(value || 'all') } });
     navigateWithParams(params);
@@ -179,7 +184,7 @@ export function Catalog() {
   }
 
   const filterChips = [
-    { key: 'all', label: 'Все цветы', active: !collectionId && !scenarioId && !preservedOnly, onClick: () => switchScope(null, null) },
+    { key: 'all', label: 'Все цветы', active: !collectionId && !scenarioId && !preservedOnly && !careKey, onClick: () => switchScope(null, null) },
     ...(hasPreserved ? [{key: 'preserved', label: 'Композиции надолго', active: preservedOnly, onClick: () => switchScope('preserved', '1')}] : []),
     ...collections.map((collection) => ({ key: `collection:${collection.id}`, label: collection.title || 'Подборка', active: activeCollection?.id === collection.id, onClick: () => switchScope('collection', collection.slug || collection.id) })),
     ...scenarios.map((scenario) => ({ key: `scenario:${scenario.id}`, label: scenario.title || 'Сценарий', active: activeScenario?.id === scenario.id, onClick: () => switchScope('scenario', scenario.slug || scenario.id) })),

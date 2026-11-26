@@ -378,3 +378,14 @@ test('anonymous events require an allowed Origin', async () => {
   });
   assert.equal(state.events.length, 0);
 });
+
+test('care interactions and section timing are accepted by the production collector', () => {
+  for (const elementKey of ['care_profile', 'care_calculator', 'care_catalog', 'upsell_add']) {
+    const normalized = normalizeClientEvent(payload({ event: 'element_click', routeKey: '/care', meta: { elementKey, placementKey: 'care_guide' } }));
+    assert.equal(normalized.meta.elementKey, elementKey);
+  }
+  for (const sectionKey of ['care_choice', 'care_water', 'care_steps', 'care_calculator', 'care_results']) {
+    const normalized = normalizeClientEvent(payload({ event: 'section_engagement', routeKey: '/care', meta: { sectionKey, activeMs: 4000, reason: 'route_leave' } }));
+    assert.equal(normalized.meta.activeMs, 4000);
+  }
+});

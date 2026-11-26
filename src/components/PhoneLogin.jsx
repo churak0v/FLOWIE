@@ -145,7 +145,6 @@ export function PhoneLogin({ initialPhone = '', onSuccess, onCancel }) {
             onChange={updatePhone}
             inputMode="tel"
             autoComplete="tel"
-            autoFocus
             maxLength={18}
             placeholder="(999) 000-00-00"
             aria-label="Номер телефона после +7"
