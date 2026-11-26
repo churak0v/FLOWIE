@@ -87,8 +87,8 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
           }}
         />
 
-        {pair ? <span style={{ position: 'absolute', bottom: 9, left: 9, right: 9, padding: '7px 8px', borderRadius: 10, background: 'rgba(255,255,255,.94)', color: 'var(--accent)', fontSize: 11, fontWeight: 900, textAlign: 'center' }}>+ минибукет в подарок</span> : null}
-        {!isList ? <button
+        {pair && !isList ? <span style={{ position: 'absolute', bottom: 9, left: 9, right: 9, padding: '7px 8px', borderRadius: 10, background: 'rgba(255,255,255,.94)', color: 'var(--accent)', fontSize: 11, fontWeight: 900, textAlign: 'center' }}>+ минибукет в подарок</span> : null}
+        {!isList || pair ? <button
           type="button"
           data-analytics-element="favorite_toggle"
           aria-label={isSaved ? 'Убрать из сохранённого' : 'Сохранить'}
@@ -147,7 +147,7 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
             {title}
           </Text>
 
-          {isList ? (
+          {isList && !pair ? (
             <button
               type="button"
               data-analytics-element="favorite_toggle"
@@ -164,7 +164,8 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
           ) : null}
 
         </div>
-        <div style={{ marginTop: 'auto', paddingTop: isList ? 12 : 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+        {isList && pair ? <div style={{ marginTop: 7, fontSize: 12, lineHeight: 1.4, color: 'var(--muted)' }}>{pair.gift} в подарок</div> : null}
+        <div style={{ marginTop: 'auto', paddingTop: isList ? 12 : 10, display: 'flex', flexWrap: isList && pair ? 'wrap' : undefined, alignItems: 'center', gap: 8 }}>
           <div
             style={{
               height: 34,
