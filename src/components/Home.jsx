@@ -122,7 +122,7 @@ export function Home({ onLogin, registrationGift }) {
   return (
     <AppShell style={{ padding: 0, '--app-content-inset-bottom': '0px' }}>
       <main className="homeScene" style={{ position: 'relative', isolation: 'isolate', width: '100%', '--home-hero-overlap': '28px', paddingBottom: `calc(var(--app-bottom-nav-space) + ${hasMiniCart ? '64px' : '0px'})` }}>
-        {requestedPair ? <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 60, padding: 'calc(10px + var(--app-inset-top)) calc(var(--sp-4) + var(--app-inset-right)) 10px calc(var(--sp-4) + var(--app-inset-left))' }}><div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}><strong style={{ fontSize: 19, letterSpacing: '-.04em' }}>FLOWIE</strong><span style={{ fontSize: 12, color: 'var(--muted)' }}>Ижевск</span></div><button type="button" onClick={() => isAuthenticated ? navigate('/account') : onLogin?.()} style={{ border: 0, borderRadius: 999, padding: '9px 13px', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, fontWeight: 850 }}>{isAuthenticated ? 'Профиль' : 'Войти'}</button></header> : <section
+        <section
           aria-label="Главные предложения"
           data-analytics-section="hero"
           style={{
@@ -140,10 +140,10 @@ export function Home({ onLogin, registrationGift }) {
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
             <HeroBlock slides={slides} isAuthenticated={isAuthenticated} onLogin={onLogin} />
           </div>
-        </section>}
+        </section>
 
-        <Surface variant="default" style={{ position: 'relative', zIndex: 1, marginTop: requestedPair ? 0 : 'calc(-1 * var(--home-hero-overlap))', minHeight: '65dvh', borderTopLeftRadius: requestedPair ? 0 : 28, borderTopRightRadius: requestedPair ? 0 : 28, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, boxShadow: requestedPair ? 'none' : '0 -14px 36px rgba(31, 15, 22, 0.14)', paddingTop: requestedPair ? 8 : 'var(--sp-6)', paddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))', paddingRight: 'calc(var(--sp-4) + var(--app-inset-right))', paddingBottom: 'var(--sp-4)', background: 'var(--bg)' }}>
-          {requestedPair ? <PremiumPairOffers pairs={focusedPairs} focused loading={offerLoading} /> : null}
+        <Surface variant="default" style={{ position: 'relative', zIndex: 1, marginTop: 'calc(-1 * var(--home-hero-overlap))', minHeight: '65dvh', borderTopLeftRadius: 28, borderTopRightRadius: 28, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, boxShadow: '0 -14px 36px rgba(31, 15, 22, 0.14)', paddingTop: 'var(--sp-6)', paddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))', paddingRight: 'calc(var(--sp-4) + var(--app-inset-right))', paddingBottom: 'var(--sp-4)', background: 'var(--bg)' }}>
+          {requestedPair ? <PremiumPairOffers pairs={focusedPairs.length ? pairs : []} focused loading={offerLoading} /> : null}
           {isAuthenticated ? <SubscriptionRow /> : null}
 
           {activeOrders.length ? <section style={{ marginTop: 24 }}>
