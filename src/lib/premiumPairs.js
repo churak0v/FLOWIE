@@ -23,15 +23,3 @@ export function requestedPremiumPair(search = '') {
 export function orderPremiumPairs(pairs, requested) {
   return [...pairs].sort((left, right) => Number(right.code === requested) - Number(left.code === requested));
 }
-
-export function premiumPairSlide(pair) {
-  return {
-    id: `premium-pair-${pair.code}`,
-    image: pair.product.image || pair.image,
-    imagePosition: 'center 62%',
-    caption: 'Большой подарок. Маленький — от нас.',
-    subtitle: `${pair.title} · ${Number(pair.product.price).toLocaleString('ru-RU')} ₽ за комплект`,
-    ctaLabel: 'Посмотреть комплект',
-    href: `/product/${pair.product.id}`,
-  };
-}

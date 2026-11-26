@@ -19,7 +19,7 @@ import { HomeBudgetExplorer } from './domain/HomeBudgetExplorer';
 import { HomeCareGuide } from './domain/HomeCareGuide';
 import { RegistrationGiftOffer } from './domain/RegistrationGiftOffer';
 import { shouldShowRegistrationGift } from '../lib/registrationGift';
-import { PREMIUM_PAIRS, premiumPairProducts, requestedPremiumPair, orderPremiumPairs, premiumPairSlide } from '../lib/premiumPairs';
+import { premiumPairProducts, requestedPremiumPair, orderPremiumPairs } from '../lib/premiumPairs';
 import { PremiumPairOffers } from './domain/PremiumPairOffers';
 import { FrequentlyOrderedSection } from './domain/FrequentlyOrderedSection';
 
@@ -118,17 +118,11 @@ export function Home({ onLogin, registrationGift }) {
   const feed = useMemo(() => buildHomeFeed(state.products.items), [state.products.items]);
   const hasMiniCart = Boolean(state.cart.items.length);
   const offerLoading = state.products.loading || (!state.products.items.length && !state.products.error);
-  const requestedConfig = PREMIUM_PAIRS.find(pair => pair.code === requestedPair) || PREMIUM_PAIRS[0];
-  const displayedSlides = requestedPair ? [focusedPairs[0] ? premiumPairSlide(focusedPairs[0]) : {
-    id: `premium-pair-pending-${requestedPair}`, image: requestedConfig.image,
-    caption: offerLoading ? 'Большой подарок. Маленький — от нас.' : 'Этот комплект сейчас недоступен',
-    subtitle: offerLoading ? 'Загружаем комплекты' : 'Другие цветы — в каталоге ниже',
-  }] : slides;
 
   return (
     <AppShell style={{ padding: 0, '--app-content-inset-bottom': '0px' }}>
       <main className="homeScene" style={{ position: 'relative', isolation: 'isolate', width: '100%', '--home-hero-overlap': '28px', paddingBottom: `calc(var(--app-bottom-nav-space) + ${hasMiniCart ? '64px' : '0px'})` }}>
-        <section
+        {requestedPair ? <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 60, padding: 'calc(10px + var(--app-inset-top)) calc(var(--sp-4) + var(--app-inset-right)) 10px calc(var(--sp-4) + var(--app-inset-left))' }}><div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}><strong style={{ fontSize: 19, letterSpacing: '-.04em' }}>FLOWIE</strong><span style={{ fontSize: 12, color: 'var(--muted)' }}>Ижевск</span></div><button type="button" onClick={() => isAuthenticated ? navigate('/account') : onLogin?.()} style={{ border: 0, borderRadius: 999, padding: '9px 13px', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, fontWeight: 850 }}>{isAuthenticated ? 'Профиль' : 'Войти'}</button></header> : <section
           aria-label="Главные предложения"
           data-analytics-section="hero"
           style={{
@@ -144,11 +138,11 @@ export function Home({ onLogin, registrationGift }) {
           }}
         >
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-            <HeroBlock key={requestedPair || 'regular-home'} slides={displayedSlides} isAuthenticated={isAuthenticated} onLogin={onLogin} />
+            <HeroBlock slides={slides} isAuthenticated={isAuthenticated} onLogin={onLogin} />
           </div>
-        </section>
+        </section>}
 
-        <Surface variant="default" style={{ position: 'relative', zIndex: 1, marginTop: 'calc(-1 * var(--home-hero-overlap))', minHeight: '65dvh', borderTopLeftRadius: 28, borderTopRightRadius: 28, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, boxShadow: '0 -14px 36px rgba(31, 15, 22, 0.14)', paddingTop: 'var(--sp-6)', paddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))', paddingRight: 'calc(var(--sp-4) + var(--app-inset-right))', paddingBottom: 'var(--sp-4)', background: 'var(--bg)' }}>
+        <Surface variant="default" style={{ position: 'relative', zIndex: 1, marginTop: requestedPair ? 0 : 'calc(-1 * var(--home-hero-overlap))', minHeight: '65dvh', borderTopLeftRadius: requestedPair ? 0 : 28, borderTopRightRadius: requestedPair ? 0 : 28, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, boxShadow: requestedPair ? 'none' : '0 -14px 36px rgba(31, 15, 22, 0.14)', paddingTop: requestedPair ? 8 : 'var(--sp-6)', paddingLeft: 'calc(var(--sp-4) + var(--app-inset-left))', paddingRight: 'calc(var(--sp-4) + var(--app-inset-right))', paddingBottom: 'var(--sp-4)', background: 'var(--bg)' }}>
           {requestedPair ? <PremiumPairOffers pairs={focusedPairs} focused loading={offerLoading} /> : null}
           {isAuthenticated ? <SubscriptionRow /> : null}
 
