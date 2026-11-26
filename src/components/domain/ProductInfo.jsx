@@ -46,8 +46,8 @@ export function ProductInfo({ product }) {
         <summary style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14, fontWeight: 750, listStyle: 'none' }}><Package size={17} color="var(--accent)" /><span style={{ flex: 1 }}>Упаковка и оформление</span><ChevronDown size={16} /></summary>
         <p style={{ fontSize: 13, lineHeight: 1.5, margin: '11px 0 0', color: 'var(--muted)' }}>{packaging.map(row => row.name).join(', ')}.</p>
       </details> : null}
-      <section style={{ marginTop: 19 }} aria-label="Доставка букета">
-        <Condition icon={Truck} title="Доставка по Ижевску">Стоимость рассчитаем по адресу. Дату и время выберете при оформлении заказа.</Condition>
+      <section style={{ marginTop: 16, padding: '0 14px', border: '1px solid var(--border)', background: '#fff', borderRadius: 19 }} aria-label="Доставка букета">
+        <Condition icon={Truck} title="Доставим по Ижевску">Укажите адрес — покажем стоимость доставки. Дату и время выберете при оформлении.</Condition>
       </section>
     </div>
   );

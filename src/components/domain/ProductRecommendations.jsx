@@ -52,18 +52,20 @@ function UpsellSection({ items, qtyById, setUpsellQty, enabled }) {
   return (
     <section data-analytics-section="upsells" style={{ marginTop: 'var(--sp-8)' }}>
       <Text variant="title" style={{ marginBottom: 'var(--sp-4)' }}>Добавьте к букету</Text>
-      {!enabled ? <p style={{fontSize: 13, color: 'var(--muted)', lineHeight: 1.4}}>Сначала добавьте букет в корзину, затем выберите дополнения.</p> : null}
+      <p style={{fontSize: 13, color: 'var(--muted)', lineHeight: 1.4, minHeight: '2.8em', margin: '0 0 12px'}}>Дополните букет сладким подарком.<br />{enabled ? 'Добавим к вашему заказу.' : 'Сначала добавьте букет в корзину.'}</p>
       <Carousel>
         {upsells.map((item) => {
           const key = String(item.id);
           const qty = Number(qtyById?.[key] || 0);
           return (
-            <Surface key={key} variant="soft" style={{ width: 188, flex: '0 0 188px', minWidth: 0, padding: 0, overflow: 'hidden', borderRadius: 22, border: '1px solid var(--border)' }}>
+            <Surface key={key} variant="soft" style={{ display: 'flex', flexDirection: 'column', height: 302, background: 'var(--surface)', boxShadow: 'none', width: 188, flex: '0 0 188px', minWidth: 0, padding: 0, overflow: 'hidden', borderRadius: 22, border: '1px solid var(--border)' }}>
+              <div style={{ position: 'relative', height: 186, flex: '0 0 186px', overflow: 'hidden' }}>
               <AppImage src={item.image || item.images?.[0]} alt={item.title} loading="lazy" variant="card"
-                style={{ display: 'block', width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', background: 'var(--surface-2)' }} />
-              <div style={{ padding: 12 }}>
-                <Text variant="subtitle" style={{ minHeight: '2.32em', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.16 }}>{item.title}</Text>
-                <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, minHeight: 36 }}>
+                style={{ position: 'absolute', inset: 0, display: 'block', width: '100%', height: '100%', objectFit: 'cover', background: 'var(--surface-2)' }} />
+              </div>
+              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                <Text variant="subtitle" style={{ height: '2.32em', flexShrink: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.16 }}>{item.title}</Text>
+                <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 8, minHeight: 36 }}>
                   <span style={{ color: 'var(--accent)', fontWeight: 1000, fontSize: 15, whiteSpace: 'nowrap' }}>{Number(item.price) > 0 ? formatMoney(item.price) : 'Бесплатно'}</span>
                   {qty > 0 ? <div style={{ marginLeft: 'auto', height: 36, borderRadius: 12, background: 'var(--c-accent)', color: 'var(--c-accent-contrast)', display: 'inline-flex', alignItems: 'center', boxShadow: 'var(--shadow-accent)', overflow: 'hidden', flexShrink: 0 }}>
                     <button type="button" disabled={!enabled} aria-label={qty === 1 ? 'Убрать дополнение' : 'Уменьшить количество дополнения'} onClick={() => changeQty(item, qty - 1)} style={{ width: 28, height: 36, border: 0, background: 'transparent', color: 'inherit', display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Minus size={17} strokeWidth={3} /></button>

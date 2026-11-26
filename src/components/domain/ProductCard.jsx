@@ -45,7 +45,7 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
         flexDirection: isList ? 'row' : 'column',
         borderRadius: 18,
         border: '1px solid rgba(13,13,13,0.07)',
-        boxShadow: '0 16px 38px rgba(13,13,13,0.08)',
+        boxShadow: 'none',
       }}
       onClick={onOpen ? () => onOpen(id) : undefined}
       role={onOpen ? 'button' : undefined}
