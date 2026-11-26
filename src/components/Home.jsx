@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { Surface } from './ui/Surface';
@@ -18,6 +18,7 @@ import { HomeStoryBanner } from './domain/HomeStoryBanner';
 import { HomeBudgetExplorer } from './domain/HomeBudgetExplorer';
 import { HomeCareGuide } from './domain/HomeCareGuide';
 import { RegistrationGiftOffer } from './domain/RegistrationGiftOffer';
+import { shouldShowRegistrationGift } from '../lib/registrationGift';
 
 const HOME_BANNERS_CACHE_KEY = 'home_banners_v2';
 const HOME_BANNERS_TIMEOUT_MS = 4_000;
@@ -38,6 +39,9 @@ export function Home({ onLogin, registrationGift }) {
   const [heroSlides, setHeroSlides] = useState(initialHeroSlides);
   const isAuthenticated = Boolean(state.auth.me?.phoneVerified);
   const mothersDayCampaignActive = isMothersDayCampaignActive();
+  const registrationGiftOfferRef = useRef(null);
+  const activateRegistrationGift = useCallback(() => registrationGiftOfferRef.current?.activate(), []);
+  const exposeRegistrationGift = useCallback(() => registrationGiftOfferRef.current?.ensureExposure() ?? false, []);
 
   useEffect(() => {
     let alive = true;
@@ -87,8 +91,22 @@ export function Home({ onLogin, registrationGift }) {
       out.push({ ...slide, id: key, subtitle: isMothersDay ? 'Предзаказ на 29 ноября · выбрать букет' : slide?.subtitle,
         href: isMothersDay ? MOTHERS_DAY_CATALOG_HREF : slide?.href });
     }
+    if (shouldShowRegistrationGift(registrationGift?.status)) {
+      const promo = {
+        id: 'raffaello-registration-gift-hero',
+        analyticsBannerId: 'home-raffaello-gift-hero',
+        image: '/banners/raffaello-gift-v1.webp',
+        imagePosition: '90% center',
+        caption: 'Raffaello в подарок',
+        subtitle: '150 г к первому заказу за регистрацию',
+        ctaLabel: 'Получить подарок',
+        onAction: activateRegistrationGift,
+        onImpression: exposeRegistrationGift,
+      };
+      out.splice(Math.min(1, out.length), 0, promo);
+    }
     return out;
-  }, [heroSlides, mothersDayCampaignActive]);
+  }, [activateRegistrationGift, exposeRegistrationGift, heroSlides, mothersDayCampaignActive, registrationGift?.status]);
 
   const feed = useMemo(() => buildHomeFeed(state.products.items), [state.products.items]);
   const hasMiniCart = Boolean(state.cart.items.length);
@@ -127,7 +145,10 @@ export function Home({ onLogin, registrationGift }) {
           </section> : null}
 
           <HomeFeedSection sectionKey="home_opening" title="Выбрать букет" subtitle="Цветы для ваших людей" products={feed.opening} href="/catalog" marginTop={activeOrders.length || isAuthenticated ? 30 : 0} />
+          <HomeStoryBanner bannerId="home-photo-proof" eyebrow="Спокойнее выбирать" title="Перед доставкой покажем ваш букет" text="Сравните фото в карточке с готовым букетом перед доставкой." image={feed.photoBanner?.image || feed.photoBanner?.images?.[0]} href="/catalog" />
+          <HomeBudgetExplorer products={feed.budgetPool} />
           <RegistrationGiftOffer
+            ref={registrationGiftOfferRef}
             status={registrationGift?.status}
             user={state.auth.me}
             placement="home"
@@ -135,9 +156,6 @@ export function Home({ onLogin, registrationGift }) {
             onRefresh={registrationGift?.onRefresh}
             onLogin={onLogin}
           />
-          <HomeStoryBanner bannerId="home-photo-proof" eyebrow="Спокойнее выбирать" title="Перед доставкой покажем ваш букет" text="Сравните фото в карточке с готовым букетом перед доставкой." image={feed.photoBanner?.image || feed.photoBanner?.images?.[0]} href="/catalog" />
-          <HomeBudgetExplorer products={feed.budgetPool} />
-          <HomeStoryBanner bannerId="home-clear-price" eyebrow="Выбирайте под свой бюджет" title="Сначала выберите сумму. Потом — свой букет." text="Покажем букеты от 3 000, 5 000 и 7 000 ₽. Доставка рассчитывается отдельно по адресу." image={feed.priceBanner?.image || feed.priceBanner?.images?.[0]} product={feed.priceBanner} href="/catalog" />
           <HomeFeedSection sectionKey="home_roses" title="Розы в разных характерах" subtitle="От спокойных до выразительных сочетаний" products={feed.roses} href="/catalog?flower=roses&flower=spray-roses&flower=peony-roses" />
           <HomeFeedSection sectionKey="home_preserved" title="Композиции надолго" subtitle="Стабилизированные цветы и сухоцветы — красота без полива" products={feed.preserved} href="/catalog?preserved=1" />
           <HomeCareGuide />

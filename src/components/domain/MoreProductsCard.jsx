@@ -1,7 +1,9 @@
+import { moreProductDeckCards } from '../../lib/moreProductDeck';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AppImage } from '../ui/AppImage';
+import { formatMoney } from '../../lib/money';
 
 function productImage(product) {
   return String(product?.image || product?.images?.[0] || '').trim();
@@ -52,26 +54,42 @@ function useDeckActivity(cardRef) {
   return { nearby, playing: visible && !reducedMotion };
 }
 
-function layerStyle(layer, playing) {
-  const layers = [
-    { transform: 'translate3d(0, 0, 0) rotate(-1.5deg) scale(1)', opacity: 1 },
-    { transform: 'translate3d(-6px, 5px, 0) rotate(-4deg) scale(.97)', opacity: .9 },
-    { transform: 'translate3d(7px, 8px, 0) rotate(4deg) scale(.94)', opacity: .76 },
-    { transform: 'translate3d(1px, 11px, 0) rotate(1deg) scale(.91)', opacity: .56 },
-  ];
+function miniCardStyle(role, playing) {
+  const roles = {
+    center: { transform: 'translate3d(0, 0, 0) rotate(0deg) scale(1)', opacity: 1, zIndex: 4 },
+    left: { transform: 'translate3d(-34%, -27%, 0) rotate(-16deg) scale(.87)', opacity: .9, zIndex: 2 },
+    right: { transform: 'translate3d(34%, -27%, 0) rotate(16deg) scale(.87)', opacity: .9, zIndex: 2 },
+  };
   return {
-    ...layers[layer],
+    ...roles[role],
     position: 'absolute',
-    inset: '4% 5% 5%',
-    zIndex: 10 - layer,
+    left: '17%',
+    bottom: '3%',
+    width: '66%',
+    height: '78%',
     overflow: 'hidden',
-    border: '2px solid var(--surface)',
-    borderRadius: 16,
-    background: 'var(--surface-2)',
-    boxShadow: layer === 0 ? '0 15px 30px rgba(60, 24, 42, .20)' : '0 8px 18px rgba(60, 24, 42, .12)',
+    border: '1px solid rgba(55, 22, 38, .10)',
+    borderRadius: 13,
+    background: 'var(--surface)',
+    boxShadow: role === 'center' ? '0 14px 26px rgba(60, 24, 42, .22)' : '0 8px 18px rgba(60, 24, 42, .16)',
     transition: playing ? 'transform 560ms cubic-bezier(.22,.8,.24,1), opacity 420ms ease' : 'none',
     willChange: playing ? 'transform' : 'auto',
   };
+}
+
+function MiniProductCard({ product, role, playing }) {
+  const image = productImage(product);
+  const title = String(product?.title || product?.name || 'Букет').trim();
+  return (
+    <span style={miniCardStyle(role, playing)}>
+      <AppImage src={image} alt="" loading="eager" fetchPriority="low" variant="thumb" sizes="140px"
+        style={{ width: '100%', height: '62%', objectFit: 'cover', display: 'block', background: 'var(--surface-2)' }} />
+      <span style={{ height: '38%', padding: '6px 7px 7px', display: 'flex', flexDirection: 'column', minWidth: 0, background: 'var(--surface)' }}>
+        <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: 'var(--text)', fontSize: 10, fontWeight: 850, lineHeight: 1.08 }}>{title}</span>
+        <span style={{ marginTop: 'auto', color: 'var(--accent)', fontSize: 10, fontWeight: 1000, whiteSpace: 'nowrap' }}>{formatMoney(product?.price)}</span>
+      </span>
+    </span>
+  );
 }
 
 export function MoreProductsCard({ products, coverImage, href, collectionTitle, label = 'Показать все' }) {
@@ -82,6 +100,7 @@ export function MoreProductsCard({ products, coverImage, href, collectionTitle, 
   const [loadedImages, setLoadedImages] = useState([]);
   const [active, setActive] = useState(0);
   const readyImages = useMemo(() => images.filter((src) => loadedImages.includes(src)), [images, loadedImages]);
+  const readyProducts = useMemo(() => (products || []).filter((product) => readyImages.includes(productImage(product))).slice(0, 4), [products, readyImages]);
 
   useEffect(() => {
     setLoadedImages((current) => current.filter((src) => images.includes(src)));
@@ -90,14 +109,14 @@ export function MoreProductsCard({ products, coverImage, href, collectionTitle, 
   }, [images]);
 
   useEffect(() => {
-    if (!playing || readyImages.length < 2) return undefined;
-    const timer = window.setInterval(() => setActive((current) => (current + 1) % readyImages.length), 2600);
+    if (!playing || readyProducts.length < 2) return undefined;
+    const timer = window.setInterval(() => setActive((current) => (current + 1) % readyProducts.length), 2600);
     return () => window.clearInterval(timer);
-  }, [playing, readyImages.length]);
+  }, [playing, readyProducts.length]);
 
   if (!images.length && !coverImage) return null;
-  const safeActive = readyImages.length ? active % readyImages.length : 0;
-  const orderedImages = [...readyImages.slice(safeActive), ...readyImages.slice(0, safeActive)];
+  const safeActive = readyProducts.length ? active % readyProducts.length : 0;
+  const visibleCards = moreProductDeckCards(readyProducts, safeActive);
   const query = new URL(href, 'https://flowie.art').searchParams;
   const floor = query.get('min');
   const bannerId = floor && /^\d{1,6}$/.test(floor) ? `home-more-from-${floor}` : query.has('search') || query.has('flower') ? 'home-more-roses' : 'home-more-catalog';
@@ -136,19 +155,17 @@ export function MoreProductsCard({ products, coverImage, href, collectionTitle, 
           background: 'linear-gradient(145deg, var(--surface-2), rgba(244, 194, 209, .42))',
         }}
       >
-        {!readyImages.length && coverImage ? (
-          <span style={layerStyle(0, false)}>
+        {!readyProducts.length && coverImage ? (
+          <span style={{ ...miniCardStyle('center', false), height: '84%' }}>
             <AppImage src={coverImage} alt="" loading="lazy" fetchPriority="low" variant="card" width={320} height={320}
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
           </span>
         ) : null}
-        {orderedImages.slice(0, 4).map((src, index) => {
-          return <span key={src} style={layerStyle(index, playing)}>
-            <AppImage src={src} alt="" loading="eager" fetchPriority="low" variant="card" width={320} height={320} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-          </span>;
-        })}
+        {visibleCards.map(({ product, role }) => (
+          <MiniProductCard key={product.id ?? productImage(product)} product={product} role={role} playing={playing} />
+        ))}
         {nearby ? images.filter((src) => !readyImages.includes(src) && !failedImages.current.has(src)).map((src) => (
-          <AppImage key={`prewarm-${src}`} src={src} alt="" loading="eager" fetchPriority="low" variant="card"
+          <AppImage key={`prewarm-${src}`} src={src} alt="" loading="eager" fetchPriority="low" variant="thumb" sizes="140px"
             onLoad={() => {
               if (failedImages.current.has(src)) return;
               setLoadedImages((current) => current.includes(src) ? current : [...current, src]);

@@ -646,7 +646,7 @@ export function AppStateProvider({ children }) {
 
       // products
       loadProducts: async () => {
-        const cacheKey = 'products_ui_v13_local_images';
+        const cacheKey = 'products_ui_v14_brand_review';
         const cached = readCacheEntry(cacheKey);
         const cachedItems = Array.isArray(cached?.data) ? cached.data : null;
         if (cachedItems?.length) {

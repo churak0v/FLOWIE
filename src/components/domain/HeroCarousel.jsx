@@ -4,6 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { cx } from '../../lib/cx';
 import { AppImage } from '../ui/AppImage';
 import { trackAnalytics } from '../../lib/analytics';
+import { isActuallyVisible } from '../../lib/heroImpression';
+
+const HERO_IMPRESSION_DWELL_MS = 1_000;
 
 function isVideoSrc(src) {
   return /\.mp4($|[?#])/i.test(String(src || '').trim());
@@ -20,6 +23,8 @@ export function HeroCarousel({ slides, className }) {
   const [readyMedia, setReadyMedia] = useState(() => new Set());
   const readyMediaRef = useRef(new Set());
   const scrollerRef = useRef(null);
+  const activeOfferRef = useRef(null);
+  const impressedSlidesRef = useRef(new Set());
 
   const markMediaReady = (slide, index) => {
     const key = slideMediaKey(slide, index);
@@ -31,8 +36,12 @@ export function HeroCarousel({ slides, className }) {
   };
 
   function openSlide(slide) {
-    if (!slide?.href) return;
-    trackAnalytics('home_banner_click', { meta: { bannerId: String(slide.id || '') } });
+    if (!slide?.href && typeof slide?.onAction !== 'function') return;
+    trackAnalytics('home_banner_click', { meta: { bannerId: String(slide.analyticsBannerId || slide.id || '') } });
+    if (typeof slide.onAction === 'function') {
+      slide.onAction();
+      return;
+    }
     navigate(slide.href);
   }
 
@@ -53,6 +62,60 @@ export function HeroCarousel({ slides, className }) {
     }, 5200);
     return () => window.clearInterval(timer);
   }, [safeSlides]);
+
+  useEffect(() => {
+    const slide = safeSlides[active];
+    const key = slideMediaKey(slide, active);
+    if (typeof slide?.onImpression !== 'function' || !readyMedia.has(key) || impressedSlidesRef.current.has(key)) return undefined;
+
+    let dwellTimer = 0;
+    let finished = false;
+    const clearDwell = () => {
+      if (dwellTimer) window.clearTimeout(dwellTimer);
+      dwellTimer = 0;
+    };
+    const actuallyVisible = () => isActuallyVisible(activeOfferRef.current, {
+      occlusionRoot: scrollerRef.current?.parentElement,
+    });
+    const audit = () => {
+      if (finished || !actuallyVisible()) {
+        clearDwell();
+        return;
+      }
+      if (dwellTimer) return;
+      dwellTimer = window.setTimeout(async () => {
+        dwellTimer = 0;
+        if (finished || !actuallyVisible()) return;
+        let recorded = false;
+        try {
+          recorded = await slide.onImpression();
+        } catch {
+          return;
+        }
+        if (finished || recorded === false) return;
+        impressedSlidesRef.current.add(key);
+        finished = true;
+      }, HERO_IMPRESSION_DWELL_MS);
+    };
+
+    const interval = window.setInterval(audit, 250);
+    window.addEventListener('scroll', audit, { passive: true, capture: true });
+    window.addEventListener('resize', audit, { passive: true });
+    window.addEventListener('focus', audit);
+    window.addEventListener('blur', audit);
+    document.addEventListener('visibilitychange', audit);
+    audit();
+    return () => {
+      finished = true;
+      clearDwell();
+      window.clearInterval(interval);
+      window.removeEventListener('scroll', audit, { capture: true });
+      window.removeEventListener('resize', audit);
+      window.removeEventListener('focus', audit);
+      window.removeEventListener('blur', audit);
+      document.removeEventListener('visibilitychange', audit);
+    };
+  }, [active, readyMedia, safeSlides]);
 
   const nextToPrepare = safeSlides.length > 1 ? (active + 1) % safeSlides.length : active;
 
@@ -100,6 +163,9 @@ export function HeroCarousel({ slides, className }) {
         {safeSlides.map((s, idx) => (
           <div
             key={s.id || idx}
+            data-analytics-impression={s.analyticsBannerId ? 'banner' : undefined}
+            data-analytics-banner={s.analyticsBannerId}
+            data-analytics-placement={s.analyticsBannerId ? 'home_hero' : undefined}
             style={{
               minWidth: '100%',
               height: '100%',
@@ -145,7 +211,7 @@ export function HeroCarousel({ slides, className }) {
             )}
             <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
               background: 'linear-gradient(180deg, rgba(40,20,25,0.10), rgba(40,20,25,0.16) 42%, rgba(40,20,25,0.58))' }} />
-            {s.href ? <button type="button" aria-label={'Открыть баннер: ' + (s.caption || '')}
+            {s.href || typeof s.onAction === 'function' ? <button type="button" aria-label={'Открыть баннер: ' + (s.caption || '')}
               tabIndex={idx === active ? 0 : -1} onClick={() => openSlide(s)}
               style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'transparent', border: 0,
                 cursor: 'pointer', touchAction: 'pan-x' }} /> : null}
@@ -186,13 +252,17 @@ export function HeroCarousel({ slides, className }) {
           bottom: 'calc(var(--sp-8) + 4px)',
           color: 'var(--c-white)',
           textAlign: 'left',
+          zIndex: 2,
+          pointerEvents: 'none',
         }}
       >
-        <div style={{ maxWidth: 360, fontSize: 30, fontWeight: 1000, lineHeight: 1.02, letterSpacing: 0, textShadow: '0 2px 12px var(--c-ink-25)' }}>
-          {safeSlides[active]?.caption || ''}
-        </div>
+        {!safeSlides[active]?.ctaLabel ? (
+          <div style={{ maxWidth: 360, fontSize: 30, fontWeight: 1000, lineHeight: 1.02, letterSpacing: 0, textShadow: '0 2px 12px var(--c-ink-25)' }}>
+            {safeSlides[active]?.caption || ''}
+          </div>
+        ) : null}
 
-        {safeSlides[active]?.subtitle ? (
+        {safeSlides[active]?.subtitle && !safeSlides[active]?.ctaLabel ? (
           <button
             type="button"
             onClick={() => {
@@ -203,7 +273,7 @@ export function HeroCarousel({ slides, className }) {
               border: 0,
               background: 'transparent',
               padding: 0,
-              cursor: safeSlides[active]?.href ? 'pointer' : 'default',
+              cursor: safeSlides[active]?.href || typeof safeSlides[active]?.onAction === 'function' ? 'pointer' : 'default',
               color: 'var(--c-white)',
               fontSize: 14,
               fontWeight: 900,
@@ -213,12 +283,13 @@ export function HeroCarousel({ slides, className }) {
               gap: 6,
               maxWidth: 360,
               textAlign: 'left',
-              opacity: safeSlides[active]?.href ? 1 : 0.9,
+              opacity: safeSlides[active]?.href || typeof safeSlides[active]?.onAction === 'function' ? 1 : 0.9,
               textShadow: '0 2px 10px var(--c-ink-25)',
+              pointerEvents: 'auto',
             }}
           >
             <span style={{ textAlign: 'left' }}>{safeSlides[active]?.subtitle}</span>
-            {safeSlides[active]?.href ? (
+            {safeSlides[active]?.href || typeof safeSlides[active]?.onAction === 'function' ? (
               <span
                 aria-hidden="true"
                 style={{
@@ -241,7 +312,25 @@ export function HeroCarousel({ slides, className }) {
           </button>
         ) : null}
 
-        <div style={{ display: 'flex', gap: 6, marginTop: safeSlides[active]?.subtitle ? 10 : 10 }}>
+        {safeSlides[active]?.ctaLabel ? (
+          <div ref={activeOfferRef} style={{ display: 'inline-block', maxWidth: 360, pointerEvents: 'auto' }}>
+            <div style={{ maxWidth: 360, fontSize: 30, fontWeight: 1000, lineHeight: 1.02, letterSpacing: 0, textShadow: '0 2px 12px var(--c-ink-25)' }}>
+              {safeSlides[active].caption}
+            </div>
+            <div style={{ marginTop: 8, maxWidth: 310, color: 'var(--c-white)', fontSize: 14, fontWeight: 850, lineHeight: 1.25, textShadow: '0 2px 10px var(--c-ink-25)' }}>
+              {safeSlides[active].subtitle}
+            </div>
+            <button
+              type="button"
+              onClick={() => openSlide(safeSlides[active])}
+              style={{ marginTop: 12, minHeight: 40, padding: '0 16px', border: 0, borderRadius: 999, background: 'rgba(255,255,255,0.94)', color: '#4a2b25', fontSize: 14, fontWeight: 950, cursor: 'pointer', boxShadow: '0 9px 24px rgba(0,0,0,0.18)', pointerEvents: 'auto' }}
+            >
+              {safeSlides[active].ctaLabel}
+            </button>
+          </div>
+        ) : null}
+
+        <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
           {safeSlides.map((_, i) => (
             <div
               key={i}

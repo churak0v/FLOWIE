@@ -32,7 +32,7 @@ export function ProductDetails({ onLogin, registrationGift }) {
   const [qty, setQty] = useState(1);
   const [loadError, setLoadError] = useState('');
   const [retry, setRetry] = useState(0);
-  const cacheKey = useMemo(() => (Number.isFinite(productId) ? `product_detail_v7_local_images_${productId}` : ''), [productId]);
+  const cacheKey = useMemo(() => (Number.isFinite(productId) ? `product_detail_v8_brand_review_${productId}` : ''), [productId]);
 
   useEffect(() => {
     if (!Number.isSafeInteger(productId) || productId < 1) {
