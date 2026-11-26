@@ -1,6 +1,7 @@
-import { createAnalyticsUuid, getAnalyticsSessionId } from './lib/analytics';
+import { createAnalyticsUuid, getAnalyticsSessionId } from './lib/analytics.js';
+import { buildOrderPayload } from './lib/orderPayload.js';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const API_URL = import.meta.env?.VITE_API_URL || '/api';
 
 const MEM_CACHE = new Map();
 
@@ -204,7 +205,7 @@ export const api = {
         return fetchJson(`${API_URL}/orders`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(orderData)
+            body: JSON.stringify(buildOrderPayload(orderData))
         });
     },
 

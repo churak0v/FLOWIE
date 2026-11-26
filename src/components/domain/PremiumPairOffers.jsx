@@ -6,6 +6,6 @@ export function PremiumPairOffers({ pairs, focused = false, loading = false }) {
   return <section data-analytics-section="home_offer" style={{ marginBottom: 30 }}>
     <Text variant="title">Минибукет — наш подарок</Text>
     <Text variant="caption" muted style={{ marginTop: 5, marginBottom: 14 }}>Большой и маленький в одной палитре · один адрес</Text>
-    <FrequentlyOrderedSection products={pairs.map(pair => ({ ...pair.product, title: pair.code === 'angel-duet' ? 'Angel + минибукет' : 'Красный дуэт + минибукет' }))} />
+    <FrequentlyOrderedSection products={pairs.map(pair => ({ ...pair.product, title: pair.code === 'angel-duet' ? 'Angel + минибукет' : '51 красная роза + минибукет' }))} />
   </section>;
 }

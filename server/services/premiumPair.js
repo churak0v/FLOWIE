@@ -14,4 +14,14 @@ function premiumPairGifts(items) {
   });
 }
 
-module.exports = { premiumPairGifts };
+function assertStablePremiumPairTags(currentTags, nextTags) {
+  if (nextTags === undefined) return;
+  const known = tags => String(tags || '').split(',').map(tag => tag.trim()).filter(tag => Object.hasOwn(GIFTS, tag)).sort().join(',');
+  if (known(currentTags) !== known(nextTags)) {
+    const error = new Error('Состав подарка привязан к комплекту. Создайте новый комплект для другого подарка; существующий можно скрыть.');
+    error.code = 'PREMIUM_PAIR_TAG_IMMUTABLE';
+    throw error;
+  }
+}
+
+module.exports = { premiumPairGifts, assertStablePremiumPairTags };

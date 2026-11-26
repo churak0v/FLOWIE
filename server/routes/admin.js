@@ -14,6 +14,7 @@ const {
   verifyStoredAdminCredentials,
 } = require('../services/adminCredentials');
 const { loadAnalyticsReport } = require('../services/reportAnalytics');
+const { assertStablePremiumPairTags } = require('../services/premiumPair');
 const { BANNER_IDS, normalizeBanner } = require('../services/homeBanners');
 const {
   PRODUCT_MEDIA_BRANDING_CODE,
@@ -537,9 +538,10 @@ router.patch('/products/:id', requireAdmin, requireRoles(['admin', 'moderator'])
       await lockProductMedia(tx, id);
       const current = await tx.product.findUnique({
         where: { id },
-        select: { image: true, isActive: true, images: { select: { url: true } } },
+        select: { image: true, isActive: true, tags: true, images: { select: { url: true } } },
       });
       if (!current) return null;
+      assertStablePremiumPairTags(current.tags, data.tags);
       assertPublishableProductMedia({
         isActive: data.isActive ?? current.isActive,
         image: data.image ?? current.image,
@@ -616,6 +618,7 @@ router.patch('/products/:id', requireAdmin, requireRoles(['admin', 'moderator'])
     return res.json({ ok: true, product });
   } catch (e) {
     if (e?.code === PRODUCT_MEDIA_BRANDING_CODE) return res.status(422).json({ ok: false, error: PRODUCT_MEDIA_BRANDING_CODE, message: PRODUCT_MEDIA_BRANDING_MESSAGE });
+    if (e?.code === 'PREMIUM_PAIR_TAG_IMMUTABLE') return res.status(409).json({ ok: false, error: e.code, message: e.message });
     return res.status(500).json({ ok: false, error: e?.message || 'PRODUCT_UPDATE_FAILED' });
   }
 });

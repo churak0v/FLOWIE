@@ -164,7 +164,7 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
           ) : null}
 
         </div>
-        {isList && pair ? <div style={{ marginTop: 7, fontSize: 12, lineHeight: 1.4, color: 'var(--muted)' }}>{pair.gift} в подарок</div> : null}
+        {pair ? <div style={{ marginTop: 7, fontSize: isList ? 12 : 11, lineHeight: 1.4, color: 'var(--muted)' }}>{pair.gift} в подарок</div> : null}
         <div style={{ marginTop: 'auto', paddingTop: isList ? 12 : 10, display: 'flex', flexWrap: isList && pair ? 'wrap' : undefined, alignItems: 'center', gap: 8 }}>
           <div
             style={{
@@ -236,6 +236,7 @@ export function ProductCard({ id, title, price, image, images, onAdd, onOpen, vi
             </button>
           )}
         </div>
+        {pair ? <div style={{ marginTop: 5, fontSize: 10, color: 'var(--muted)', lineHeight: 1.2 }}>Визуализация комплекта</div> : null}
       </div>
     </Surface>
   );

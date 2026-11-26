@@ -19,11 +19,11 @@
 
 Пример ссылки ВК:
 
-`https://flowie.art/?offer=angel-duet&utm_source=vk_ads&utm_medium=cpc&utm_campaign=premium_pair_20261127&utm_content=angel_duet`
+`https://flowie.art/?offer=angel-duet&utm_source=vk_ads&utm_medium=cpc&utm_campaign=premium_pairs_a&utm_content=angel_duet_vk`
 
 Пример ссылки Директа:
 
-`https://flowie.art/?offer=red-duet&utm_source=yandex&utm_medium=cpc&utm_campaign={campaign_id}&utm_content={ad_id}&utm_term={keyword}`
+`https://flowie.art/?offer=red-duet&utm_source=yandex&utm_medium=cpc&utm_campaign=premium_pairs_a&utm_content=red_duet_search&utm_term={keyword}`
 
 ## Иллюстрации
 
@@ -39,3 +39,9 @@
 Свежая резервная копия перед добавлением: `/srv/flowie/backups/premium-pair-20261127/20261126T222650Z`. Перед записью сохранены снимок каталога и план с UUID; созданы только два новых неактивных товара. Их активация разрешена только после доступности изображений и выпуска UI. Все записи через существующий admin API, с повторным чтением.
 
 Для снятия предложения достаточно установить `isActive=false` у новых товаров комплектов. Исходные товары 54 и 74 остаются прежними. Не удалять комплекты, на которые уже есть заказы. Для отката кода сохранены предыдущие образы web/API; admin, БД-схема, тарифы и прочие сервисы не меняются.
+
+## Предпусковое ревью
+
+В POST заказа передаются sessionId и очищенная атрибуция с учётом opt-out/DNT. Истина оплаченного заказа — серверные PAID/CONFIRMED; клиентский purchase может потеряться после закрытия вкладки. Служебный offer-tag нельзя изменить/удалить через admin PATCH: для нового подарка создаётся новый SKU. Аналитика не меняет idempotency digest.
+
+Метки кампании и креатива — статические строки без длинных числовых последовательностей, чтобы privacy-фильтр не принимал ID Директа за телефон. В кабинете должен быть убран старый числовой шаблон UTM кампании. Первая кнопка исходного hero на рекламном входе прокручивает к подборке комплектов; сама компоновка hero не меняется.

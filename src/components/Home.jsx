@@ -38,6 +38,7 @@ export function Home({ onLogin, registrationGift }) {
   const requestedPair = requestedPremiumPair(search);
   const pairs = useMemo(() => orderPremiumPairs(premiumPairProducts(state.products.items), requestedPair), [state.products.items, requestedPair]);
   const focusedPairs = requestedPair && requestedPair !== 'premium-pair' ? pairs.filter(pair => pair.code === requestedPair) : pairs;
+  const hasRequestedPair = Boolean(requestedPair && focusedPairs.length);
   const [activeOrders, setActiveOrders] = useState([]);
   const [initialHeroSlides] = useState(() => {
     const cached = cachedHomeSlides();
@@ -112,8 +113,11 @@ export function Home({ onLogin, registrationGift }) {
       };
       out.splice(Math.min(1, out.length), 0, promo);
     }
+    if (hasRequestedPair && out[0]) {
+      out[0] = { ...out[0], onAction: () => document.querySelector('[data-analytics-section="home_offer"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) };
+    }
     return out;
-  }, [activateRegistrationGift, exposeRegistrationGift, heroSlides, mothersDayCampaignActive, registrationGift?.status]);
+  }, [activateRegistrationGift, exposeRegistrationGift, hasRequestedPair, heroSlides, mothersDayCampaignActive, registrationGift?.status]);
 
   const feed = useMemo(() => buildHomeFeed(state.products.items), [state.products.items]);
   const hasMiniCart = Boolean(state.cart.items.length);
