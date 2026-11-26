@@ -6,7 +6,7 @@ import { AppShell } from './layout/AppShell';
 import { IconButton } from './ui/IconButton';
 import { ProductGallery } from './domain/ProductGallery';
 import { ProductInfo } from './domain/ProductInfo';
-import { ProductRecommendations } from './domain/ProductRecommendations';
+import { ProductAdditions, ProductRecommendations } from './domain/ProductRecommendations';
 import { Link } from 'react-router-dom';
 import { ProductAddBar } from './domain/ProductAddBar';
 import { api } from '../api';
@@ -159,6 +159,7 @@ export function ProductDetails({ onLogin, registrationGift }) {
             <div data-analytics-section="promotion">
               <RegistrationGiftOffer status={registrationGift?.status} user={state.auth.me} placement="product_details" onExpose={registrationGift?.onExpose} onRefresh={registrationGift?.onRefresh} onLogin={onLogin} />
             </div>
+            <ProductAdditions />
             <section data-analytics-section="care" style={{ marginTop: 24, padding: 18, borderRadius: 22, background: '#eef3ed' }}>
               <div style={{ fontSize: 11, fontWeight: 850, textTransform: 'uppercase', letterSpacing: '.07em', color: '#57705a' }}>После вручения</div>
               <h2 style={{ margin: '8px 0', fontSize: 22, letterSpacing: '-.025em' }}>Чтобы цветы радовали дольше</h2>

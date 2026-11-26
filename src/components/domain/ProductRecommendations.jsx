@@ -6,7 +6,7 @@ import { formatMoney } from '../../lib/money';
 import { trackAnalytics } from '../../lib/analytics';
 import { Carousel } from '../ui/Carousel';
 import { AppImage } from '../ui/AppImage';
-import { QuantityStepper } from '../ui/QuantityStepper';
+import { Minus, Plus } from 'lucide-react';
 import { Surface } from '../ui/Surface';
 import { Text } from '../ui/Text';
 import { ProductCard } from './ProductCard';
@@ -58,16 +58,19 @@ function UpsellSection({ items, qtyById, setUpsellQty, enabled }) {
           const key = String(item.id);
           const qty = Number(qtyById?.[key] || 0);
           return (
-            <Surface key={key} variant="soft" style={{ width: 172, flex: '0 0 172px', minWidth: 0, padding: 0, overflow: 'hidden', borderRadius: 18, border: qty ? '2px solid var(--accent)' : '1px solid var(--border)' }}>
+            <Surface key={key} variant="soft" style={{ width: 188, flex: '0 0 188px', minWidth: 0, padding: 0, overflow: 'hidden', borderRadius: 22, border: '1px solid var(--border)' }}>
               <AppImage src={item.image || item.images?.[0]} alt={item.title} loading="lazy" variant="card"
-                style={{ display: 'block', width: '100%', height: 132, objectFit: 'cover', background: 'var(--surface-2)' }} />
+                style={{ display: 'block', width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', background: 'var(--surface-2)' }} />
               <div style={{ padding: 12 }}>
                 <Text variant="subtitle" style={{ minHeight: '2.32em', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.16 }}>{item.title}</Text>
-                <Text variant="body" muted style={{ marginTop: 6 }}>{Number(item.price) > 0 ? formatMoney(item.price) : 'Бесплатно'}</Text>
-                <fieldset disabled={!enabled} style={{ margin: '12px 0 0', border: 0, padding: 0, opacity: enabled ? 1 : 0.5 }}>
-                  <QuantityStepper value={qty} min={0} max={99}
-                    onDec={() => changeQty(item, qty - 1)} onInc={() => changeQty(item, qty + 1)} />
-                </fieldset>
+                <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, minHeight: 36 }}>
+                  <span style={{ color: 'var(--accent)', fontWeight: 1000, fontSize: 15, whiteSpace: 'nowrap' }}>{Number(item.price) > 0 ? formatMoney(item.price) : 'Бесплатно'}</span>
+                  {qty > 0 ? <div style={{ marginLeft: 'auto', height: 36, borderRadius: 12, background: 'var(--c-accent)', color: 'var(--c-accent-contrast)', display: 'inline-flex', alignItems: 'center', boxShadow: 'var(--shadow-accent)', overflow: 'hidden', flexShrink: 0 }}>
+                    <button type="button" disabled={!enabled} aria-label={qty === 1 ? 'Убрать дополнение' : 'Уменьшить количество дополнения'} onClick={() => changeQty(item, qty - 1)} style={{ width: 28, height: 36, border: 0, background: 'transparent', color: 'inherit', display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Minus size={17} strokeWidth={3} /></button>
+                    <span style={{ minWidth: 18, textAlign: 'center', fontWeight: 1000, fontSize: 13 }}>{qty}</span>
+                    <button type="button" disabled={!enabled || qty >= 99} aria-label="Увеличить количество дополнения" onClick={() => changeQty(item, qty + 1)} style={{ width: 28, height: 36, border: 0, background: 'transparent', color: 'inherit', display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Plus size={17} strokeWidth={3} /></button>
+                  </div> : <button type="button" disabled={!enabled} data-analytics-element="upsell_add" aria-label={`Добавить ${item.title}`} onClick={() => changeQty(item, 1)} style={{ width: 36, height: 36, borderRadius: 12, border: 0, background: 'var(--c-accent)', color: 'var(--c-accent-contrast)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: enabled ? 'pointer' : 'default', flexShrink: 0, marginLeft: 'auto', boxShadow: 'var(--shadow-accent)', opacity: enabled ? 1 : 0.5 }}><Plus size={20} strokeWidth={3} /></button>}
+                </div>
               </div>
             </Surface>
           );
@@ -92,8 +95,12 @@ export function ProductRecommendations({ product }) {
         navigate={navigate} addToCart={actions.addToCart} />
       <RecommendationSection title="С этими цветами" sectionKey="same_flowers" products={recommendations.sameFlowers}
         navigate={navigate} addToCart={actions.addToCart} />
-      <UpsellSection enabled={state.cart.items.some(item => item.qty > 0)} items={state.upsells.items} qtyById={state.cart.upsells} setUpsellQty={actions.setUpsellQty} />
     </>
   );
 }
 
+
+export function ProductAdditions() {
+  const { state, actions } = useAppState();
+  return <UpsellSection enabled={state.cart.items.some(item => item.qty > 0)} items={state.upsells.items} qtyById={state.cart.upsells} setUpsellQty={actions.setUpsellQty} />;
+}
